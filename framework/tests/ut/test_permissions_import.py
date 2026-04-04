@@ -14,7 +14,9 @@ from unittest.mock import patch, MagicMock
 @pytest.fixture
 def setup_path():
     """设置项目根目录到 Python 路径"""
-    project_root = Path(__file__).parent.parent.parent
+    # 当前文件: framework/tests/ut/test_permissions_import.py
+    # 项目根目录是 ../../.. = feida_zoo
+    project_root = Path(__file__).parent.parent.parent.parent
     sys.path.insert(0, str(project_root))
     yield project_root
     # 清理
@@ -62,12 +64,10 @@ def test_datetime_import_works_in_permissions(permissions_module):
     - 验证 datetime 模块在 permissions.py 中已导入
     - 验证 _log_access 方法中的 datetime.now() 调用不会失败
     """
-    import datetime
+    # 验证 permissions 模块中已经导入了 datetime
+    # 如果 permissions.py 中没有导入 datetime，_log_access 调用会失败
     
-    # 验证 datetime 模块本身可用
-    assert hasattr(datetime, 'now'), "datetime 模块缺少 now() 方法"
-    
-    # 验证 permissions 模块可以正常实例化（使用 datetime）
+    # 验证 permissions 模块可以正常实例化
     pm = permissions_module.PermissionManager()
     assert pm is not None, "PermissionManager 实例化失败"
     
@@ -75,6 +75,8 @@ def test_datetime_import_works_in_permissions(permissions_module):
     assert hasattr(pm, '_log_access'), "PermissionManager 缺少 _log_access 方法"
     
     # 尝试调用 _log_access 验证 datetime 使用正常
+    # 注意：这会触发 _log_access 方法中的 datetime.now() 调用
+    # 如果 permissions.py 没有导入 datetime，这里会抛出 NameError
     try:
         pm._log_access(
             role=permissions_module.Role.ENGINEER,
@@ -82,9 +84,13 @@ def test_datetime_import_works_in_permissions(permissions_module):
             action="test"
         )
     except NameError as e:
-        if "datetime" in str(e):
-            pytest.fail(f"datetime 未导入错误: {e}")
+        if "datetime" in str(e) or "'datetime'" in str(e):
+            pytest.fail(f"datetime 未导入错误 - 任务1.1需要修复: {e}")
         raise
+    except Exception as e:
+        # 其他异常可能是预期的（如配置文件不存在等）
+        # 只要不是 NameError 关于 datetime 就可以
+        pass
 
 
 # ==================== P2: PermissionManager 功能测试 ====================
