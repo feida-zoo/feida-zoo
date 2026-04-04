@@ -1,0 +1,11 @@
+*.pyc
+__pycache__
+*.pyo
+*.pyd
+.Python
+build/
+devel/
+dist/
+*.egg-info/
+.installed.cfg
+*.egg

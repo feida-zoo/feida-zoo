@@ -4,6 +4,7 @@
 包含以下核心组件：
 - spawner: 角色孵化器，负责成员创建和管理
 - permissions: 权限管理器，提供RBAC功能
+- config_loader: 配置模板引擎，支持变量解析
 """
 
 __version__ = "1.0.0"
@@ -15,6 +16,11 @@ from .permissions import (
     Permission, 
     Role,
     RolePermissions
+)
+from .config_loader import (
+    ConfigLoader,
+    ConfigTemplateError,
+    ConfigTemplateSyntaxError
 )
 
 __all__ = [
@@ -29,4 +35,8 @@ __all__ = [
     "Permission",
     "Role",
     "RolePermissions",
+    # ConfigLoader
+    "ConfigLoader",
+    "ConfigTemplateError",
+    "ConfigTemplateSyntaxError",
 ]
