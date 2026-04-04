@@ -436,4 +436,5 @@ class TestConfigLoaderPerformance:
         
         # Assert - 应该在合理时间内完成（100ms 以内）
         assert end_time - start_time < 0.1  # 100ms
-        assert len(result.split('/')) == 100
+        # 每个注册路径 /path/{i} 包含 2 个斜杠，用 / 连接 100 个变量 → 总斜杠数 = (100-1) + 100*2 = 299 → 分割长度 = 300
+        assert len(result.split('/')) == 300

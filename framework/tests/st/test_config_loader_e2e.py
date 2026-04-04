@@ -51,14 +51,14 @@ class TestConfigLoaderE2EBasic:
             with patch.dict(os.environ, {'APP_VERSION': '1.0.0'}):
                 # Act
                 loader = ConfigLoader(base_path=str(tmpdir))
-                loader.register_path('data', str(tmpdir / "data"))
+                loader.register_path('data', str(Path(tmpdir) / "data"))
                 config = loader.load(str(main_config_path))
                 
                 # Assert
                 assert config['app']['name'] == 'TestApp'
                 assert config['app']['version'] == '1.0.0'
-                assert config['paths']['data'] == str(tmpdir / "data")
-                assert config['paths']['logs'] == str(tmpdir / "logs")
+                assert config['paths']['data'] == str(Path(tmpdir) / "data")
+                assert config['paths']['logs'] == str(Path(tmpdir) / "logs")
     
     def test_config_loader_e2e_nested_configs(self):
         """测试嵌套配置文件加载"""
@@ -339,7 +339,7 @@ class TestConfigLoaderE2EAdvanced:
             for i in range(100):
                 services[f'service_{i}'] = {
                     'name': f'Service {i}',
-                    'endpoint': 'http://service-${i}.${env:DOMAIN}',
+                    'endpoint': f'http://service-{i}.${{env:DOMAIN}}',
                     'port': 8080 + i,
                     'enabled': True
                 }
