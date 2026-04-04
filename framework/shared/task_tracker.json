@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "last_updated": "2026-04-05T01:50:00+08:00",
+  "last_updated": "2026-04-05T02:40:00+08:00",
   "current_phase": "P1",
   "phases": {
     "P1": {
@@ -39,13 +39,13 @@
           "name": "实现配置模板引擎",
           "file": "framework/core/config_loader.py",
           "severity": "P1",
-          "status": "pending",
+          "status": "completed",
           "assignee": "weaver",
           "estimated_hours": 1.5,
-          "actual_hours": null,
+          "actual_hours": 1.5,
           "created_at": "2026-04-05T00:20:00+08:00",
-          "started_at": null,
-          "completed_at": null,
+          "started_at": "2026-04-05T02:01:00+08:00",
+          "completed_at": "2026-04-05T02:38:00+08:00",
           "description": "创建 ConfigLoader 类，支持环境变量、路径变量、相对路径解析",
           "dependencies": ["1.1"],
           "verification": [
@@ -56,25 +56,25 @@
           "test_cases": [
             {
               "type": "UT",
-              "status": "pending",
+              "status": "completed",
               "description": "测试环境变量解析 ${env:VAR_NAME}",
               "file": "framework/tests/ut/test_config_loader_env.py"
             },
             {
               "type": "UT",
-              "status": "pending",
+              "status": "completed",
               "description": "测试路径变量解析 ${paths.xxx}",
               "file": "framework/tests/ut/test_config_loader_paths.py"
             },
             {
               "type": "UT",
-              "status": "pending",
+              "status": "completed",
               "description": "测试相对路径解析 ${base_dir}/xxx",
               "file": "framework/tests/ut/test_config_loader_relative.py"
             },
             {
               "type": "ST",
-              "status": "pending",
+              "status": "completed",
               "description": "测试端到端配置加载流程",
               "file": "framework/tests/st/test_config_loader_e2e.py"
             }
@@ -115,7 +115,7 @@
             {
               "type": "ST",
               "status": "pending",
-              "description": "测试通过环境变量 FEIDA_ZOO_HOME 配置根目录",
+              "description": "测试通过环境变量ari配置根目录",
               "file": "framework/tests/st/test_env_path_config.py"
             }
           ]
@@ -216,11 +216,11 @@
       ],
       "statistics": {
         "total": 5,
-        "pending": 4,
+        "pending": 3,
         "in_progress": 0,
-        "completed": 1,
+        "completed": 2,
         "total_estimated_hours": 6.25,
-        "total_actual_hours": 0.5
+        "total_actual_hours": 2.0
       }
     }
   },
