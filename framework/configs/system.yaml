@@ -1,0 +1,112 @@
+# 飝龘动物园系统配置
+# FeidaZoo Framework Configuration
+
+system:
+  name: "FeidaZoo Framework"
+  version: "1.0.0"
+  codename: "飝龘动物园"
+  description: "多智能体协作框架"
+  environment: "development"  # development | production
+  
+paths:
+  base: "/home/afei/workspace/panda"
+  agents: "/home/afei/workspace/panda/agents"
+  framework: "/home/afei/workspace/panda/framework"
+  shared: "/home/afei/workspace/panda/framework/shared"
+  data: "/home/afei/workspace/panda/framework/data"
+  configs: "/home/afei/workspace/panda/framework/configs"
+  logs: "/home/afei/workspace/panda/logs"
+  temp: "/tmp/feida_zoo"
+
+logging:
+  level: "INFO"  # DEBUG | INFO | WARNING | ERROR | CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  output: "both"  # console | file | both
+  file: "${paths.logs}/framework.log"
+  max_size: "10MB"
+  backup_count: 5
+
+security:
+  default_role: "guest"
+  auth_enabled: true
+  token_expiry: 86400  # 24 hours in seconds
+  max_login_attempts: 5
+  lockout_duration: 300  # 5 minutes
+  
+  # 权限配置
+  permissions:
+    strict_mode: false
+    audit_enabled: true
+    audit_log_retention: 30  # days
+
+# 成员配置
+members:
+  auto_activate: true
+  default_capabilities:
+    - "read_shared"
+    - "read_member"
+  
+  # 工作区初始化
+  workspace:
+    create_src: true
+    create_docs: true
+    create_outputs: true
+    template_enabled: true
+
+# 通信配置
+communication:
+  # 交付物流转
+  delivery:
+    shared_path: "${paths.shared}"
+    naming_format: "{producer}_{consumer}_{summary}.md"
+    archive_enabled: true
+    archive_path: "${paths.shared}/archives"
+    
+  # 消息队列
+  messaging:
+    enabled: false
+    backend: "memory"  # memory | redis | rabbitmq
+    
+  # 通知
+  notification:
+    enabled: true
+    channels:
+      - "console"
+      # - "email"
+      # - "webhook"
+
+# 工作流配置
+workflows:
+  default: "default_delivery"
+  auto_execute: false
+  timeout: 3600  # seconds
+  
+  # 步骤重试
+  retry:
+    enabled: true
+    max_attempts: 3
+    backoff: "exponential"
+
+# 插件配置
+plugins:
+  enabled: false
+  directory: "${paths.framework}/plugins"
+  auto_load: false
+  
+# 性能监控
+monitoring:
+  enabled: true
+  metrics:
+    - "cpu"
+    - "memory"
+    - "disk"
+  interval: 60  # seconds
+  
+# 调试配置
+debug:
+  enabled: false
+  verbose: false
+  trace_calls: false
+  
+# 扩展配置（供其他模块使用）
+extensions: {}

@@ -1,0 +1,176 @@
+# 飝龘动物园默认工作流定义
+# FeidaZoo Default Workflow
+
+workflow:
+  name: "default_delivery"
+  version: "1.0.0"
+  description: "标准的跨成员交付工作流"
+  
+  # 工作流元数据
+  metadata:
+    author: "飝龘动物园"
+    created: "2026-04-04"
+    last_modified: "2026-04-04"
+    tags:
+      - "default"
+      - "delivery"
+      - "cross-member"
+  
+  # 触发条件
+  triggers:
+    - type: "manual"
+      description: "手动触发"
+    - type: "file_created"
+      path: "framework/shared/*.md"
+      description: "共享目录有新交付物"
+    - type: "api_call"
+      endpoint: "/api/v1/workflows/default_delivery"
+      description: "API调用触发"
+  
+  # 工作流步骤
+  steps:
+    - id: "step_01_request"
+      name: "接收任务请求"
+      type: "input"
+      description: "接收来自成员或其他系统的任务请求"
+      config:
+        required_fields:
+          - "requester"
+          - "task_type"
+          - "description"
+        optional_fields:
+          - "priority"
+          - "deadline"
+          - "attachments"
+      
+    - id: "step_02_validate"
+      name: "验证请求"
+      type: "validation"
+      description: "验证请求的有效性"
+      config:
+        rules:
+          - "requester must exist in registry"
+          - "task_type must be supported"
+          - "description length > 10"
+      on_failure:
+        action: "reject"
+        notify: "requester"
+      
+    - id: "step_03_assign"
+      name: "分配任务"
+      type: "assignment"
+      description: "根据任务类型和成员能力分配任务"
+      config:
+        assignment_rules:
+          architecture_design: "alpha"
+          code_implementation: "weaver"
+          security_audit: "duci"
+          memory_archiving: "aeterna"
+          visual_design: "gulu"
+          system_management: "panda"
+        fallback: "panda"
+        load_balancing: true
+      
+    - id: "step_04_execute"
+      name: "执行任务"
+      type: "execution"
+      description: "被分配的成员执行任务"
+      config:
+        timeout: 3600
+        retry:
+          enabled: true
+          max_attempts: 3
+          backoff: "exponential"
+        checkpoint_interval: 300
+      
+    - id: "step_05_review"
+      name: "审核检查"
+      type: "review"
+      description: "根据任务类型决定是否进行审核"
+      config:
+        review_rules:
+          - condition: "task_type == 'architecture_design'"
+            reviewer: "duci"
+            required: true
+          - condition: "task_type == 'code_implementation'"
+            reviewer: "duci"
+            required: false
+          - condition: "priority == 'high'"
+            reviewer: "alpha"
+            required: true
+      on_reject:
+        action: "return_to_executor"
+        max_iterations: 3
+      
+    - id: "step_06_deliver"
+      name: "交付成果"
+      type: "delivery"
+      description: "将成果交付到共享目录"
+      config:
+        delivery_path: "framework/shared/"
+        naming_format: "{producer}_{consumer}_{summary}.md"
+        required_metadata:
+          - "producer"
+          - "created_at"
+          - "version"
+        archive_after: 30
+      
+    - id: "step_07_notify"
+      name: "通知相关人员"
+      type: "notification"
+      description: "通知任务请求者和相关成员"
+      config:
+        channels:
+          - type: "console"
+            enabled: true
+          - type: "file"
+            enabled: true
+            path: "logs/notifications.log"
+        notify_targets:
+          - "requester"
+          - "producer"
+          - "reviewer"
+      
+    - id: "step_08_archive"
+      name: "归档记录"
+      type: "archive"
+      description: "归档工作流执行记录"
+      config:
+        archive_path: "framework/data/workflow_archives/"
+        retention_days: 90
+        compression: true
+        include_artifacts: true
+  
+  # 错误处理
+  error_handling:
+    default_action: "abort"
+    notify_on_error: true
+    error_handlers:
+      - error_type: "validation_error"
+        action: "retry"
+        max_retries: 3
+      - error_type: "timeout_error"
+        action: "escalate"
+        escalate_to: "panda"
+      - error_type: "execution_error"
+        action: "abort"
+        notify: ["requester", "alpha"]
+  
+  # 工作流变量
+  variables:
+    - name: "workflow_id"
+      type: "string"
+      description: "工作流实例ID"
+      auto_generate: true
+    - name: "started_at"
+      type: "datetime"
+      description: "工作流开始时间"
+      auto_generate: true
+    - name: "completed_at"
+      type: "datetime"
+      description: "工作流完成时间"
+      auto_generate: true
+    - name: "duration"
+      type: "duration"
+      description: "工作流执行时长"
+      auto_calculate: true
