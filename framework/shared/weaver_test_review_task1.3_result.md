@@ -22,12 +22,12 @@
 #### 🔴 P1级别问题：
 1. **`framework/core/spawner.py` 第73行**：
    ```python
-   def __init__(self, base_path: str = "/home/afei/workspace/panda"):
+   def __init__(self, base_path: str = "/home/afei/workspace/code/feida_zoo"):
    ```
 
 2. **`framework/core/permissions.py` 第121行**：
    ```python
-   self.config_path = Path("/home/afei/workspace/panda/framework/configs/permissions.yaml")
+   self.config_path = Path("/home/afei/workspace/code/feida_zoo/framework/configs/permissions.yaml")
    ```
 
 #### 🟡 P2级别问题：
@@ -59,8 +59,8 @@
 **问题描述**: `spawner.py`和`permissions.py`中存在硬编码的绝对路径
 **严重性**: P1
 **代码位置**:
-- `framework/core/spawner.py:73`: `"/home/afei/workspace/panda"`
-- `framework/core/permissions.py:121`: `"/home/afei/workspace/panda/framework/configs/permissions.yaml"`
+- `framework/core/spawner.py:73`: `"/home/afei/workspace/code/feida_zoo"`
+- `framework/core/permissions.py:121`: `"/home/afei/workspace/code/feida_zoo/framework/configs/permissions.yaml"`
 **影响**: 无法部署到其他环境，违反任务1.3的核心要求
 **建议修复方案**:
 1. 创建路径配置文件：`framework/configs/paths.yaml`

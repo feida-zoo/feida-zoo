@@ -52,7 +52,7 @@
 
 #### 问题1: Spawner硬编码路径未修复
 - **位置**: `framework/core/spawner.py:73`
-- **代码**: `def __init__(self, base_path: str = "/home/afei/workspace/panda"):`
+- **代码**: `def __init__(self, base_path: str = "/home/afei/workspace/code/feida_zoo"):`
 - **违反标准**: 验收标准#1 - "代码中不再有硬编码的绝对路径"
 - **状态**: **未解决**
 
@@ -66,7 +66,7 @@
 #### 问题1: 测试预期与实际不符
 - **测试**: `test_environment_variable_placeholder`
 - **期望**: `paths.yaml`包含`${FEIDA_ZOO_HOME}`
-- **实际**: 包含`${FEIDA_ZOO_HOME:-/home/afei/workspace/panda}`（带默认值）
+- **实际**: 包含`${FEIDA_ZOO_HOME:-/home/afei/workspace/code/feida_zoo}`（带默认值）
 - **分析**: 测试预期过于严格，实际实现更合理（提供默认值）
 - **建议**: 更新测试预期或修改测试逻辑
 

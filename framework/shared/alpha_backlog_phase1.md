@@ -54,7 +54,7 @@
 **严重性**: P1 - 无法部署到其他环境
 **状态**: ⏳ 待处理
 **依赖**: 任务 1.2
-**描述**: 多个文件中硬编码了绝对路径 `/home/afei/workspace/panda`
+**描述**: 多个文件中硬编码了绝对路径 `/home/afei/workspace/code/feida_zoo`
 
 **修复步骤**:
 1. 创建 `framework/configs/paths.yaml` 存放所有路径配置

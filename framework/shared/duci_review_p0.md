@@ -25,8 +25,8 @@
 **严重性**: 🔴 P1  
 **影响范围**: 所有文件  
 **问题描述**: 多个文件中硬编码了绝对路径，导致：
-- `spawner.py`: `base_path = "/home/afei/workspace/panda"`
-- `permissions.py`: `config_path = "/home/afei/workspace/panda/framework/configs/permissions.yaml"`
+- `spawner.py`: `base_path = "/home/afei/workspace/code/feida_zoo"`
+- `permissions.py`: `config_path = "/home/afei/workspace/code/feida_zoo/framework/configs/permissions.yaml"`
 - `registry.json`: 所有成员的`workspace`字段硬编码
 
 **风险**: 部署到不同环境时无法工作，违反了"配置与代码分离"原则。

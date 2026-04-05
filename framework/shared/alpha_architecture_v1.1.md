@@ -74,7 +74,7 @@ framework/shared/
 **实施规范：**
 
 1. **产出物类型**：架构设计文档、代码审查报告、设计稿说明、技术规范等
-2. **写入路径**：`/home/afei/workspace/panda/framework/shared/`
+2. **写入路径**：`/home/afei/workspace/code/feida_zoo/framework/shared/`
 3. **命名规范**：`{产出者}_{接收者}_{内容摘要}.md`
 4. **禁止行为**：不得通过 Panda 主会话直接发送大段文本给接收者
 5. **通知机制**：交付完成后，通知接收者前往 shared/ 目录读取

@@ -138,6 +138,9 @@ class TestNoHardcodedPandaPaths:
         # 不应该有硬编码的 panda 路径
         assert "/home/afei/workspace/panda" not in content, \
             "spawner.py should not contain hardcoded /home/afei/workspace/panda"
+        # 应该使用新的 zoo 路径
+        assert "/home/afei/workspace/code/feida_zoo" in content, \
+            "spawner.py should use /home/afei/workspace/code/feida_zoo"
 
     def test_no_panda_in_permissions_source(self):
         """测试 Permissions 源代码中没有硬编码 panda 路径"""
@@ -149,6 +152,9 @@ class TestNoHardcodedPandaPaths:
         # 不应该有硬编码的 panda 路径
         assert "/home/afei/workspace/panda" not in content, \
             "permissions.py should not contain hardcoded /home/afei/workspace/panda"
+        # 应该使用新的 zoo 路径
+        assert "/home/afei/workspace/code/feida_zoo" in content, \
+            "permissions.py should use /home/afei/workspace/code/feida_zoo"
 
     def test_uses_env_var_pattern(self):
         """测试使用了环境变量模式"""

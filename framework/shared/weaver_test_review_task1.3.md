@@ -78,7 +78,7 @@
 
 1. **framework/core/spawner.py:73**
    ```python
-   def __init__(self, base_path: str = "/home/afei/workspace/panda"):
+   def __init__(self, base_path: str = "/home/afei/workspace/code/feida_zoo"):
    ```
    - 问题：默认参数使用硬编码绝对路径
    - 影响：无法部署到其他环境
@@ -89,7 +89,7 @@
 
 2. **framework/core/permissions.py:121** (文件不存在，但评审报告提及)
    ```python
-   self.config_path = Path("/home/afei/workspace/panda/framework/configs/permissions.yaml")
+   self.config_path = Path("/home/afei/workspace/code/feida_zoo/framework/configs/permissions.yaml")
    ```
    - 问题：permissions.py文件不存在
    - 修复计划：检查文件路径或创建缺失文件
@@ -99,8 +99,8 @@
 1. **framework/configs/system.yaml:12-18**
    ```yaml
    paths:
-     base: "/home/afei/workspace/panda"
-     agents: "/home/afei/workspace/panda/agents"
+     base: "/home/afei/workspace/code/feida_zoo"
+     agents: "/home/afei/workspace/code/feida_zoo/agents"
      # ... 其他硬编码路径
    ```
    - 问题：配置文件中存在硬编码路径
