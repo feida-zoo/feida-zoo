@@ -85,13 +85,13 @@
           "name": "移除路径硬编码",
           "file": "framework/core/spawner.py, framework/core/permissions.py",
           "severity": "P1",
-          "status": "pending",
+          "status": "completed",
           "assignee": "weaver",
           "estimated_hours": 1.0,
-          "actual_hours": null,
+          "actual_hours": 2.5,
           "created_at": "2026-04-05T00:20:00+08:00",
-          "started_at": null,
-          "completed_at": null,
+          "started_at": "2026-04-05T11:24:00+08:00",
+          "completed_at": "2026-04-05T16:35:00+08:00",
           "description": "使用配置系统替换所有硬编码路径，支持环境变量配置",
           "dependencies": ["1.2"],
           "verification": [
@@ -102,23 +102,24 @@
           "test_cases": [
             {
               "type": "UT",
-              "status": "pending",
+              "status": "completed",
               "description": "测试 Spawner 使用配置化路径初始化",
-              "file": "framework/tests/ut/test_spawner_config_paths.py"
+              "file": "framework/tests/ut/test_hardcoded_paths.py"
             },
             {
               "type": "UT",
-              "status": "pending",
+              "status": "completed",
               "description": "测试 PermissionManager 使用配置化路径初始化",
-              "file": "framework/tests/ut/test_permissions_config_paths.py"
+              "file": "framework/tests/ut/test_hardcoded_paths.py"
             },
             {
               "type": "ST",
-              "status": "pending",
-              "description": "测试通过环境变量ari配置根目录",
-              "file": "framework/tests/st/test_env_path_config.py"
+              "status": "completed",
+              "description": "测试通过环境变量配置根目录",
+              "file": "framework/tests/st/test_path_config.py"
             }
-          ]
+          ],
+          "notes": "经过多轮TDD迭代，最终使用Claude Code彻底清理了所有硬编码路径，包括生产代码和文档。修复了registry.json因误改而导致的成员工作区路径错误。"
         },
         {
           "id": "1.4",
