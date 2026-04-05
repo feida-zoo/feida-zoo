@@ -94,7 +94,9 @@ class ZooDashboardHandler(BaseHTTPRequestHandler):
             with open(identity_path, 'r', encoding='utf-8') as f:
                 for line in f:
                     if "- **生物:**" in line or "- **种族:**" in line:
-                        return {"species": line.split(':', 1)[1].strip()}
+                        # 移除 Markdown 加粗标识（**）
+                        species = line.split(':', 1)[1].strip().replace('**', '')
+                        return {"species": species}
             return {"species": "未知"}
         except:
             return {"species": "未知"}
