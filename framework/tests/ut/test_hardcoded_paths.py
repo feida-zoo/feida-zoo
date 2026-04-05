@@ -23,10 +23,10 @@ class TestSpawnerPaths:
         with patch.dict(os.environ, {"FEIDA_ZOO_HOME": test_path}):
             # 使用临时目录避免实际创建文件
             with patch.object(Path, 'mkdir'):
-                with patch.object(Path, 'exists', return_value=True):
-                    with patch('builtins.open', MagicMock()):
-                        spawner = Spawner()
-                        assert str(spawner.base_path) == test_path
+                # 返回False避免触发json.load读取文件
+                with patch.object(Path, 'exists', return_value=False):
+                    spawner = Spawner()
+                    assert str(spawner.base_path) == test_path
 
     def test_spawner_uses_default_when_no_env(self):
         """测试无环境变量时使用默认值"""
@@ -35,11 +35,11 @@ class TestSpawnerPaths:
         # 确保环境变量不存在
         with patch.dict(os.environ, {}, clear=True):
             with patch.object(Path, 'mkdir'):
-                with patch.object(Path, 'exists', return_value=True):
-                    with patch('builtins.open', MagicMock()):
-                        spawner = Spawner()
-                        assert "/home/afei/workspace/code/feida_zoo" in str(spawner.base_path)
-                        assert "panda" not in str(spawner.base_path)
+                # 返回False避免触发json.load读取文件
+                with patch.object(Path, 'exists', return_value=False):
+                    spawner = Spawner()
+                    assert "/home/afei/workspace/code/feida_zoo" in str(spawner.base_path)
+                    assert "panda" not in str(spawner.base_path)
 
     def test_spawner_accepts_explicit_path(self):
         """测试 Spawner 接受显式路径参数"""
@@ -47,10 +47,10 @@ class TestSpawnerPaths:
 
         explicit_path = "/custom/explicit/path"
         with patch.object(Path, 'mkdir'):
-            with patch.object(Path, 'exists', return_value=True):
-                with patch('builtins.open', MagicMock()):
-                    spawner = Spawner(base_path=explicit_path)
-                    assert str(spawner.base_path) == explicit_path
+            # 返回False避免触发json.load读取文件
+            with patch.object(Path, 'exists', return_value=False):
+                spawner = Spawner(base_path=explicit_path)
+                assert str(spawner.base_path) == explicit_path
 
 
 class TestPermissionsPaths:
