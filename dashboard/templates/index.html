@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>飝龘动物园 - 成员看板</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🐉</span>
+                <h1>飝龘动物园</h1>
+            </div>
+            <p class="subtitle">Zoo Dashboard v1.0 - 生态成员一览</p>
+        </header>
+
+        <main class="main-content">
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>正在加载成员数据...</p>
+            </div>
+            
+            <div class="members-grid" id="members-grid" style="display: none;">
+                <!-- 成员卡片将在这里动态生成 -->
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>🐜 由织巢蚁工程师精心构建 | 飝龘动物园生态</p>
+        </footer>
+    </div>
+
+    <script>
+        // 获取成员数据并渲染
+        async function loadMembers() {
+            try {
+                const response = await fetch('/api/members');
+                const members = await response.json();
+                renderMembers(members);
+            } catch (error) {
+                console.error('加载成员数据失败:', error);
+                document.getElementById('loading').innerHTML = `
+                    <p style="color: #e74c3c;">加载失败，请刷新页面重试</p>
+                `;
+            }
+        }
+
+        // 渲染成员卡片
+        function renderMembers(members) {
+            const grid = document.getElementById('members-grid');
+            const loading = document.getElementById('loading');
+            
+            grid.innerHTML = members.map(member => `
+                <div class="member-card ${member.status}">
+                    <div class="card-header">
+                        <div class="avatar-container">
+                            ${member.avatar ? 
+                                `<img src="${member.avatar}" alt="${member.name}" class="avatar-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">` :
+                                ''
+                            }
+                            <div class="avatar-fallback" style="${member.avatar ? 'display: none;' : ''}">
+                                <span class="avatar-emoji">${member.avatar_emoji}</span>
+                            </div>
+                        </div>
+                        <div class="status-badge ${member.status}">
+                            ${getStatusText(member.status)}
+                        </div>
+                    </div>
+                    
+                    <div class="card-body">
+                        <h3 class="member-name">${member.name}</h3>
+                        <p class="member-code">${member.code_name}</p>
+                        
+                        <div class="info-row">
+                            <span class="info-label">种族</span>
+                            <span class="info-value species">${member.species}</span>
+                        </div>
+                        
+                        <div class="info-row">
+                            <span class="info-label">角色</span>
+                            <span class="info-value role">${member.role_display}</span>
+                        </div>
+                        
+                        <div class="info-row">
+                            <span class="info-label">模型</span>
+                            <span class="info-value model">${member.model}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="card-footer">
+                        <p class="description">${member.description || '暂无描述'}</p>
+                        ${member.personality ? `<p class="personality">${member.personality}</p>` : ''}
+                    </div>
+                </div>
+            `).join('');
+            
+            loading.style.display = 'none';
+            grid.style.display = 'grid';
+        }
+
+        // 状态文本映射
+        function getStatusText(status) {
+            const statusMap = {
+                'active': '🟢 活跃',
+                'inactive': '⚫ 离线',
+                'busy': '🔴 忙碌',
+                'idle': '🟡 空闲'
+            };
+            return statusMap[status] || status;
+        }
+
+        // 页面加载完成后获取数据
+        document.addEventListener('DOMContentLoaded', loadMembers);
+    </script>
+</body>
+</html>
