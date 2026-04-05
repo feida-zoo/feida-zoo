@@ -85,7 +85,7 @@ class ZooDashboardHandler(BaseHTTPRequestHandler):
     def _get_member_species(self, member_id):
         # 特殊处理主脑 Panda 的种族
         if member_id == 'panda':
-            return {"species": "AI 伙伴 🐼"}
+            return {"species": "熊猫 🐼"}
             
         identity_path = AGENTS_DIR / member_id / "IDENTITY.md"
         if not identity_path.exists():
