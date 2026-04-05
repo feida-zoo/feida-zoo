@@ -6,7 +6,7 @@ import os
 import sys
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch, MagicMock
 
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -23,8 +23,8 @@ class TestSpawnerPaths:
         with patch.dict(os.environ, {"FEIDA_ZOO_HOME": test_path}):
             # 使用临时目录避免实际创建文件
             with patch.object(Path, 'mkdir'):
-                with patch.object(Path, 'exists', return_value=False):
-                    with patch('builtins.open', mock_open(read_data='{"members": {}, "version": "1.0.0", "last_updated": null}')):
+                with patch.object(Path, 'exists', return_value=True):
+                    with patch('builtins.open', MagicMock()):
                         spawner = Spawner()
                         assert str(spawner.base_path) == test_path
 
@@ -36,7 +36,7 @@ class TestSpawnerPaths:
         with patch.dict(os.environ, {}, clear=True):
             with patch.object(Path, 'mkdir'):
                 with patch.object(Path, 'exists', return_value=True):
-                    with patch('json.load', return_value={"members": {}, "version": "1.0.0", "last_updated": None}):
+                    with patch('builtins.open', MagicMock()):
                         spawner = Spawner()
                         assert "/home/afei/workspace/code/feida_zoo" in str(spawner.base_path)
                         assert "panda" not in str(spawner.base_path)
@@ -47,8 +47,8 @@ class TestSpawnerPaths:
 
         explicit_path = "/custom/explicit/path"
         with patch.object(Path, 'mkdir'):
-            with patch.object(Path, 'exists', return_value=False):
-                with patch('builtins.open', mock_open(read_data='{"members": {}, "version": "1.0.0", "last_updated": null}')):
+            with patch.object(Path, 'exists', return_value=True):
+                with patch('builtins.open', MagicMock()):
                     spawner = Spawner(base_path=explicit_path)
                     assert str(spawner.base_path) == explicit_path
 
