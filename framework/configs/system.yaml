@@ -9,13 +9,13 @@ system:
   environment: "development"  # development | production
   
 paths:
-  base: "/home/afei/workspace/panda"
-  agents: "/home/afei/workspace/panda/agents"
-  framework: "/home/afei/workspace/panda/framework"
-  shared: "/home/afei/workspace/panda/framework/shared"
-  data: "/home/afei/workspace/panda/framework/data"
-  configs: "/home/afei/workspace/panda/framework/configs"
-  logs: "/home/afei/workspace/panda/logs"
+  base: "${FEIDA_ZOO_HOME:-/home/afei/workspace/code/feida_zoo}"
+  agents: "${FEIDA_ZOO_HOME:-/home/afei/workspace/code/feida_zoo}/agents"
+  framework: "${FEIDA_ZOO_HOME:-/home/afei/workspace/code/feida_zoo}/framework"
+  shared: "${FEIDA_ZOO_HOME:-/home/afei/workspace/code/feida_zoo}/framework/shared"
+  data: "${FEIDA_ZOO_HOME:-/home/afei/workspace/code/feida_zoo}/framework/data"
+  configs: "${FEIDA_ZOO_HOME:-/home/afei/workspace/code/feida_zoo}/framework/configs"
+  logs: "${FEIDA_ZOO_HOME:-/home/afei/workspace/code/feida_zoo}/logs"
   temp: "/tmp/feida_zoo"
 
 logging:

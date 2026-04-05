@@ -70,13 +70,15 @@ class Spawner:
     - 记录成员信息到注册表
     """
     
-    def __init__(self, base_path: str = "/home/afei/workspace/panda"):
+    def __init__(self, base_path: str = None):
         """
         初始化孵化器
-        
+
         Args:
             base_path: 项目根目录路径
         """
+        if base_path is None:
+            base_path = os.getenv("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo")
         self.base_path = Path(base_path)
         self.agents_path = self.base_path / "agents"
         self.framework_path = self.base_path / "framework"

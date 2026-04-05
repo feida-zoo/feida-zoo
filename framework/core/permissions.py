@@ -118,7 +118,9 @@ class PermissionManager:
         if config_path:
             self.config_path = Path(config_path)
         else:
-            self.config_path = Path("/home/afei/workspace/panda/framework/configs/permissions.yaml")
+            import os
+            base_path = os.getenv("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo")
+            self.config_path = Path(base_path) / "framework" / "configs" / "permissions.yaml"
         
         # 初始化角色权限
         self._role_permissions: Dict[Role, Set[Permission]] = {}
