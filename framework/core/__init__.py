@@ -5,6 +5,7 @@
 - spawner: 角色孵化器，负责成员创建和管理
 - permissions: 权限管理器，提供RBAC功能
 - config_loader: 配置模板引擎，支持变量解析
+- workspace: 工作空间管理器，提供安全删除功能
 """
 
 __version__ = "1.0.0"
@@ -22,6 +23,7 @@ from .config_loader import (
     ConfigTemplateError,
     ConfigTemplateSyntaxError
 )
+from .workspace import Workspace
 
 __all__ = [
     # Spawner
@@ -39,4 +41,6 @@ __all__ = [
     "ConfigLoader",
     "ConfigTemplateError",
     "ConfigTemplateSyntaxError",
+    # Workspace
+    "Workspace",
 ]
