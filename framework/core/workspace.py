@@ -1,11 +1,17 @@
 """
 Workspace module for file operations with safe delete functionality.
+
+重构说明 (P1-1.5):
+- 引入 IStorageAdapter 接口，将物理操作抽离
+- Workspace 负责权限校验、回收站逻辑、事务流转
+- 具体文件操作由 LocalFileSystemAdapter 实现
 """
 
-import os
-import shutil
 from pathlib import Path
-from typing import Union
+from typing import Union, Optional
+
+from .interfaces import IStorageAdapter
+from .adapters import LocalFileSystemAdapter
 
 
 class Workspace:
@@ -13,19 +19,26 @@ class Workspace:
     
     TRASH_DIR_NAME = ".trash"
     
-    def __init__(self, root_path: Union[str, Path]):
+    def __init__(
+        self, 
+        root_path: Union[str, Path],
+        storage_adapter: Optional[IStorageAdapter] = None
+    ):
         """
         Initialize workspace with root path.
         
         Args:
             root_path: Root directory of the workspace
+            storage_adapter: Storage adapter for file operations.
+                           Defaults to LocalFileSystemAdapter if None.
         """
         self.root = Path(root_path).resolve()
         self.trash_dir = self.root / self.TRASH_DIR_NAME
-        
+        self._storage = storage_adapter or LocalFileSystemAdapter()
+    
     def _ensure_trash_dir(self) -> None:
         """Ensure trash directory exists."""
-        self.trash_dir.mkdir(exist_ok=True)
+        self._storage.mkdir(self.trash_dir, parents=True, exist_ok=True)
     
     def _get_trash_path(self, path: Union[str, Path]) -> Path:
         """
@@ -37,7 +50,7 @@ class Workspace:
         Returns:
             Path in trash directory
         """
-        rel_path = Path(path).relative_to(self.root)
+        rel_path = self._storage.relative_to(path, self.root)
         return self.trash_dir / rel_path
     
     def _is_in_trash(self, path: Union[str, Path]) -> bool:
@@ -51,9 +64,9 @@ class Workspace:
             True if path is in trash directory
         """
         try:
-            path_obj = Path(path).resolve()
-            trash_obj = self.trash_dir.resolve()
-            return trash_obj in path_obj.parents or path_obj == trash_obj
+            path_obj = self._storage.resolve(path)
+            trash_obj = self._storage.resolve(self.trash_dir)
+            return trash_obj in self._storage.parents(path_obj) or path_obj == trash_obj
         except ValueError:
             return False
     
@@ -68,7 +81,7 @@ class Workspace:
             FileNotFoundError: If file does not exist
         """
         src = Path(path)
-        if not src.exists():
+        if not self._storage.exists(src):
             raise FileNotFoundError(f"File not found: {path}")
         
         # Check if file is already in trash
@@ -83,10 +96,10 @@ class Workspace:
         dst = self._get_trash_path(src)
         
         # Ensure parent directory exists in trash
-        dst.parent.mkdir(parents=True, exist_ok=True)
+        self._storage.mkdir(dst.parent, parents=True, exist_ok=True)
         
-        # Move file to trash
-        shutil.move(str(src), str(dst))
+        # Move file to trash (delegate to adapter)
+        self._storage.move(src, dst)
     
     def restore(self, path: Union[str, Path]) -> None:
         """
@@ -101,15 +114,16 @@ class Workspace:
         # Get the path in trash
         trash_path = self._get_trash_path(path)
         
-        if not trash_path.exists():
+        if not self._storage.exists(trash_path):
             raise FileNotFoundError(f"File not found in trash: {path}")
         
         # Ensure parent directory exists for restoration
         dst = Path(path)
-        dst.parent.mkdir(parents=True, exist_ok=True)
+        self._storage.mkdir(dst.parent, parents=True, exist_ok=True)
         
         # Move file from trash to original location (overwrite if exists)
-        shutil.move(str(trash_path), str(dst))
+        # Delegate to adapter
+        self._storage.move(trash_path, dst)
     
     def permanent_delete(self, path: Union[str, Path]) -> None:
         """
@@ -127,8 +141,26 @@ class Workspace:
         
         # Delete file if it exists (idempotent)
         file_path = Path(path)
-        if file_path.exists():
-            if file_path.is_file():
-                os.remove(str(file_path))
-            elif file_path.is_dir():
-                shutil.rmtree(str(file_path))
+        if self._storage.exists(file_path):
+            # Delegate to adapter
+            self._storage.delete(file_path)
+    
+    # ==================== 扩展方法（供未来使用）====================
+    
+    def get_storage_adapter(self) -> IStorageAdapter:
+        """
+        获取当前使用的存储适配器。
+        
+        Returns:
+            存储适配器实例
+        """
+        return self._storage
+    
+    def set_storage_adapter(self, adapter: IStorageAdapter) -> None:
+        """
+        设置存储适配器（用于测试或替换实现）。
+        
+        Args:
+            adapter: 新的存储适配器实例
+        """
+        self._storage = adapter

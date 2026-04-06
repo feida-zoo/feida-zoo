@@ -6,6 +6,8 @@
 - permissions: 权限管理器，提供RBAC功能
 - config_loader: 配置模板引擎，支持变量解析
 - workspace: 工作空间管理器，提供安全删除功能
+- interfaces: 存储适配器接口定义
+- adapters: 存储适配器实现
 """
 
 __version__ = "1.0.0"
@@ -24,6 +26,8 @@ from .config_loader import (
     ConfigTemplateSyntaxError
 )
 from .workspace import Workspace
+from .interfaces import IStorageAdapter
+from .adapters import LocalFileSystemAdapter
 
 __all__ = [
     # Spawner
@@ -43,4 +47,7 @@ __all__ = [
     "ConfigTemplateSyntaxError",
     # Workspace
     "Workspace",
+    # Storage Adapter
+    "IStorageAdapter",
+    "LocalFileSystemAdapter",
 ]
