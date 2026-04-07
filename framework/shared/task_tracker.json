@@ -92,10 +92,10 @@
           "id": "3.1",
           "name": "全员聊天室/工作流协调系统",
           "severity": "P3",
-          "status": "pending",
+          "status": "in_progress",
           "assignee": "alpha",
           "description": "实现全链路可视化协作，支持成员间 @ 主动提醒与工作流自动流转。",
-          "notes": "本质是协作文化的重大升级。已完成阿尔法架构分析（ID: 3.1）。",
+          "notes": "Alpha 🐢 已完成技术设计文档 (P3_1_CollabSystem_Design.md)。即将进入后端接口实现与协调器开发阶段。",
           "verification": ["可视化对话", "自动任务流转"]
         }
       ]
