@@ -92,31 +92,54 @@ class ZooDevCenter {
     
     async loadMemberStatus() {
         try {
-            const response = await fetch('/api/member-status');
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            // 同时获取成员详细信息和状态
+            const [membersResponse, statusResponse] = await Promise.all([
+                fetch('/api/members'),
+                fetch('/api/member-status')
+            ]);
             
-            const data = await response.json();
-            this.renderMemberStatus(data);
+            if (!membersResponse.ok) throw new Error(`获取成员详情失败: HTTP ${membersResponse.status}`);
+            if (!statusResponse.ok) throw new Error(`获取成员状态失败: HTTP ${statusResponse.status}`);
+            
+            const membersData = await membersResponse.json();
+            const statusData = await statusResponse.json();
+            
+            // 合并数据
+            const combinedData = { members: membersData, status: statusData };
+            this.renderMemberStatus(combinedData);
         } catch (error) {
             console.error('加载成员状态失败:', error);
+            // 回退到只显示状态
+            try {
+                const response = await fetch('/api/member-status');
+                if (response.ok) {
+                    const data = await response.json();
+                    this.renderMemberStatus({ status: data, members: [] });
+                }
+            } catch (fallbackError) {
+                console.error('回退加载也失败:', fallbackError);
+            }
         }
     }
     
-    renderMemberStatus(statusData) {
+    renderMemberStatus(data) {
         const listEl = document.getElementById('member-status-list');
         if (!listEl) return;
         
-        let html = '<div class="member-status-grid">';
+        const membersData = data.members || [];
+        const statusData = data.status || {};
         
-        // 我们知道这些成员
-        const members = [
-            { id: 'alpha', name: '阿尔法', emoji: '🐢' },
-            { id: 'weaver', name: '织巢', emoji: '🐜' },
-            { id: 'duci', name: '毒刺', emoji: '🦂' },
-            { id: 'panda', name: '达达', emoji: '🐼' },
-            { id: 'aeterna', name: '史官', emoji: '📜' },
-            { id: 'gulu', name: '咕噜', emoji: '🟢' }
+        // 如果没有成员详细数据，使用硬编码的成员列表
+        const members = membersData.length > 0 ? membersData : [
+            { id: 'alpha', name: '阿尔法', code_name: 'Alpha', role_display: '首席架构师 · 玄龟', model: 'MiniMax-M2.5', avatar_emoji: '🐢' },
+            { id: 'weaver', name: '织巢', code_name: 'Weaver', role_display: '疯狂工程师 · 织巢蚁', model: 'Kimi-K2.5', avatar_emoji: '🐜' },
+            { id: 'duci', name: '毒刺', code_name: 'Duci', role_display: '代码审计师 · 毒刺蝎', model: 'DeepSeek-V3.2', avatar_emoji: '🦂' },
+            { id: 'panda', name: '达达', code_name: 'Panda', role_display: '代理园长 · 熊猫', model: 'DeepSeek-V3.2', avatar_emoji: '🐼' },
+            { id: 'aeterna', name: '永恒史官', code_name: 'Aeterna', role_display: '史官 · 永恒石', model: 'GLM-4.7', avatar_emoji: '🪨' },
+            { id: 'gulu', name: '咕噜', code_name: 'Gulu', role_display: '咕噜球', model: 'GLM-4', avatar_emoji: '🟢' }
         ];
+        
+        let html = '<div class="member-status-grid">';
         
         members.forEach(member => {
             const status = statusData[member.id] || 'unknown';
@@ -126,8 +149,12 @@ class ZooDevCenter {
             html += `
                 <div class="member-status-item">
                     <div class="member-info-mini">
-                        <span class="member-emoji">${member.emoji}</span>
+                        <span class="member-emoji">${member.avatar_emoji || this.memberEmojiMap[member.id] || '🐾'}</span>
                         <span class="member-name">${member.name}</span>
+                    </div>
+                    <div class="member-details-mini">
+                        <span class="member-role" title="角色">${member.role_display || '未知角色'}</span>
+                        <span class="member-model" title="模型">${member.model || '未知模型'}</span>
                     </div>
                     <div class="status-badge ${statusClass}">
                         <span class="status-dot"></span>

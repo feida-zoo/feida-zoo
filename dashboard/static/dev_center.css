@@ -780,6 +780,13 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.member-status-item {
+    display: grid;
+    grid-template-columns: 80px 1fr 70px;
+    gap: 8px;
+    align-items: center;
+}
+
 .member-info-mini {
     display: flex;
     align-items: center;
@@ -793,6 +800,29 @@ body {
 .member-info-mini .member-name {
     font-size: 0.9rem;
     font-weight: 500;
+}
+
+.member-details-mini {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.7);
+    max-width: 120px;
+}
+
+.member-role {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.member-model {
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.5);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .status-badge {
