@@ -10,31 +10,16 @@ P1-1.5 重构：将注册表管理职责从 Spawner 分离出来
 
 import json
 import os
-import sys
 import threading
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
-
-# 尝试导入 fcntl，如果不可用则设置为 None
-fcntl = None
-if sys.platform.startswith('linux') or sys.platform.startswith('darwin'):
-    try:
-        import fcntl
-    except ImportError:
-        fcntl = None
 
 
 class RegistryManager:
     """
     成员注册表管理器
     统一管理成员注册表的加载、保存和成员信息的CRUD操作
-
-    并发安全保证：
-    - 线程级：使用 threading.RLock 保护内存数据结构
-    - 进程级：使用文件锁 (fcntl on Linux, 原子创建锁文件 on Windows)
-    - 文件写入：采用原子写入（写临时文件 -> os.replace）保证文件不损坏
     """
 
     DEFAULT_VERSION = "1.0.0"
@@ -48,99 +33,12 @@ class RegistryManager:
         """
         self.registry_file = Path(registry_file).resolve()
         self._registry: Dict[str, Any] = {}
-        self._lock = threading.RLock()  # 可重入锁，解决死锁风险，支持嵌套加锁
-
-        # 跨进程文件锁相关
-        self._lock_file_path = self.registry_file.with_suffix('.lock')
-        self._lock_file = None
-        self._file_lock_creation_lock = threading.Lock()  # 用于保护锁文件创建的锁
+        self._lock = threading.Lock()  # 线程锁，保护并发写入
         self._ensure_directory()
 
     def _ensure_directory(self) -> None:
         """确保注册表文件所在目录存在"""
         self.registry_file.parent.mkdir(parents=True, exist_ok=True)
-
-    def _acquire_file_lock(self, timeout: float = 10.0, retry_interval: float = 0.01) -> bool:
-        """
-        获取跨进程文件锁
-
-        使用不同策略保证跨平台兼容性：
-        - Linux: 使用 fcntl.flock 进行建议性文件锁
-        - Windows: 使用原子文件创建方式实现简单锁
-
-        Args:
-            timeout: 获取锁的最大等待时间（秒）
-            retry_interval: 重试间隔（秒）
-
-        Returns:
-            是否成功获取锁
-        """
-        start_time = time.time()
-
-        while True:
-            try:
-                if sys.platform.startswith('linux') or sys.platform.startswith('darwin'):
-                    # Linux/Unix: 使用 fcntl.flock
-                    with self._file_lock_creation_lock:
-                        if self._lock_file is None:
-                            self._lock_file = open(self._lock_file_path, 'w+', encoding='utf-8')
-
-                    # 获取排他锁，非阻塞方式
-                    if fcntl is None:
-                        raise RuntimeError("fcntl模块不可用，无法获取文件锁")
-                    fcntl.flock(self._lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    return True
-
-                else:
-                    # Windows/其他平台：使用原子创建文件
-                    # 使用 O_EXCL 保证只有一个进程能创建成功
-                    with self._file_lock_creation_lock:
-                        try:
-                            fd = os.open(self._lock_file_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-                            os.close(fd)
-                            self._lock_file = open(self._lock_file_path, 'w+', encoding='utf-8')
-                            return True
-                        except (FileExistsError, OSError):
-                            # 锁已被其他进程持有，继续等待
-                            # 如果锁文件已存在，尝试打开它
-                            if self._lock_file_path.exists():
-                                self._lock_file = open(self._lock_file_path, 'w+', encoding='utf-8')
-                                return True
-                            pass
-
-            except (BlockingIOError, IOError):
-                # 锁被其他进程持有，等待后重试
-                self._release_file_lock()
-            except Exception:
-                # 其他错误，释放资源继续重试
-                self._release_file_lock()
-
-            # 检查超时
-            if time.time() - start_time > timeout:
-                return False
-
-            # 等待后重试
-            time.sleep(retry_interval)
-
-    def _release_file_lock(self) -> None:
-        """释放跨进程文件锁"""
-        if self._lock_file is not None:
-            try:
-                if sys.platform.startswith('linux') or sys.platform.startswith('darwin') and fcntl is not None:
-                    fcntl.flock(self._lock_file, fcntl.LOCK_UN)
-                if self._lock_file:
-                    self._lock_file.close()
-            except Exception:
-                pass
-            finally:
-                self._lock_file = None
-
-            # 尝试删除锁文件（Windows 上可能删除失败，忽略即可）
-            try:
-                if self._lock_file_path.exists():
-                    os.remove(self._lock_file_path)
-            except Exception:
-                pass
 
     def load(self) -> Dict[str, Any]:
         """
@@ -150,68 +48,27 @@ class RegistryManager:
             完整注册表字典
         """
         with self._lock:
-            # 获取跨进程文件锁进行读取
-            if not self._acquire_file_lock():
-                raise RuntimeError("无法获取注册表文件锁，加载失败")
-
-            try:
-                if self.registry_file.exists():
-                    with open(self.registry_file, 'r', encoding='utf-8') as f:
-                        self._registry = json.load(f)
-                else:
-                    self._registry = {
-                        "members": {},
-                        "version": self.DEFAULT_VERSION,
-                        "last_updated": None
-                    }
-                return self._registry
-            finally:
-                self._release_file_lock()
+            if self.registry_file.exists():
+                with open(self.registry_file, 'r', encoding='utf-8') as f:
+                    self._registry = json.load(f)
+            else:
+                self._registry = {
+                    "members": {},
+                    "version": self.DEFAULT_VERSION,
+                    "last_updated": None
+                }
+            return self._registry
 
     def save(self) -> None:
         """
         保存注册表到文件
         更新 last_updated 时间戳
-        使用原子写入保证文件不损坏：写临时文件 -> 重命名
-
-        并发安全：
-        - 线程级：threading.RLock 保护内存
-        - 进程级：文件锁保护文件系统
-        - 写入原子性：临时文件 + os.replace 保证要么完整要么不修改原文件
+        使用线程锁保护并发写入，防止文件损坏
         """
-        with self._lock:  # 线程锁保护内存数据结构
-            # 获取跨进程文件锁
-            if not self._acquire_file_lock():
-                raise RuntimeError("无法获取注册表文件锁，保存失败")
-
-            try:
-                self._registry["last_updated"] = datetime.now().isoformat()
-
-                # 原子写入方案：先写入临时文件，再重命名
-                # 这样保证即使写入过程出错，原文件保持完整
-                temp_file = self.registry_file.with_suffix('.tmp')
-
-                # 写入临时文件
-                with open(temp_file, 'w', encoding='utf-8') as f:
-                    json.dump(self._registry, f, indent=2, ensure_ascii=False)
-                    # 确保数据刷写到磁盘
-                    f.flush()
-                    os.fsync(f.fileno())
-
-                # 原子重命名替换原文件
-                # os.replace 保证原子性，即使目标已存在也会被替换
-                os.replace(temp_file, self.registry_file)
-
-            finally:
-                # 清理可能遗留的临时文件
-                temp_file = self.registry_file.with_suffix('.tmp')
-                if temp_file.exists():
-                    try:
-                        os.remove(temp_file)
-                    except Exception:
-                        pass
-                # 释放文件锁
-                self._release_file_lock()
+        with self._lock:  # 使用线程锁保护整个保存操作
+            self._registry["last_updated"] = datetime.now().isoformat()
+            with open(self.registry_file, 'w', encoding='utf-8') as f:
+                json.dump(self._registry, f, indent=2, ensure_ascii=False)
 
     def register_member(self, member_data: Dict[str, Any]) -> str:
         """
