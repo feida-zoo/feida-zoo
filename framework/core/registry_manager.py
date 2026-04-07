@@ -10,7 +10,6 @@ P1-1.5 重构：将注册表管理职责从 Spawner 分离出来
 
 import json
 import os
-import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
@@ -33,7 +32,6 @@ class RegistryManager:
         """
         self.registry_file = Path(registry_file).resolve()
         self._registry: Dict[str, Any] = {}
-        self._lock = threading.Lock()  # 线程锁，保护并发写入
         self._ensure_directory()
 
     def _ensure_directory(self) -> None:
@@ -47,28 +45,25 @@ class RegistryManager:
         Returns:
             完整注册表字典
         """
-        with self._lock:
-            if self.registry_file.exists():
-                with open(self.registry_file, 'r', encoding='utf-8') as f:
-                    self._registry = json.load(f)
-            else:
-                self._registry = {
-                    "members": {},
-                    "version": self.DEFAULT_VERSION,
-                    "last_updated": None
-                }
-            return self._registry
+        if self.registry_file.exists():
+            with open(self.registry_file, 'r', encoding='utf-8') as f:
+                self._registry = json.load(f)
+        else:
+            self._registry = {
+                "members": {},
+                "version": self.DEFAULT_VERSION,
+                "last_updated": None
+            }
+        return self._registry
 
     def save(self) -> None:
         """
         保存注册表到文件
         更新 last_updated 时间戳
-        使用线程锁保护并发写入，防止文件损坏
         """
-        with self._lock:  # 使用线程锁保护整个保存操作
-            self._registry["last_updated"] = datetime.now().isoformat()
-            with open(self.registry_file, 'w', encoding='utf-8') as f:
-                json.dump(self._registry, f, indent=2, ensure_ascii=False)
+        self._registry["last_updated"] = datetime.now().isoformat()
+        with open(self.registry_file, 'w', encoding='utf-8') as f:
+            json.dump(self._registry, f, indent=2, ensure_ascii=False)
 
     def register_member(self, member_data: Dict[str, Any]) -> str:
         """
@@ -83,21 +78,20 @@ class RegistryManager:
         Raises:
             ValueError: 如果成员ID已存在
         """
-        with self._lock:
-            if "id" not in member_data:
-                raise ValueError("成员数据必须包含 'id' 字段")
+        if "id" not in member_data:
+            raise ValueError("成员数据必须包含 'id' 字段")
 
-            member_id = member_data["id"]
-            if member_id in self._registry.get("members", {}):
-                raise ValueError(f"成员 '{member_id}' 已存在")
+        member_id = member_data["id"]
+        if member_id in self._registry.get("members", {}):
+            raise ValueError(f"成员 '{member_id}' 已存在")
 
-            # 确保 members 字典存在
-            if "members" not in self._registry:
-                self._registry["members"] = {}
+        # 确保 members 字典存在
+        if "members" not in self._registry:
+            self._registry["members"] = {}
 
-            # 存储成员数据
-            self._registry["members"][member_id] = member_data.copy()
-            return member_id
+        # 存储成员数据
+        self._registry["members"][member_id] = member_data.copy()
+        return member_id
 
     def get_member(self, member_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -109,9 +103,8 @@ class RegistryManager:
         Returns:
             成员数据字典，如果不存在返回 None
         """
-        with self._lock:
-            members = self._registry.get("members", {})
-            return members.get(member_id)
+        members = self._registry.get("members", {})
+        return members.get(member_id)
 
     def list_members(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
         """
@@ -123,18 +116,17 @@ class RegistryManager:
         Returns:
             成员数据列表
         """
-        with self._lock:
-            members = self._registry.get("members", {})
-            result = []
+        members = self._registry.get("members", {})
+        result = []
 
-            for member_data in members.values():
-                if status is not None:
-                    member_status = member_data.get("status")
-                    if member_status != status:
-                        continue
-                result.append(member_data.copy())
+        for member_data in members.values():
+            if status is not None:
+                member_status = member_data.get("status")
+                if member_status != status:
+                    continue
+            result.append(member_data.copy())
 
-            return result
+        return result
 
     def update_member(self, member_id: str, updates: Dict[str, Any]) -> bool:
         """
@@ -147,14 +139,13 @@ class RegistryManager:
         Returns:
             是否更新成功。如果成员不存在返回 False
         """
-        with self._lock:
-            if member_id not in self._registry.get("members", {}):
-                return False
+        if member_id not in self._registry.get("members", {}):
+            return False
 
-            # 更新字段
-            member = self._registry["members"][member_id]
-            member.update(updates)
-            return True
+        # 更新字段
+        member = self._registry["members"][member_id]
+        member.update(updates)
+        return True
 
     def delete_member(self, member_id: str) -> bool:
         """
@@ -166,13 +157,12 @@ class RegistryManager:
         Returns:
             是否删除成功。如果成员不存在返回 False
         """
-        with self._lock:
-            members = self._registry.get("members", {})
-            if member_id not in members:
-                return False
+        members = self._registry.get("members", {})
+        if member_id not in members:
+            return False
 
-            del members[member_id]
-            return True
+        del members[member_id]
+        return True
 
     def update_member_status(self, member_id: str, status: str) -> bool:
         """
@@ -194,8 +184,7 @@ class RegistryManager:
         Returns:
             版本字符串
         """
-        with self._lock:
-            return self._registry.get("version", self.DEFAULT_VERSION)
+        return self._registry.get("version", self.DEFAULT_VERSION)
 
     def get_last_updated(self) -> Optional[str]:
         """
@@ -204,8 +193,7 @@ class RegistryManager:
         Returns:
             ISO格式时间戳，如果未更新过返回 None
         """
-        with self._lock:
-            return self._registry.get("last_updated")
+        return self._registry.get("last_updated")
 
     @property
     def member_count(self) -> int:
@@ -215,5 +203,4 @@ class RegistryManager:
         Returns:
             成员数量
         """
-        with self._lock:
-            return len(self._registry.get("members", {}))
+        return len(self._registry.get("members", {}))
