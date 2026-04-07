@@ -15,8 +15,8 @@ PROJECT_ROOT = Path("/home/afei/workspace/code/feida_zoo")
 PANDA_ROOT = Path("/home/afei/workspace/panda")
 REGISTRY_PATH = PROJECT_ROOT / "framework" / "data" / "registry.json"
 AGENTS_DIR = PANDA_ROOT / "agents"
-TEMPLATES_DIR = PANDA_ROOT / "dashboard" / "templates"
-STATIC_DIR = PANDA_ROOT / "dashboard" / "static"
+TEMPLATES_DIR = PROJECT_ROOT / "dashboard" / "templates"
+STATIC_DIR = PROJECT_ROOT / "dashboard" / "static"
 
 class ZooDashboardHandler(BaseHTTPRequestHandler):
     def do_GET(self):

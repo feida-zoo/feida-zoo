@@ -102,6 +102,9 @@ class Workspace:
     
     def _ensure_log_file(self) -> None:
         """Ensure log file exists with empty list if not present."""
+        # 确保日志文件的父目录存在
+        if not self._storage.exists(self.log_file.parent):
+            self._storage.mkdir(self.log_file.parent, parents=True, exist_ok=True)
         if not self._storage.exists(self.log_file):
             self._write_log([])
     

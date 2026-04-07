@@ -1,14 +1,21 @@
 """
 飝龘动物园 - 权限管理器 (Permissions)
 基于角色的访问控制(RBAC)系统
+
+重构说明 (P1-1.5):
+- 支持配置化路径配置
+- 与 RegistryManager 和 WorkspaceManager 集成
+- 保持向后兼容的公共API
 """
 
 from enum import Enum
-from typing import Dict, List, Optional, Set, Any
+from typing import Dict, List, Optional, Set, Any, Union
 from dataclasses import dataclass, field
-import json
+import os
 from pathlib import Path
 from datetime import datetime
+
+from .config_loader import ConfigLoader
 
 
 class Permission(Enum):
@@ -17,21 +24,21 @@ class Permission(Enum):
     READ_SHARED = "read_shared"
     WRITE_SHARED = "write_shared"
     DELETE_SHARED = "delete_shared"
-    
+
     # 成员目录权限
     READ_MEMBER = "read_member"
     WRITE_MEMBER = "write_member"
     DELETE_MEMBER = "delete_member"
-    
+
     # 代理管理权限
     SPAWN_AGENT = "spawn_agent"
     DELETE_AGENT = "delete_agent"
     MODIFY_AGENT = "modify_agent"
-    
+
     # 配置管理权限
     READ_CONFIG = "read_config"
     MODIFY_CONFIG = "modify_config"
-    
+
     # 系统管理权限
     ADMIN = "admin"
     AUDIT = "audit"
@@ -61,14 +68,19 @@ class RolePermissions:
 class PermissionManager:
     """
     权限管理器
-    
+
     提供基于角色的访问控制(RBAC)功能：
     - 角色定义与管理
     - 权限分配与检查
     - 权限继承
     - 访问日志记录
+
+    重构说明：
+    - 支持通过 ConfigLoader 进行配置化路径管理
+    - 可与 RegistryManager 和 WorkspaceManager 协同工作
+    - 保持向后兼容性
     """
-    
+
     # 默认角色权限配置
     DEFAULT_ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Role.ARCHITECT: {
@@ -107,42 +119,57 @@ class PermissionManager:
             Permission.READ_SHARED,
         },
     }
-    
-    def __init__(self, config_path: Optional[str] = None):
+
+    def __init__(
+        self,
+        config_path: Optional[Union[str, Path]] = None,
+        base_path: Optional[Union[str, Path]] = None,
+        config_loader: Optional[ConfigLoader] = None
+    ):
         """
         初始化权限管理器
-        
+
         Args:
-            config_path: 配置文件路径，默认为 framework/configs/permissions.yaml
+            config_path: 配置文件路径。如果为 None，使用默认路径
+            base_path: 项目根目录路径，用于解析相对路径。如果为 None，从环境变量获取
+            config_loader: ConfigLoader 实例，用于配置解析。如果为 None，创建新实例
         """
-        if config_path:
-            self.config_path = Path(config_path)
-        else:
-            import os
+        # 处理基础路径
+        if base_path is None:
             base_path = os.getenv("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo")
-            self.config_path = Path(base_path) / "framework" / "configs" / "permissions.yaml"
-        
+        self.base_path = Path(base_path).resolve()
+
+        # 处理配置文件路径
+        if config_path is None:
+            self.config_path = self.base_path / "framework" / "configs" / "permissions.yaml"
+        else:
+            self.config_path = Path(config_path).resolve()
+
+        # 初始化配置加载器
+        self._config_loader = config_loader or ConfigLoader(str(self.base_path))
+
         # 初始化角色权限
         self._role_permissions: Dict[Role, Set[Permission]] = {}
         self._load_permissions()
-        
+
         # 访问日志
         self._access_log: List[Dict[str, Any]] = []
         self._max_log_entries = 1000
     
     def _load_permissions(self) -> None:
-        """加载权限配置"""
+        """加载权限配置
+        使用 ConfigLoader 加载并解析配置文件，支持模板变量
+        """
         # 从默认配置加载
         for role, permissions in self.DEFAULT_ROLE_PERMISSIONS.items():
             self._role_permissions[role] = permissions.copy()
-        
+
         # 如果存在配置文件，从文件加载覆盖
         if self.config_path.exists():
             try:
-                import yaml
-                with open(self.config_path, 'r', encoding='utf-8') as f:
-                    config = yaml.safe_load(f)
-                
+                # 使用 ConfigLoader 加载并解析配置
+                config = self._config_loader.load(str(self.config_path))
+
                 if config and 'roles' in config:
                     for role_name, role_config in config['roles'].items():
                         try:
@@ -156,6 +183,72 @@ class PermissionManager:
                             continue
             except Exception as e:
                 print(f"加载权限配置文件失败: {e}")
+
+    def get_config_loader(self) -> ConfigLoader:
+        """
+        获取配置加载器实例
+
+        Returns:
+            ConfigLoader 实例
+        """
+        return self._config_loader
+
+    def set_config_loader(self, config_loader: ConfigLoader) -> None:
+        """
+        设置配置加载器实例
+
+        Args:
+            config_loader: 新的 ConfigLoader 实例
+        """
+        self._config_loader = config_loader
+
+    def check_member_permission(self, role: Role, permission: Permission,
+                               member_id: str, registry_manager=None) -> bool:
+        """
+        检查对特定成员的操作权限
+
+        与 RegistryManager 集成，验证成员存在性后检查权限
+
+        Args:
+            role: 请求者角色
+            permission: 请求的权限
+            member_id: 目标成员ID
+            registry_manager: RegistryManager 实例，用于检查成员是否存在
+
+        Returns:
+            是否拥有权限。如果成员不存在且提供了 registry_manager，返回 False
+        """
+        # 如果提供了 RegistryManager，先检查成员是否存在
+        if registry_manager is not None:
+            if registry_manager.get_member(member_id) is None:
+                return False
+
+        # 检查权限
+        return self.check_permission(role, permission)
+
+    def check_workspace_permission(self, role: Role, permission: Permission,
+                                  member_id: str, workspace_manager=None) -> bool:
+        """
+        检查对特定工作空间的操作权限
+
+        与 WorkspaceManager 集成，验证工作空间存在性后检查权限
+
+        Args:
+            role: 请求者角色
+            permission: 请求的权限
+            member_id: 成员ID
+            workspace_manager: WorkspaceManager 实例，用于检查工作空间是否存在
+
+        Returns:
+            是否拥有权限。如果工作空间不存在且提供了 workspace_manager，返回 False
+        """
+        # 如果提供了 WorkspaceManager，先检查工作空间是否存在
+        if workspace_manager is not None:
+            if not workspace_manager.workspace_exists(member_id):
+                return False
+
+        # 检查权限
+        return self.check_permission(role, permission)
     
     def check_permission(self, role: Role, permission: Permission) -> bool:
         """
