@@ -1,6 +1,7 @@
+已添加聊天室需求到P3需求池
 {
   "version": "1.0.0",
-  "last_updated": "2026-04-06T21:15:00+08:00",
+  "last_updated": "2026-04-06T21:45:00+08:00",
   "current_phase": "P2",
   "phases": {
     "P1": {
@@ -56,10 +57,34 @@
           "severity": "P2",
           "status": "completed",
           "assignee": "weaver",
-          "description": "实现基于文件的异步消息队列，支持成员间的 '订阅/发布' 模式。",
-          "verification": ["消息不丢失", "解耦成员唤醒逻辑"],
+          "description": "实现基于文件的异步消息队列，支持成员间的 '订阅/发布' 模式。已修复毒刺发现的P0级安全漏洞。",
+          "verification": [
+            "消息不丢失",
+            "解耦成员唤醒逻辑",
+            "原子写入机制完整",
+            "事件去重功能有效",
+            "单例模式设计正确",
+            "读写锁竞争优化"
+          ],
           "completed_at": "2026-04-06T21:15:00+08:00",
-          "notes": "实现基于文件系统的异步消息队列，支持发布/订阅模式、延迟事件、并发安全和事件去重。包含完整测试和演示脚本。交付物：event_bus.py, event_bus_demo.py, test_basic.py"
+          "security_fixed_at": "2026-04-06T21:45:00+08:00",
+          "notes": "实现基于文件系统的异步消息队列，支持发布/订阅模式、延迟事件、并发安全和事件去重。包含完整测试和演示脚本。已修复毒刺审计发现的P0级原子写入漏洞及其他P1级问题，确保数据完整性。交付物：event_bus.py, event_bus_demo.py, test_basic.py, test_enhanced.py",
+          "security_audit": {
+            "auditor": "毒刺 🦂",
+            "findings": [
+              "P0级风险：原子写入机制不完整，可能导致数据损坏",
+              "P1级风险：事件去重功能实际失效（ID包含时间戳导致重复检测无效）",
+              "P1级风险：单例模式设计缺陷",
+              "P1级风险：读写锁竞争问题"
+            ],
+            "fixes": [
+              "实现完整的原子写入机制（写临时文件 → os.replace）",
+              "修复事件去重算法，移除时间戳依赖",
+              "改为基于成员名称的多实例管理",
+              "优化锁使用，添加缓存机制减少竞争"
+            ],
+            "status": "已修复并通过所有测试"
+          }
         },
         {
           "id": "2.2",
@@ -68,7 +93,10 @@
           "status": "pending",
           "assignee": "gulu",
           "description": "在看板上实时展示成员的 CPU/内存占用及活跃 Session 状态。",
-          "verification": ["数据实时更新", "视觉美化"]
+          "verification": [
+            "数据实时更新",
+            "视觉美化"
+          ]
         },
         {
           "id": "2.3",
@@ -77,7 +105,30 @@
           "status": "pending",
           "assignee": "aeterna",
           "description": "史官根据每日 memory 自动提炼项目进度，并推送到园长飞书。",
-          "verification": ["内容精准", "定时推送"]
+          "verification": [
+            "内容精准",
+            "定时推送"
+          ]
+        }
+      ]
+    },
+    "P3": {
+      "name": "P3 战略孵化与创新探索",
+      "status": "pending",
+      "tasks": [
+        {
+          "id": "3.1",
+          "name": "动物园聊天室协作平台",
+          "description": "基于Event Bus构建全链路可视化聊天室，支持需求下发、成员@机制、工作流自动流转。",
+          "assignee": "alpha",
+          "severity": "P3",
+          "status": "pending",
+          "verification": [
+            "聊天界面可用",
+            "@机制生效",
+            "工作流自动流转"
+          ],
+          "notes": "战略优先级高，紧急程度低。阿尔法已提供详细架构建议。"
         }
       ]
     }
