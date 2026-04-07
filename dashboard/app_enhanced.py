@@ -65,20 +65,114 @@ class SSEManager:
         with self.lock:
             dead_clients = []
             
+            # 准备消息，处理 JSON 序列化错误
+            try:
+                # 使用 default=str 处理不可序列化对象，处理循环引用等错误
+                json_data = json.dumps(data, ensure_ascii=False, default=str)
+                message = f"event: {event_type}\ndata: {json_data}\n\n"
+                message_bytes = message.encode('utf-8')
+            except Exception as e:
+                print(f"SSE 消息序列化错误: {e}")
+                # 如果无法序列化，使用错误消息替代
+                error_data = {
+                    "error": "Message serialization failed",
+                    "original_event_type": event_type,
+                    "details": str(e)
+                }
+                json_data = json.dumps(error_data, ensure_ascii=False, default=str)
+                message = f"event: error\ndata: {json_data}\n\n"
+                message_bytes = message.encode('utf-8')
+            
             for client in self.clients:
                 try:
-                    message = f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-                    client.wfile.write(message.encode('utf-8'))
+                    client.wfile.write(message_bytes)
                     client.wfile.flush()
-                except (BrokenPipeError, ConnectionResetError):
+                except (BrokenPipeError, ConnectionResetError, AttributeError):
                     dead_clients.append(client)
                 except Exception as e:
-                    print(f"SSE 广播错误: {e}")
+                    print(f"SSE 客户端写入错误: {e}")
                     dead_clients.append(client)
             
             # 清理死掉的客户端
             for client in dead_clients:
                 self.remove_client(client)
+
+
+class MemberStatusManager:
+    """成员运行状态管理器，负责实时监控成员状态"""
+    
+    def __init__(self, registry_path: Path, agents_dir: Path):
+        self.registry_path = registry_path
+        self.agents_dir = agents_dir
+        self.status_cache = {}
+        self.lock = threading.RLock()
+        self._stop_event = threading.Event()
+        self._monitor_thread = None
+        self._callbacks = []
+
+    def start(self):
+        """启动状态监控"""
+        if self._monitor_thread and self._monitor_thread.is_alive():
+            return
+        self._monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
+        self._monitor_thread.start()
+
+    def stop(self):
+        """停止状态监控"""
+        self._stop_event.set()
+        if self._monitor_thread:
+            self._monitor_thread.join(timeout=2)
+
+    def register_callback(self, callback):
+        """注册状态变更回调"""
+        self._callbacks.append(callback)
+
+    def get_all_status(self) -> Dict[str, str]:
+        """获取所有成员状态"""
+        with self.lock:
+            if not self.status_cache:
+                self._update_status()
+            return self.status_cache.copy()
+
+    def _monitor_loop(self):
+        """监控循环"""
+        while not self._stop_event.is_set():
+            old_status = self.status_cache.copy()
+            new_status = self._update_status()
+            
+            # 检查是否有状态变更
+            if old_status != new_status:
+                for callback in self._callbacks:
+                    callback(new_status)
+            
+            # 每 10 秒检查一次（模拟实时性）
+            time.sleep(10)
+
+    def _update_status(self) -> Dict[str, str]:
+        """更新状态逻辑"""
+        try:
+            print("正在更新成员状态...") # 添加日志
+            with open(self.registry_path, 'r', encoding='utf-8') as f:
+                registry = json.load(f)
+            
+            new_status = {}
+            for member_id in registry.get("members", {}):
+                print(f"检测成员 {member_id} 状态...") # 添加日志
+                new_status[member_id] = self._detect_member_active_status(member_id)
+            
+            with self.lock:
+                self.status_cache = new_status
+            print(f"状态更新完成: {new_status}") # 添加日志
+            return new_status
+        except Exception as e:
+            print(f"更新成员状态失败: {e}")
+            return self.status_cache
+
+    def _detect_member_active_status(self, member_id: str) -> str:
+        """检测单个成员的活跃状态"""
+        # 简化版：先返回idle，后续可以根据需要扩展
+        return "idle"
+
 
 
 class TaskTrackerManager:
@@ -249,6 +343,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
     # 类变量共享 SSE 管理器
     sse_manager = SSEManager()
     task_manager = TaskTrackerManager(TASK_TRACKER_PATH)
+    status_manager = MemberStatusManager(REGISTRY_PATH, AGENTS_DIR)
     git_adapter = get_git_adapter()
     git_watcher = get_git_watcher()
     
@@ -259,6 +354,12 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             # 注册回调，当有新提交时广播 SSE 事件
             self.git_watcher.register_callback(self._on_git_update)
             self.__class__._git_watcher_started = True
+        
+        # 启动成员状态监视器
+        if not hasattr(self.__class__, '_status_monitor_started'):
+            self.status_manager.start()
+            self.status_manager.register_callback(self._on_status_update)
+            self.__class__._status_monitor_started = True
         
         super().__init__(*args, **kwargs)
     
@@ -271,6 +372,14 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             "data": timeline_data,
             "timestamp": datetime.now().isoformat()
         })
+        
+    def _on_status_update(self, status_data):
+        """成员状态更新回调函数"""
+        self.sse_manager.broadcast("member_status", {
+            "type": "status_update",
+            "data": status_data,
+            "timestamp": datetime.now().isoformat()
+        })
     
     def do_GET(self):
         """处理 GET 请求"""
@@ -279,6 +388,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 self._serve_dev_center()
             elif self.path == '/api/members':
                 self._send_json(self._get_member_data())
+            elif self.path == '/api/member-status':
+                self._send_json(self.status_manager.get_all_status())
             elif self.path == '/api/kanban':
                 self._send_json(self._get_kanban_data())
             elif self.path == '/api/task-stats':
@@ -378,7 +489,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                     "species": species_info["species"],
                     "avatar": f"/avatar/{member_id}" if avatar_exists else None,
                     "avatar_emoji": data.get("metadata", {}).get("avatar", "🐾"),
-                    "status": data.get("status", "unknown"),
+                    "status": self.status_manager.status_cache.get(member_id, data.get("status", "unknown")),
                     "model": data.get("model", "unknown"),
                     "description": data.get("metadata", {}).get("description", "")
                 })
@@ -494,6 +605,7 @@ def run_server():
     except KeyboardInterrupt:
         print("\n\n🛑 服务器正在关闭...")
         ZooDevCenterHandler.git_watcher.stop()
+        ZooDevCenterHandler.status_manager.stop()
         server.server_close()
         print("✅ 服务器已安全关闭")
 

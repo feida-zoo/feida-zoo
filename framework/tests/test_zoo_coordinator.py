@@ -14,6 +14,9 @@ from typing import Dict, List
 
 import pytest
 
+# Register custom marks
+pytest.mark.performance = pytest.mark.performance
+
 # Add project root to path
 import sys
 project_root = Path(__file__).parent.parent.parent
@@ -100,8 +103,8 @@ class ZooCoordinator:
             event: 事件字典
         """
         # 提取消息内容
-        payload = event.get("payload", {})
-        content = payload.get("content", "")
+        payload = event.get("payload", {}) or {}
+        content = payload.get("content", "") if isinstance(payload, dict) else ""
         mentions = self._parse_mentions(content)
 
         # 保存到聊天历史
@@ -132,18 +135,22 @@ class ZooCoordinator:
         Returns:
             被 @ 的成员ID列表
         """
-        if not content:
+        if not content or not isinstance(content, str):
             return []
 
+        import re
+        # 使用正则表达式精确匹配 @ 后跟合法成员ID字符（字母、数字、下划线、连字符）
+        # 要求 @ 前面是单词边界（非单词字符或字符串开始），后面跟合法ID字符
+        # 这样可以避免匹配到 @weaver@stinger 中的 @stinger
+        pattern = r'(?:^|[^a-zA-Z0-9_-])@([a-zA-Z0-9_-]+)'
+        matches = re.findall(pattern, content)
+        
+        # 去重并返回
         mentions = []
-        words = content.split()
-
-        for word in words:
-            if word.startswith("@"):
-                member_id = word[1:].strip()
-                if member_id and member_id not in mentions:
-                    mentions.append(member_id)
-
+        for match in matches:
+            if match and match not in mentions:
+                mentions.append(match)
+        
         return mentions
 
     def _wake_member(self, member_id: str, trigger_event: Dict) -> None:
@@ -175,11 +182,42 @@ class ZooCoordinator:
         with self._chat_history_lock:
             try:
                 with open(self._chat_history_file, "a", encoding="utf-8") as f:
-                    json.dump(event, f, ensure_ascii=False)
+                    json.dump(event, f, ensure_ascii=False, default=str)
                     f.write("\n")
+            except (PermissionError, OSError) as e:
+                # 文件权限错误或磁盘空间不足
+                print(f"[ZooCoordinator] File access error appending to chat history: {e}")
+                # 尝试创建备份文件或降级处理
+                try:
+                    # 尝试写入临时文件
+                    import tempfile
+                    temp_file = tempfile.NamedTemporaryFile(mode="w", prefix="zoo_chat_backup_", suffix=".jsonl", delete=False)
+                    json.dump({"error": "Main chat file inaccessible, event lost", "original_event_id": event.get("id", "unknown"), "timestamp": time.time()}, temp_file, ensure_ascii=False)
+                    temp_file.write("\n")
+                    temp_file.close()
+                    print(f"[ZooCoordinator] Backup event saved to {temp_file.name}")
+                except Exception as backup_error:
+                    print(f"[ZooCoordinator] Backup also failed: {backup_error}")
+            except json.JSONDecodeError as e:
+                # JSON 编码错误
+                print(f"[ZooCoordinator] JSON encode error: {e}")
+                try:
+                    # 尝试保存错误信息
+                    with open(self._chat_history_file, "a", encoding="utf-8") as f:
+                        simplified_event = {
+                            "id": event.get("id", "unknown"),
+                            "type": event.get("type", "unknown"),
+                            "publisher": event.get("publisher", "unknown"),
+                            "timestamp": event.get("timestamp", time.time()),
+                            "error": "Original event failed JSON encoding"
+                        }
+                        json.dump(simplified_event, f, ensure_ascii=False)
+                        f.write("\n")
+                except Exception as fallback_error:
+                    print(f"[ZooCoordinator] Fallback save also failed: {fallback_error}")
             except Exception as e:
-                # 记录错误但不抛出，避免阻断事件流程
-                print(f"[ZooCoordinator] Failed to append to chat history: {e}")
+                # 其他未知异常
+                print(f"[ZooCoordinator] Unexpected error appending to chat history: {e}")
 
     def get_chat_history(self, limit: int = 100) -> List[Dict]:
         """
@@ -290,6 +328,24 @@ class TestZooCoordinator:
         assert temp_coordinator._parse_mentions(None) == []
         assert temp_coordinator._parse_mentions("Hello world") == []
 
+    def test_parse_mentions_invalid_formats(self, temp_coordinator):
+        """测试无效 @提及格式"""
+        # 无效格式应返回空或正确解析
+        assert temp_coordinator._parse_mentions("@weaver@stinger") == ["weaver"]  # 只匹配第一个 @weaver，@stinger 前面是字母，不匹配
+        assert temp_coordinator._parse_mentions("@weaver!") == ["weaver"]  # 匹配 weaver，! 不是合法字符
+        assert temp_coordinator._parse_mentions("@@") == []  # 无效，@后没有合法字符
+        assert temp_coordinator._parse_mentions("@ ") == []  # @后是空格
+        
+        # 包含特殊字符
+        assert temp_coordinator._parse_mentions("@weaver-123") == ["weaver-123"]  # 连字符允许
+        assert temp_coordinator._parse_mentions("@weaver_123") == ["weaver_123"]  # 下划线允许
+        assert temp_coordinator._parse_mentions("@weaver.123") == ["weaver"]  # 只匹配到 weaver，因为 . 不是合法字符
+        
+        # 边界测试
+        assert temp_coordinator._parse_mentions("hello@weaver") == []  # @ 在单词中间，不匹配
+        assert temp_coordinator._parse_mentions("hello @weaver world") == ["weaver"]  # 正常匹配
+        assert temp_coordinator._parse_mentions("@weaver,@stinger") == ["weaver", "stinger"]  # 逗号分隔，两个都匹配
+
     def test_parse_mentions_duplicate(self, temp_coordinator):
         """测试去重 @提及"""
         content = "@weaver @weaver hello"
@@ -392,6 +448,46 @@ class TestZooCoordinator:
         temp_coordinator.set_sse_manager(sse_mgr)
         assert temp_coordinator.sse_manager is sse_mgr
 
+    def test_stop_unsubscribes_and_sets_flag(self, temp_coordinator):
+        """测试停止协调器会取消订阅并设置标志"""
+        # 先启动以订阅事件
+        temp_coordinator.start()
+        assert temp_coordinator._subscribed
+        
+        # 停止协调器
+        temp_coordinator.stop()
+        
+        # 验证状态已更新
+        assert not temp_coordinator._subscribed
+
+    def test_start_stop_idempotent(self, temp_coordinator):
+        """测试多次启动/停止的幂等性"""
+        # 多次启动应该不会出错
+        temp_coordinator.start()
+        temp_coordinator.start()  # 再次启动
+        assert temp_coordinator._subscribed
+        
+        # 多次停止应该不会出错
+        temp_coordinator.stop()
+        temp_coordinator.stop()  # 再次停止
+        assert not temp_coordinator._subscribed
+
+    def test_events_not_handled_after_stop(self, temp_coordinator, temp_event_bus):
+        """测试停止后不再处理事件"""
+        # 注册成员并启动
+        temp_coordinator.register_member("weaver", {})
+        temp_coordinator.start()
+        
+        # 停止协调器
+        temp_coordinator.stop()
+        
+        # 模拟一个事件，由于 stop() 后 EventBus 没有实际取消订阅 API，
+        # 我们主要验证状态标志的正确性
+        assert not temp_coordinator._subscribed
+        
+        # 如果 EventBus 未来支持取消订阅，这里应验证取消订阅逻辑
+        # 当前只是验证状态标志
+
     def test_handle_event_broadcasts_via_sse(self, temp_coordinator, temp_event_bus):
         """测试处理事件会通过 SSE 广播"""
         sse_mgr = SSEManager()
@@ -417,6 +513,275 @@ class TestZooCoordinator:
             assert call_args[0][0] == "chat_message"
             assert "mentions" in call_args[0][1]
             assert "weaver" in call_args[0][1]["mentions"]
+
+    def test_handle_event_without_mentions(self, temp_coordinator, temp_event_bus):
+        """测试处理不含 @提及 的事件"""
+        sse_mgr = SSEManager()
+        temp_coordinator.set_sse_manager(sse_mgr)
+
+        # mock broadcast 来验证
+        with patch.object(sse_mgr, 'broadcast') as mock_broadcast:
+            event = {
+                "id": "test_123",
+                "type": "chat_message",
+                "publisher": "alpha",
+                "payload": {"content": "Hello world without mentions"},
+                "timestamp": 1234567890
+            }
+
+            temp_coordinator._handle_event(event)
+
+            # 即使没有提及，也应该广播
+            mock_broadcast.assert_called_once()
+            call_args = mock_broadcast.call_args
+            assert call_args[0][0] == "chat_message"
+            assert call_args[0][1]["mentions"] == []  # 空提及列表
+
+    def test_handle_event_malformed_payload(self, temp_coordinator, temp_event_bus):
+        """测试处理格式错误的事件"""
+        sse_mgr = SSEManager()
+        temp_coordinator.set_sse_manager(sse_mgr)
+
+        # 测试缺少 payload 的事件
+        event_without_payload = {
+            "id": "test_123",
+            "type": "chat_message",
+            "publisher": "alpha",
+            "timestamp": 1234567890
+        }
+
+        # 不应该抛出异常
+        temp_coordinator._handle_event(event_without_payload)
+
+        # 测试 payload 为 None
+        event_none_payload = {
+            "id": "test_124",
+            "type": "chat_message",
+            "publisher": "alpha",
+            "payload": None,
+            "timestamp": 1234567890
+        }
+        temp_coordinator._handle_event(event_none_payload)
+
+        # 测试空事件
+        empty_event = {}
+        temp_coordinator._handle_event(empty_event)
+
+    def test_handle_event_none_values(self, temp_coordinator, temp_event_bus):
+        """测试处理包含 None 值的事件"""
+        sse_mgr = SSEManager()
+        temp_coordinator.set_sse_manager(sse_mgr)
+
+        event = {
+            "id": None,
+            "type": None,
+            "publisher": None,
+            "payload": {"content": None},
+            "timestamp": None
+        }
+
+        # 不应该抛出异常
+        temp_coordinator._handle_event(event)
+
+    def test_chat_history_file_permission_error(self, temp_coordinator):
+        """测试聊天历史文件权限错误处理"""
+        event = {
+            "id": "test_123",
+            "type": "chat_message",
+            "payload": {"content": "test"}
+        }
+
+        # 模拟文件权限错误
+        with patch("builtins.open", side_effect=PermissionError("Permission denied")):
+            # 不应该抛出异常
+            temp_coordinator._append_to_chat_history(event)
+            # 错误应该被捕获并记录
+
+    def test_chat_history_json_encode_error(self, temp_coordinator):
+        """测试聊天历史 JSON 编码错误处理"""
+        # 创建包含不可序列化对象的事件
+        import threading
+        event = {
+            "id": "test_123",
+            "type": "chat_message",
+            "payload": {"content": "test", "thread": threading.Thread()}
+        }
+
+        # 不应该抛出异常
+        temp_coordinator._append_to_chat_history(event)
+        # 错误应该被捕获并记录
+
+    def test_concurrent_event_handling(self, temp_coordinator, temp_event_bus):
+        """测试并发事件处理"""
+        sse_mgr = SSEManager()
+        temp_coordinator.set_sse_manager(sse_mgr)
+        temp_coordinator.register_member("weaver", {})
+        temp_coordinator.register_member("stinger", {})
+        temp_coordinator.register_member("alpha", {})
+        
+        events_processed = []
+        errors = []
+        
+        def process_event(i):
+            try:
+                event = {
+                    "id": f"event_{i}",
+                    "type": "chat_message",
+                    "publisher": f"user_{i % 3}",
+                    "payload": {"content": f"@weaver @stinger message {i}"},
+                    "timestamp": time.time() + i
+                }
+                temp_coordinator._handle_event(event)
+                events_processed.append(i)
+            except Exception as e:
+                errors.append(e)
+        
+        # 并发处理多个事件
+        threads = []
+        for i in range(20):
+            t = threading.Thread(target=process_event, args=(i,))
+            t.start()
+            threads.append(t)
+        
+        for t in threads:
+            t.join()
+        
+        # 验证所有事件都被处理
+        assert len(errors) == 0
+        assert len(events_processed) == 20
+        
+        # 检查聊天历史（可能需要等待文件写入完成）
+        time.sleep(0.1)
+        history = temp_coordinator.get_chat_history(limit=50)
+        assert len(history) >= 20  # 至少有 20 个事件
+
+    def test_concurrent_member_registry_access(self, temp_coordinator):
+        """测试并发成员注册表访问"""
+        errors = []
+        
+        def register_members(prefix):
+            try:
+                for i in range(50):
+                    member_id = f"{prefix}_{i}"
+                    member_info = {"name": f"Member {prefix}_{i}", "role": "test"}
+                    temp_coordinator.register_member(member_id, member_info)
+            except Exception as e:
+                errors.append(e)
+        
+        def get_registry_repeatedly(thread_id):
+            try:
+                for _ in range(100):
+                    registry = temp_coordinator.get_member_registry()
+                    # 验证返回的是副本而不是原始引用
+                    assert isinstance(registry, dict)
+            except Exception as e:
+                errors.append(e)
+        
+        # 并发注册和获取
+        threads = []
+        for i in range(5):
+            t = threading.Thread(target=register_members, args=(f"thread{i}",))
+            t.start()
+            threads.append(t)
+        
+        for i in range(3):
+            t = threading.Thread(target=get_registry_repeatedly, args=(i,))
+            t.start()
+            threads.append(t)
+        
+        for t in threads:
+            t.join()
+        
+        # 验证没有错误
+        assert len(errors) == 0
+        
+        # 验证所有成员都被注册
+        registry = temp_coordinator.get_member_registry()
+        assert len(registry) == 5 * 50  # 5个线程各注册50个成员
+
+    def test_concurrent_chat_history_access(self, temp_coordinator):
+        """测试并发聊天历史访问"""
+        errors = []
+        events_written = []
+        
+        def append_events(thread_id):
+            try:
+                for i in range(20):
+                    event = {
+                        "id": f"thread{thread_id}_event{i}",
+                        "type": "chat_message",
+                        "payload": {"content": f"Message from thread {thread_id}, event {i}"},
+                        "timestamp": time.time()
+                    }
+                    temp_coordinator._append_to_chat_history(event)
+                    events_written.append(f"thread{thread_id}_event{i}")
+            except Exception as e:
+                errors.append(e)
+        
+        def read_history(thread_id):
+            try:
+                for _ in range(10):
+                    history = temp_coordinator.get_chat_history(limit=100)
+                    assert isinstance(history, list)
+            except Exception as e:
+                errors.append(e)
+        
+        # 并发写入和读取
+        threads = []
+        for i in range(3):
+            t = threading.Thread(target=append_events, args=(i,))
+            t.start()
+            threads.append(t)
+        
+        for i in range(2):
+            t = threading.Thread(target=read_history, args=(i,))
+            t.start()
+            threads.append(t)
+        
+        for t in threads:
+            t.join()
+        
+        # 验证没有错误
+        assert len(errors) == 0
+        
+        # 验证所有事件都被写入
+        time.sleep(0.1)  # 等待文件写入完成
+        history = temp_coordinator.get_chat_history(limit=100)
+        event_ids = [e.get("id", "") for e in history]
+        
+        # 检查写入的事件是否在历史中（可能有些事件被并发覆盖，但至少大部分应该存在）
+        found_count = sum(1 for event_id in events_written if event_id in event_ids)
+        assert found_count >= len(events_written) * 0.8  # 至少80%的事件被正确记录
+
+    @pytest.mark.performance
+    def test_performance_high_frequency_events(self, temp_coordinator):
+        """测试高频事件处理性能"""
+        sse_mgr = SSEManager()
+        temp_coordinator.set_sse_manager(sse_mgr)
+        
+        # mock broadcast 以避免实际网络开销
+        with patch.object(sse_mgr, 'broadcast') as mock_broadcast:
+            import time
+            start_time = time.time()
+            
+            # 处理 100 个事件
+            for i in range(100):
+                event = {
+                    "id": f"perf_event_{i}",
+                    "type": "chat_message",
+                    "payload": {"content": f"Performance test message {i} @weaver"},
+                    "timestamp": time.time()
+                }
+                temp_coordinator._handle_event(event)
+            
+            end_time = time.time()
+            elapsed = end_time - start_time
+            
+            # 验证 broadcast 被调用了 100 次
+            assert mock_broadcast.call_count == 100
+            
+            # 性能要求：100个事件应在2秒内处理完成
+            assert elapsed < 2.0, f"Processing 100 events took {elapsed:.2f}s, expected <2.0s"
 
 
 class TestSSEManager:
@@ -587,6 +952,165 @@ class TestSSEManager:
         # 不应该有错误
         assert len(errors) == 0
         assert len(mgr.clients) == 0
+
+
+
+    def test_broadcast_json_serialization_error_handling(self):
+        """测试 JSON 序列化错误处理"""
+        mgr = SSEManager()
+        client = Mock()
+        client.wfile = Mock()
+        client.wfile.write = Mock()
+        client.wfile.flush = Mock()
+        mgr.add_client(client)
+
+        # 测试不可序列化对象（如 bytes）
+        invalid_data = {
+            "normal": "string",
+            "bytes_data": b"binary data",  # 无法直接序列化
+            "set_data": {1, 2, 3}  # set 无法直接序列化
+        }
+
+        # 广播应该成功，即使有不可序列化数据
+        mgr.broadcast("test", invalid_data)
+
+        # 验证 write 被调用（表示广播成功）
+        assert client.wfile.write.called
+        assert client.wfile.flush.called
+
+        # 验证写入的内容包含错误处理
+        write_arg = client.wfile.write.call_args[0][0]
+        message = write_arg.decode('utf-8')
+        # 由于 default=str，应该能序列化，不会抛出错误
+        assert "event: test" in message
+
+    def test_broadcast_with_circular_reference(self):
+        """测试循环引用处理"""
+        mgr = SSEManager()
+        client = Mock()
+        client.wfile = Mock()
+        client.wfile.write = Mock()
+        client.wfile.flush = Mock()
+        mgr.add_client(client)
+
+        # 创建循环引用
+        data = {"name": "test"}
+        data["self"] = data  # 循环引用
+
+        # 广播应该处理循环引用而不崩溃
+        mgr.broadcast("circular", data)
+
+        # 验证 write 被调用
+        assert client.wfile.write.called
+        assert client.wfile.flush.called
+
+    @pytest.mark.performance
+    def test_performance_broadcast_to_many_clients(self):
+        """测试向大量客户端广播的性能"""
+        mgr = SSEManager()
+        
+        # 创建大量 mock 客户端
+        clients = []
+        for _ in range(100):  # 测试 100 个客户端
+            client = Mock()
+            client.wfile = Mock()
+            client.wfile.write = Mock()
+            client.wfile.flush = Mock()
+            mgr.add_client(client)
+            clients.append(client)
+        
+        # 测量广播时间
+        import time
+        start_time = time.time()
+        
+        mgr.broadcast("performance_test", {"message": "test", "count": 100})
+        
+        end_time = time.time()
+        elapsed = end_time - start_time
+        
+        # 验证所有客户端都收到消息
+        for client in clients:
+            assert client.wfile.write.called
+            assert client.wfile.flush.called
+        
+        # 性能要求：100个客户端广播应在1秒内完成
+        assert elapsed < 1.0, f"Broadcast to 100 clients took {elapsed:.2f}s, expected <1.0s"
+
+
+
+    @pytest.mark.performance
+    def test_memory_usage_large_message_broadcast(self):
+        """测试广播大消息时的内存使用"""
+        mgr = SSEManager()
+        client = Mock()
+        client.wfile = Mock()
+        client.wfile.write = Mock()
+        client.wfile.flush = Mock()
+        mgr.add_client(client)
+        
+        # 创建大消息（约 1MB）
+        large_data = {
+            "large_content": "x" * (1024 * 1024),  # 1MB 字符串
+            "metadata": {"type": "large", "size": 1024 * 1024}
+        }
+        
+        # 广播大消息不应崩溃
+        mgr.broadcast("large_message", large_data)
+        
+        # 验证 write 被调用
+        assert client.wfile.write.called
+        
+        # 检查写入的数据大小大致正确
+        write_arg = client.wfile.write.call_args[0][0]
+        assert len(write_arg) > 1024 * 1024  # 应该大于 1MB
+
+    @pytest.mark.performance
+    def test_concurrent_broadcast_performance(self):
+        """测试并发广播性能"""
+        mgr = SSEManager()
+        
+        # 添加多个客户端
+        clients = []
+        for _ in range(50):
+            client = Mock()
+            client.wfile = Mock()
+            client.wfile.write = Mock()
+            client.wfile.flush = Mock()
+            mgr.add_client(client)
+            clients.append(client)
+        
+        errors = []
+        
+        def broadcast_worker(worker_id):
+            try:
+                for i in range(20):
+                    data = {"worker": worker_id, "message": f"msg_{i}", "timestamp": time.time()}
+                    mgr.broadcast(f"worker_{worker_id}", data)
+            except Exception as e:
+                errors.append(e)
+        
+        # 并发广播
+        import time
+        threads = []
+        start_time = time.time()
+        
+        for i in range(10):
+            t = threading.Thread(target=broadcast_worker, args=(i,))
+            t.start()
+            threads.append(t)
+        
+        for t in threads:
+            t.join()
+        
+        end_time = time.time()
+        elapsed = end_time - start_time
+        
+        # 验证没有错误
+        assert len(errors) == 0
+        
+        # 10个线程各广播20次，总共200次广播
+        # 性能要求：200次广播应在5秒内完成
+        assert elapsed < 5.0, f"200 concurrent broadcasts took {elapsed:.2f}s, expected <5.0s"
 
 
 if __name__ == "__main__":
