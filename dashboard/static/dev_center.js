@@ -80,7 +80,8 @@ class ZooDevCenter {
             this.loadTaskStats(),
             this.loadKanbanData(),
             this.loadGitTimeline(),
-            this.loadGitStats()
+            this.loadGitStats(),
+            this.loadMemberStatus()
         ]).then(() => {
             console.log('所有初始数据加载完成');
         }).catch(error => {
@@ -89,6 +90,85 @@ class ZooDevCenter {
         });
     }
     
+    async loadMemberStatus() {
+        try {
+            const response = await fetch('/api/member-status');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            const data = await response.json();
+            this.renderMemberStatus(data);
+        } catch (error) {
+            console.error('加载成员状态失败:', error);
+        }
+    }
+    
+    renderMemberStatus(statusData) {
+        const listEl = document.getElementById('member-status-list');
+        if (!listEl) return;
+        
+        let html = '<div class="member-status-grid">';
+        
+        // 我们知道这些成员
+        const members = [
+            { id: 'alpha', name: '阿尔法', emoji: '🐢' },
+            { id: 'weaver', name: '织巢', emoji: '🐜' },
+            { id: 'duci', name: '毒刺', emoji: '🦂' },
+            { id: 'panda', name: '达达', emoji: '🐼' },
+            { id: 'aeterna', name: '史官', emoji: '📜' },
+            { id: 'gulu', name: '咕噜', emoji: '🟢' }
+        ];
+        
+        members.forEach(member => {
+            const status = statusData[member.id] || 'unknown';
+            const statusClass = status === 'executing' ? 'status-executing' : (status === 'idle' ? 'status-idle' : 'status-unknown');
+            const statusText = status === 'executing' ? '执行中' : (status === 'idle' ? '空闲' : '未知');
+            
+            html += `
+                <div class="member-status-item">
+                    <div class="member-info-mini">
+                        <span class="member-emoji">${member.emoji}</span>
+                        <span class="member-name">${member.name}</span>
+                    </div>
+                    <div class="status-badge ${statusClass}">
+                        <span class="status-dot"></span>
+                        <span class="status-label">${statusText}</span>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        listEl.innerHTML = html;
+        
+        // 同时更新看板中的头像状态
+        this.updateKanbanAssigneeStatus(statusData);
+    }
+    
+    updateKanbanAssigneeStatus(statusData) {
+        document.querySelectorAll('.task-assignee').forEach(el => {
+            const nameSpan = el.querySelector('span');
+            if (!nameSpan) return;
+            
+            const assigneeName = nameSpan.textContent.trim();
+            // 简单映射名称到ID
+            const nameToId = {
+                '阿尔法': 'alpha', '织巢': 'weaver', '毒刺': 'duci', 
+                '达达': 'panda', '史官': 'aeterna', '史官 (Aeterna)': 'aeterna', '咕噜': 'gulu'
+            };
+            
+            const id = nameToId[assigneeName] || assigneeName.toLowerCase();
+            const status = statusData[id];
+            
+            if (status) {
+                if (status === 'executing') {
+                    el.classList.add('is-executing');
+                } else {
+                    el.classList.remove('is-executing');
+                }
+            }
+        });
+    }
+
     async loadTaskStats() {
         try {
             const response = await fetch('/api/task-stats');
@@ -490,6 +570,16 @@ class ZooDevCenter {
             }
         });
         
+        this.eventSource.addEventListener('member_status', (event) => {
+            this.eventCount++;
+            this.updateEventCount();
+            
+            const data = JSON.parse(event.data);
+            if (data.type === 'status_update') {
+                this.renderMemberStatus(data.data);
+            }
+        });
+        
         this.eventSource.addEventListener('heartbeat', (event) => {
             this.eventCount++;
             this.updateEventCount();
@@ -548,6 +638,7 @@ class ZooDevCenter {
             if (this.autoRefresh) {
                 this.loadTaskStats();
                 this.loadGitStats();
+                this.loadMemberStatus();
                 
                 // 每5分钟全量刷新一次看板
                 const now = new Date();

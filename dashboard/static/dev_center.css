@@ -763,3 +763,110 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--dark-color);
 }
+/* 成员状态列表样式 */
+.member-status-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.member-status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.member-info-mini {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.member-info-mini .member-emoji {
+    font-size: 1.2rem;
+}
+
+.member-info-mini .member-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.status-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+/* 执行中状态 */
+.status-executing {
+    background: rgba(46, 204, 113, 0.2);
+    color: #2ecc71;
+    border: 1px solid rgba(46, 204, 113, 0.3);
+}
+
+.status-executing .status-dot {
+    background: #2ecc71;
+    box-shadow: 0 0 5px #2ecc71;
+    animation: pulse-green 2s infinite;
+}
+
+/* 空闲状态 */
+.status-idle {
+    background: rgba(149, 165, 166, 0.2);
+    color: #95a5a6;
+    border: 1px solid rgba(149, 165, 166, 0.3);
+}
+
+.status-idle .status-dot {
+    background: #95a5a6;
+}
+
+/* 未知状态 */
+.status-unknown {
+    background: rgba(231, 76, 60, 0.2);
+    color: #e74c3c;
+    border: 1px solid rgba(231, 76, 60, 0.3);
+}
+
+.status-unknown .status-dot {
+    background: #e74c3c;
+}
+
+/* 看板头像活跃动画 */
+.task-assignee.is-executing .assignee-avatar-img {
+    border: 2px solid #2ecc71;
+    box-shadow: 0 0 8px rgba(46, 204, 113, 0.6);
+    animation: subtle-pulse 2s infinite;
+}
+
+.task-assignee.is-executing .assignee-avatar {
+    border: 2px solid #2ecc71;
+    background: rgba(46, 204, 113, 0.2);
+    animation: subtle-pulse 2s infinite;
+}
+
+@keyframes pulse-green {
+    0% { opacity: 1; }
+    50% { opacity: 0.4; }
+    100% { opacity: 1; }
+}
+
+@keyframes subtle-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
