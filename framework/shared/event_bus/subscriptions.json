@@ -1,0 +1,52 @@
+{
+  "task_completed": [
+    {
+      "member": "demo_user",
+      "subscribed_at": 1775481014.2249572
+    }
+  ],
+  "error_occurred": [
+    {
+      "member": "demo_user",
+      "subscribed_at": 1775481014.2251723
+    }
+  ],
+  "new_task": [
+    {
+      "member": "panda",
+      "subscribed_at": 1775481015.2293162
+    },
+    {
+      "member": "hedgehog",
+      "subscribed_at": 1775481015.237115
+    }
+  ],
+  "error": [
+    {
+      "member": "ant",
+      "subscribed_at": 1775481015.2297854
+    },
+    {
+      "member": "hedgehog",
+      "subscribed_at": 1775481015.2396703
+    }
+  ],
+  "reminder": [
+    {
+      "member": "scheduler",
+      "subscribed_at": 1775481016.2466853
+    }
+  ],
+  "calculation_result": [
+    {
+      "member": "concurrent_test",
+      "subscribed_at": 1775481022.249655
+    }
+  ],
+  "duplicate_test": [
+    {
+      "member": "dedup_test",
+      "subscribed_at": 1775481023.5644832
+    }
+  ]
+}
