@@ -513,7 +513,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                         species = line.split(':', 1)[1].strip().replace('**', '').strip()
                         return {"species": species}
             return {"species": "未知"}
-        except:
+        except Exception as e:
+            print(f"读取成员身份文件失败: {e}")
             return {"species": "未知"}
     
     def _get_kanban_data(self):
@@ -570,7 +571,11 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
         try:
             self.wfile.write(f"event: connected\ndata: {{\"timestamp\": \"{datetime.now().isoformat()}\"}}\n\n".encode('utf-8'))
             self.wfile.flush()
-        except:
+        except (BrokenPipeError, ConnectionResetError):
+            # 客户端已经断开连接，静默处理
+            pass
+        except Exception as e:
+            print(f"发送SSE初始连接事件失败: {e}")
             pass
         
         # 保持连接打开（客户端断开时会自动清理）
