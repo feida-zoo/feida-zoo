@@ -51,8 +51,8 @@ class Workspace:
         self.log_file = self.root / self.LOG_FILE_NAME
         self._storage = storage_adapter or LocalFileSystemAdapter()
         
-        # 并发控制
-        self._log_lock = threading.Lock()
+        # 并发控制 - 使用RLock防止嵌套调用死锁
+        self._log_lock = threading.RLock()
         
         # 日志配置
         self._max_log_entries = 10000  # 最大日志条目数

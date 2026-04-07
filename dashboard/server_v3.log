@@ -1,0 +1,14 @@
+🚀 启动 Zoo Dev-Center v1.0...
+🛑 停止现有服务器...
+📡 启动增强版服务器 (端口: 18792)...
+./start_dev_center.sh: line 36: 1198069 Killed                  nohup python3 dashboard/app_enhanced.py > dashboard/server_enhanced.log 2>&1
+✅ Zoo Dev-Center 启动成功!
+
+📊 看板地址: http://localhost:18792
+📈 API 端点:
+  - 看板数据: http://localhost:18792/api/kanban
+  - 任务统计: http://localhost:18792/api/task-stats
+  - Git时间线: http://localhost:18792/api/git-timeline
+  - 实时事件: http://localhost:18792/events
+
+🐜 由织巢蚁精心构建 | 飝龘动物园生态

@@ -1,0 +1,94 @@
+127.0.0.1 - - [06/Apr/2026 19:20:08] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:08] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:12] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:12] "GET /api/kanban HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:12] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:15] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:15] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:18] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:18] "GET /api/task-stats HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:18] code 404, message File not found
+127.0.0.1 - - [06/Apr/2026 19:20:18] "GET /api/git-stats HTTP/1.1" 404 -
+127.0.0.1 - - [06/Apr/2026 19:20:18] code 404, message File not found
+127.0.0.1 - - [06/Apr/2026 19:20:18] "GET /api/git-timeline HTTP/1.1" 404 -
+127.0.0.1 - - [06/Apr/2026 19:20:18] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:21] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:21] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:24] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:24] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:27] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:27] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:28] "GET /api/task-stats HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:29] code 404, message File not found
+127.0.0.1 - - [06/Apr/2026 19:20:29] "GET /api/git-stats HTTP/1.1" 404 -
+127.0.0.1 - - [06/Apr/2026 19:20:29] code 404, message File not found
+127.0.0.1 - - [06/Apr/2026 19:20:29] "GET /api/git-timeline HTTP/1.1" 404 -
+127.0.0.1 - - [06/Apr/2026 19:20:30] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:31] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:34] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:34] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:37] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:37] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:40] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:40] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:43] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:44] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:45] "GET / HTTP/1.1" 304 -
+127.0.0.1 - - [06/Apr/2026 19:20:45] "GET /api/task-stats HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:45] code 404, message File not found
+127.0.0.1 - - [06/Apr/2026 19:20:45] "GET /api/git-timeline HTTP/1.1" 404 -
+127.0.0.1 - - [06/Apr/2026 19:20:45] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:45] code 404, message File not found
+127.0.0.1 - - [06/Apr/2026 19:20:45] "GET /api/git-stats HTTP/1.1" 404 -
+127.0.0.1 - - [06/Apr/2026 19:20:46] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:47] "GET /api/task-stats HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:47] code 404, message File not found
+127.0.0.1 - - [06/Apr/2026 19:20:47] "GET /api/git-stats HTTP/1.1" 404 -
+127.0.0.1 - - [06/Apr/2026 19:20:47] code 404, message File not found
+127.0.0.1 - - [06/Apr/2026 19:20:47] "GET /api/git-timeline HTTP/1.1" 404 -
+127.0.0.1 - - [06/Apr/2026 19:20:48] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:51] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:51] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:54] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:55] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:58] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:20:58] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:01] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:01] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:04] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:04] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:05] "GET /api/kanban HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:07] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:07] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:10] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:10] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:13] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:13] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:15] "GET /api/task-stats HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:15] code 404, message File not found
+127.0.0.1 - - [06/Apr/2026 19:21:15] "GET /api/git-stats HTTP/1.1" 404 -
+127.0.0.1 - - [06/Apr/2026 19:21:15] code 404, message File not found
+127.0.0.1 - - [06/Apr/2026 19:21:15] "GET /api/git-timeline HTTP/1.1" 404 -
+127.0.0.1 - - [06/Apr/2026 19:21:16] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:17] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:20] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:20] "GET /api/task-stats HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:20] code 404, message File not found
+127.0.0.1 - - [06/Apr/2026 19:21:20] "GET /api/git-stats HTTP/1.1" 404 -
+127.0.0.1 - - [06/Apr/2026 19:21:20] code 404, message File not found
+127.0.0.1 - - [06/Apr/2026 19:21:20] "GET /api/git-timeline HTTP/1.1" 404 -
+127.0.0.1 - - [06/Apr/2026 19:21:20] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:23] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:23] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:26] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:26] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:29] "GET /api/kanban HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:29] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:29] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:32] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:32] "GET /api/task-stats HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:32] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:35] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:36] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:39] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 19:21:39] "GET /events HTTP/1.1" 200 -

@@ -272,3 +272,168 @@ class TestRegistryManager:
         assert "pre_existing" in registry["members"]
         assert manager.member_count == 1
         assert manager.get_member("pre_existing")["name"] == "Pre Existing"
+
+    # ============ 并发压力测试 ============
+
+    def test_concurrent_registrations_no_data_corruption(self):
+        """测试并发注册不会导致数据损坏
+        使用多个线程同时注册成员，验证最终计数正确且没有数据丢失
+        """
+        import threading
+        manager = RegistryManager(self.registry_path)
+        manager.load()
+
+        errors = []
+        registered_count = []
+
+        def register_worker(worker_id, count):
+            try:
+                for i in range(count):
+                    member_id = f"thread_{worker_id}_member_{i}"
+                    manager.register_member({
+                        "id": member_id,
+                        "name": f"Thread {worker_id} Member {i}",
+                        "status": "active"
+                    })
+                    registered_count.append(1)
+            except Exception as e:
+                errors.append(e)
+
+        # 启动10个线程，每个注册20个成员，总共200个
+        threads = []
+        num_threads = 10
+        members_per_thread = 20
+
+        for t in range(num_threads):
+            thread = threading.Thread(target=register_worker, args=(t, members_per_thread))
+            threads.append(thread)
+            thread.start()
+
+        # 等待所有线程完成
+        for thread in threads:
+            thread.join()
+
+        # 检查没有错误
+        assert len(errors) == 0, f"并发注册发生错误: {errors}"
+
+        # 检查最终计数正确
+        expected_total = num_threads * members_per_thread
+        assert manager.member_count == expected_total
+        assert len(registered_count) == expected_total
+
+    def test_concurrent_read_write_mixed(self):
+        """测试混合并发读写操作
+        验证在同时读写的情况下数据一致性
+        """
+        import threading
+        import time
+        manager = RegistryManager(self.registry_path)
+        manager.load()
+
+        # 预先注册一些成员
+        for i in range(50):
+            manager.register_member({"id": f"initial_{i}", "status": "active"})
+        manager.save()
+
+        errors = []
+        stop_flag = threading.Event()
+
+        # 读者线程：持续读取成员列表
+        def reader_worker():
+            try:
+                while not stop_flag.is_set():
+                    members = manager.list_members(status="active")
+                    count = manager.member_count
+                    assert count >= 50
+                    # 短暂睡眠模拟真实负载
+                    time.sleep(0.001)
+            except Exception as e:
+                errors.append(e)
+
+        # 写者线程：持续更新成员状态
+        def writer_worker():
+            try:
+                counter = 0
+                while not stop_flag.is_set():
+                    member_id = f"initial_{counter % 50}"
+                    new_status = "active" if counter % 2 == 0 else "suspended"
+                    manager.update_member_status(member_id, new_status)
+                    counter += 1
+                    time.sleep(0.002)
+            except Exception as e:
+                errors.append(e)
+
+        # 启动多个读者和写者
+        threads = []
+        num_readers = 8
+        num_writers = 4
+
+        for _ in range(num_readers):
+            t = threading.Thread(target=reader_worker)
+            threads.append(t)
+            t.start()
+
+        for _ in range(num_writers):
+            t = threading.Thread(target=writer_worker)
+            threads.append(t)
+            t.start()
+
+        # 运行压力测试1秒
+        time.sleep(1.0)
+        stop_flag.set()
+
+        # 等待所有线程结束
+        for t in threads:
+            t.join()
+
+        # 检查没有异常
+        assert len(errors) == 0, f"并发读写发生错误: {errors}"
+
+    def test_nested_locking_no_deadlock(self):
+        """测试嵌套锁不会死锁
+        这就是为什么需要RLock而不是普通Lock - 当一个方法在已持有锁时调用另一个方法也需要加锁，
+        RLock支持同一线程重入而不会死锁
+        """
+        import threading
+        manager = RegistryManager(self.registry_path)
+        manager.load()
+
+        # 预先注册一个成员
+        manager.register_member({"id": "test_member", "name": "Test", "status": "active"})
+
+        # 测试：在同一线程内，外层已经获取锁，内层方法再次尝试获取锁
+        # 如果使用普通Lock，这里会立即死锁
+        # 如果使用RLock，因为支持同一线程重入，所以可以正常完成
+
+        result = None
+        error = None
+
+        def outer_nested_call():
+            nonlocal result, error
+            try:
+                # 第一层：已经通过public方法获取锁
+                with manager._lock:
+                    # 第二层：同一个线程再次获取锁 - RLock允许这样
+                    # 这模拟了一个public方法调用另一个public方法时，两者都有加锁
+                    result = manager.get_member("test_member")
+            except Exception as e:
+                error = e
+
+        # 这个调用如果发生死锁会永远卡住，所以设置超时
+        from threading import Timer
+
+        def timeout_handler():
+            # 如果超时，说明发生了死锁
+            raise TimeoutError("测试超时，发生死锁了！")
+
+        timer = Timer(2.0, timeout_handler)
+        timer.start()
+        try:
+            outer_nested_call()
+        finally:
+            timer.cancel()
+
+        # 检查能正常完成，没有死锁
+        assert error is None, f"嵌套锁发生异常: {error}"
+        assert result is not None
+        assert result["id"] == "test_member"

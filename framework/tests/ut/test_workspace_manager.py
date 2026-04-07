@@ -241,3 +241,93 @@ class TestWorkspaceManager:
         manager.set_storage_adapter(new_adapter)
 
         assert manager.get_storage_adapter() is new_adapter
+
+    # ============ 安全测试：路径遍历与编码攻击防护 ============
+
+    def test_path_traversal_unicode_encoding_attack(self):
+        """测试Unicode编码路径遍历攻击防护
+        测试各种Unicode编码绕过技术，如%c0%ae%c0%ae/等编码攻击
+        """
+        manager = WorkspaceManager(self.agents_path)
+
+        # Unicode编码绕过 ../ 尝试 (%c0%ae 是.的UTF-8变长编码)
+        unicode_attacks = [
+            # Unicode编码的 ../
+            "\u00c0\u00ae\u002e\u00c0\u00ae\u002fetc\u002fpasswd",
+            # 全宽字符的 ..
+            "．．/etc/passwd",
+            # 空格填充绕过
+            " .. /../etc/passwd",
+            # Unicode零宽度空格插入
+            ".\u200b./\u200b../etc/passwd",
+            # 双向Unicode字符绕过
+            "\u202e/etc/passwd",
+            # URL编码残留
+            "%2e%2e/%2e%2e/etc/passwd",
+            # HTML实体编码
+            "..&#47;..&#47;etc&#47;passwd",
+            # 混合编码
+            "%252e%252e%252fetc%252fpasswd",
+        ]
+
+        for attack in unicode_attacks:
+            with pytest.raises(ValueError):
+                manager.get_workspace_path(attack)
+
+    def test_path_traversal_percent_encoding(self):
+        """测试百分比编码路径遍历攻击"""
+        manager = WorkspaceManager(self.agents_path)
+
+        encoded_attacks = [
+            "..%2f..%2fetc%2fpasswd",
+            "%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+            "..%252f..%252fetc%252fpasswd",
+        ]
+
+        for attack in encoded_attacks:
+            with pytest.raises(ValueError):
+                manager.get_workspace_path(attack)
+
+    def test_null_byte_attack(self):
+        """测试空字节注入攻击"""
+        manager = WorkspaceManager(self.agents_path)
+
+        with pytest.raises(ValueError):
+            manager.get_workspace_path("test\0.txt")
+
+    def test_alternate_path_separators(self):
+        """测试替代路径分隔符绕过尝试"""
+        manager = WorkspaceManager(self.agents_path)
+
+        attacks = [
+            "..\\..\\etc\\passwd",  # Windows路径分隔符
+            "..//..//etc//passwd",  # 双斜杠
+            "././././etc/passwd",   # 多个./
+        ]
+
+        for attack in attacks:
+            with pytest.raises(ValueError):
+                manager.get_workspace_path(attack)
+
+    def test_home_directory_expansion_attempt(self):
+        """测试家目录展开尝试"""
+        manager = WorkspaceManager(self.agents_path)
+
+        with pytest.raises(ValueError):
+            manager.get_workspace_path("~/root")
+
+    def test_special_unicode_paths_that_may_bypass(self):
+        """测试可能绕过验证的特殊Unicode路径"""
+        manager = WorkspaceManager(self.agents_path)
+
+        # 测试Unicode路径遍历绕过，这些应该被正则拒绝
+        unicode_cases = [
+            "test\u2024member",  # Unicode句号替换
+            "test\u2215member",  # Unicode分割符
+            "test\u2044member",  # Unicode分数斜杠
+            "..\u2044..\u2044etc",
+        ]
+
+        for test_case in unicode_cases:
+            with pytest.raises(ValueError):
+                manager.get_workspace_path(test_case)

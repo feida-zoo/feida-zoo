@@ -52,6 +52,7 @@ class WorkspaceManager:
         """
         获取成员工作区路径
         安全验证：防止绝对路径逃逸和路径遍历攻击
+        使用多层验证：输入验证 + 规范化 + 物理路径对比，抵御Unicode/URL/HTML编码攻击
 
         Args:
             member_id: 成员ID
@@ -62,13 +63,30 @@ class WorkspaceManager:
         Raises:
             ValueError: 如果成员ID包含不安全字符或路径逃逸
         """
-        # 安全验证：确保成员ID是安全的
+        # 第一层：安全验证输入成员ID
         self._validate_member_id(member_id)
-        
-        # 构建路径并确保规范化
-        workspace_path = (self.agents_base_path / member_id).resolve()
-        
-        # 二次验证：确保路径没有逃逸出基础目录
+
+        # 构建原始路径
+        raw_path = self.agents_base_path / member_id
+
+        # 第二层：使用os.path规范化处理，解析任何. .. ~等符号
+        # 同时使用abspath确保获取绝对路径
+        normalized_str = os.path.normpath(os.path.abspath(raw_path))
+        workspace_path = Path(normalized_str).resolve()
+
+        # 第三层：严格物理路径前缀匹配，防止任何编码绕过
+        # 转换为绝对路径字符串进行比较
+        base_abs = os.path.abspath(self.agents_base_path)
+        workspace_abs = os.path.abspath(workspace_path)
+
+        # 确保工作区路径确实以基础路径为前缀
+        if not workspace_abs.startswith(base_abs + os.sep) and workspace_abs != base_abs:
+            raise ValueError(
+                f"成员ID '{member_id}' 导致路径逃逸攻击。"
+                f"结果路径：{workspace_abs} 不在基础目录 {base_abs} 内。"
+            )
+
+        # 保留原有的relative_to检查作为备用
         try:
             workspace_path.relative_to(self.agents_base_path)
         except ValueError:
@@ -76,7 +94,7 @@ class WorkspaceManager:
                 f"成员ID '{member_id}' 导致路径逃逸攻击。"
                 f"结果路径：{workspace_path} 不在基础目录 {self.agents_base_path} 内。"
             )
-        
+
         return workspace_path
     
     def _validate_member_id(self, member_id: str) -> None:
