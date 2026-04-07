@@ -408,14 +408,23 @@ body {
 }
 
 .assignee-avatar {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     background: var(--light-color);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.7rem;
+    font-size: 0.8rem;
+    overflow: hidden;
+}
+
+.assignee-avatar-img {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--border-color);
 }
 
 .task-phase {

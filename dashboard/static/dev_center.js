@@ -13,12 +13,13 @@ class ZooDevCenter {
         
         // 成员 Emoji 映射
         this.memberEmojiMap = {
-            'alpha': '🐢',
-            'weaver': '🐜',
-            'stinger': '🦂',
-            'panda': '🐼',
-            'aeterna': '📜'
-        };
+      'alpha': '🐢',
+      'weaver': '🐜',
+      'stinger': '🦂',
+      'panda': '🐼',
+      'aeterna': '📜',
+      'gulu': '🟢'
+    };
         
         // 初始化
         this.init();
@@ -269,6 +270,7 @@ class ZooDevCenter {
         
         // 获取成员 Emoji
         const assigneeEmoji = this.memberEmojiMap[task.assignee] || '👤';
+        const avatarSrc = task.assignee ? `/static/avatars/${task.assignee === 'stinger' ? 'stinger' : task.assignee}.png` : '';
         
         taskCard.innerHTML = `
             <div class="task-header">
@@ -278,10 +280,11 @@ class ZooDevCenter {
             <div class="task-title">${this.escapeHtml(task.name)}</div>
             <div class="task-meta">
                 <div class="task-assignee">
-                    <div class="assignee-avatar">${assigneeEmoji}</div>
+                    ${avatarSrc ? `<img src="${avatarSrc}" class="assignee-avatar-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">` : ''}
+                    <div class="assignee-avatar" style="${avatarSrc ? 'display:none;' : ''}">${assigneeEmoji}</div>
                     <span>${task.assignee || '未分配'}</span>
                 </div>
-                ${task.phase ? `<div class="task-phase">${task.phase}</div>` : ''}
+                ${task.phase_name ? `<div class="task-phase">${task.phase_name}</div>` : ''}
             </div>
         `;
         
