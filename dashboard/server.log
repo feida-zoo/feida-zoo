@@ -1,49 +1,12 @@
-127.0.0.1 - - [06/Apr/2026 10:38:22] "GET / HTTP/1.1" 200 -
-127.0.0.1 - - [06/Apr/2026 10:38:22] code 404, message Not Found
-127.0.0.1 - - [06/Apr/2026 10:38:22] "GET / HTTP/1.1" 404 -
-----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 5342)
-Traceback (most recent call last):
-  File "/home/afei/workspace/code/feida_zoo/dashboard/app.py", line 47, in _serve_file
-    self.wfile.write(content)
-  File "/usr/lib/python3.12/socketserver.py", line 840, in write
-    self._sock.sendall(b)
-BrokenPipeError: [Errno 32] Broken pipe
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/usr/lib/python3.12/socketserver.py", line 318, in _handle_request_noblock
-    self.process_request(request, client_address)
-  File "/usr/lib/python3.12/socketserver.py", line 349, in process_request
-    self.finish_request(request, client_address)
-  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
-    self.RequestHandlerClass(request, client_address, self)
-  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
-    self.handle()
-  File "/usr/lib/python3.12/http/server.py", line 436, in handle
-    self.handle_one_request()
-  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
-    method()
-  File "/home/afei/workspace/code/feida_zoo/dashboard/app.py", line 24, in do_GET
-    self._serve_file(TEMPLATES_DIR / 'index.html', 'text/html')
-  File "/home/afei/workspace/code/feida_zoo/dashboard/app.py", line 49, in _serve_file
-    self.send_error(404)
-  File "/usr/lib/python3.12/http/server.py", line 488, in send_error
-    self.end_headers()
-  File "/usr/lib/python3.12/http/server.py", line 538, in end_headers
-    self.flush_headers()
-  File "/usr/lib/python3.12/http/server.py", line 542, in flush_headers
-    self.wfile.write(b"".join(self._headers_buffer))
-  File "/usr/lib/python3.12/socketserver.py", line 840, in write
-    self._sock.sendall(b)
-BrokenPipeError: [Errno 32] Broken pipe
-----------------------------------------
-127.0.0.1 - - [06/Apr/2026 10:38:22] "GET / HTTP/1.1" 200 -
-127.0.0.1 - - [06/Apr/2026 10:38:22] "GET /static/style.css HTTP/1.1" 200 -
-127.0.0.1 - - [06/Apr/2026 10:38:22] "GET /api/members HTTP/1.1" 200 -
-127.0.0.1 - - [06/Apr/2026 10:38:22] "GET /avatar/alpha HTTP/1.1" 200 -
-127.0.0.1 - - [06/Apr/2026 10:38:22] "GET /avatar/weaver HTTP/1.1" 200 -
-127.0.0.1 - - [06/Apr/2026 10:38:22] "GET /avatar/duci HTTP/1.1" 200 -
-127.0.0.1 - - [06/Apr/2026 10:38:22] "GET /avatar/aeterna HTTP/1.1" 200 -
-127.0.0.1 - - [06/Apr/2026 10:38:22] "GET /avatar/gulu HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 17:46:46] code 501, message Unsupported method ('HEAD')
+127.0.0.1 - - [06/Apr/2026 17:46:46] "HEAD / HTTP/1.1" 501 -
+127.0.0.1 - - [06/Apr/2026 17:46:48] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 17:46:48] "GET /static/style.css HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 17:46:50] "GET /api/members HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 17:46:50] "GET /avatar/weaver HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 17:46:50] "GET /avatar/alpha HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 17:46:51] "GET /avatar/duci HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 17:46:51] "GET /avatar/aeterna HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 17:46:51] "GET /avatar/gulu HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 17:46:52] code 404, message Not Found
+127.0.0.1 - - [06/Apr/2026 17:46:52] "GET /favicon.ico HTTP/1.1" 404 -

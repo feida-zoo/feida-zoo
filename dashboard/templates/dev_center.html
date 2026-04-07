@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zoo Dev-Center - 飝龘动物园研发中心 v1.0</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/dev_center.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="dev-center-container">
+        <!-- 顶部导航栏 -->
+        <header class="dev-center-header">
+            <div class="header-left">
+                <div class="logo">
+                    <span class="logo-icon">🏗️</span>
+                    <h1>Zoo Dev-Center</h1>
+                </div>
+                <p class="subtitle">飝龘动物园研发中心 v1.0</p>
+            </div>
+            <div class="header-right">
+                <div class="system-status">
+                    <span class="status-indicator active"></span>
+                    <span class="status-text">系统运行中</span>
+                </div>
+                <div class="last-updated" id="last-updated">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>正在更新...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主内容区 -->
+        <main class="dev-center-main">
+            <!-- 左侧：统计信息面板 -->
+            <aside class="stats-sidebar">
+                <div class="stats-card">
+                    <h3><i class="fas fa-chart-pie"></i> 项目概览</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-value" id="total-tasks">0</div>
+                            <div class="stat-label">总任务数</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="completed-tasks">0</div>
+                            <div class="stat-label">已完成</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="completion-rate">0%</div>
+                            <div class="stat-label">完成率</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="in-progress-tasks">0</div>
+                            <div class="stat-label">进行中</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stats-card">
+                    <h3><i class="fas fa-code-branch"></i> Git 统计</h3>
+                    <div class="git-stats" id="git-stats">
+                        <div class="loading-small">
+                            <div class="spinner-small"></div>
+                            <span>加载Git数据...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stats-card">
+                    <h3><i class="fas fa-users"></i> 当前阶段</h3>
+                    <div class="current-phase" id="current-phase">
+                        <div class="loading-small">
+                            <div class="spinner-small"></div>
+                            <span>加载阶段信息...</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- 中间：四象限看板 -->
+            <section class="kanban-main">
+                <div class="kanban-header">
+                    <h2><i class="fas fa-columns"></i> 四象限研发看板</h2>
+                    <div class="kanban-actions">
+                        <button class="btn-refresh" id="refresh-kanban">
+                            <i class="fas fa-sync-alt"></i> 刷新看板
+                        </button>
+                        <div class="auto-refresh">
+                            <i class="fas fa-clock"></i>
+                            <span>自动更新: <span id="auto-refresh-status">启用</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="kanban-container">
+                    <!-- 四象限列将通过JS动态生成 -->
+                    <div class="loading" id="kanban-loading">
+                        <div class="spinner"></div>
+                        <p>正在加载看板数据...</p>
+                    </div>
+                    <div class="kanban-columns" id="kanban-columns" style="display: none;"></div>
+                </div>
+            </section>
+
+            <!-- 右侧：Git 时间线 -->
+            <aside class="timeline-sidebar">
+                <div class="timeline-header">
+                    <h3><i class="fas fa-history"></i> 生态 Git 时间线</h3>
+                    <div class="timeline-controls">
+                        <button class="btn-timeline-refresh" id="refresh-timeline">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="timeline-container">
+                    <div class="loading-small" id="timeline-loading">
+                        <div class="spinner-small"></div>
+                        <span>加载时间线...</span>
+                    </div>
+                    <div class="timeline-list" id="timeline-list" style="display: none;"></div>
+                </div>
+            </aside>
+        </main>
+
+        <!-- 底部状态栏 -->
+        <footer class="dev-center-footer">
+            <div class="footer-left">
+                <span class="footer-emoji">🐜</span>
+                <span>由织巢蚁工程师精心构建 | 蚁穴式严密架构</span>
+            </div>
+            <div class="footer-center">
+                <span class="sse-status connected" id="sse-status">
+                    <i class="fas fa-bolt"></i> 实时连接已建立
+                </span>
+            </div>
+            <div class="footer-right">
+                <span id="connection-status">🟢 已连接</span>
+                <span class="footer-separator">|</span>
+                <span id="event-count">事件: 0</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- 任务详情模态框 -->
+    <div class="modal" id="task-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">任务详情</h3>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- 任务详情将通过JS动态填充 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/static/dev_center.js"></script>
+</body>
+</html>
