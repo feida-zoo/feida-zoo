@@ -74,10 +74,12 @@
           "id": "2.3",
           "name": "自动化日报/周报系统 (Aeterna)",
           "severity": "P2",
-          "status": "pending",
+          "status": "completed",
           "assignee": "aeterna",
+          "completed_at": "2026-04-07T08:50:00+08:00",
           "description": "史官根据每日 memory 自动提炼项目进度，并推送到园长飞书。",
-          "verification": ["内容精准", "定时推送"]
+          "notes": "已实现基于 Python 的解析引擎及飞书集成。已部署 cron 定时任务 (22:00 Daily / Mon 09:00 Weekly)。",
+          "verification": ["内容解析精准", "推送成功", "Cron 已部署"]
         }
       ]
     },
