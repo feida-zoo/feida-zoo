@@ -50,6 +50,14 @@ class ZooDevCenter {
             this.loadGitTimeline();
         });
         
+        // 刷新成员按钮
+        const refreshMembersBtn = document.getElementById('refresh-members');
+        if (refreshMembersBtn) {
+            refreshMembersBtn.addEventListener('click', () => {
+                this.loadMemberCards();
+            });
+        }
+        
         // 模态框关闭按钮
         document.getElementById('modal-close').addEventListener('click', () => {
             this.closeTaskModal();
@@ -81,7 +89,8 @@ class ZooDevCenter {
             this.loadKanbanData(),
             this.loadGitTimeline(),
             this.loadGitStats(),
-            this.loadMemberStatus()
+            this.loadMemberStatus(),
+            this.loadMemberCards()
         ]).then(() => {
             console.log('所有初始数据加载完成');
         }).catch(error => {
@@ -194,6 +203,105 @@ class ZooDevCenter {
                 }
             }
         });
+    }
+
+    async loadMemberCards() {
+        const loadingEl = document.getElementById('members-loading');
+        const listEl = document.getElementById('members-list');
+        
+        if (!loadingEl || !listEl) return;
+        
+        loadingEl.style.display = 'flex';
+        listEl.style.display = 'none';
+        
+        try {
+            const response = await fetch('/api/members');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            const memberData = await response.json();
+            this.renderMemberCards(memberData);
+        } catch (error) {
+            console.error('加载成员卡片失败:', error);
+            loadingEl.innerHTML = `
+                <div style="text-align: center; color: #e74c3c;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>加载失败</span>
+                </div>
+            `;
+        }
+    }
+    
+    renderMemberCards(memberData) {
+        const listEl = document.getElementById('members-list');
+        const loadingEl = document.getElementById('members-loading');
+        
+        if (!listEl || !loadingEl) return;
+        
+        // 清空现有内容
+        listEl.innerHTML = '';
+        
+        if (!memberData || memberData.length === 0) {
+            listEl.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-users"></i>
+                    <p>暂无成员数据</p>
+                </div>
+            `;
+        } else {
+            // 创建成员卡片网格
+            const gridEl = document.createElement('div');
+            gridEl.className = 'members-grid';
+            
+            memberData.forEach(member => {
+                const memberCard = this.createMemberCard(member);
+                gridEl.appendChild(memberCard);
+            });
+            
+            listEl.appendChild(gridEl);
+        }
+        
+        // 显示成员列表并隐藏加载状态
+        listEl.style.display = 'block';
+        loadingEl.style.display = 'none';
+    }
+    
+    createMemberCard(member) {
+        const cardEl = document.createElement('div');
+        cardEl.className = 'member-card';
+        
+        // 获取成员 Emoji
+        const memberEmoji = member.avatar_emoji || this.memberEmojiMap[member.id] || '🐾';
+        
+        cardEl.innerHTML = `
+            <div class="member-card-header">
+                <div class="member-avatar">
+                    ${memberEmoji}
+                </div>
+                <div class="member-title">
+                    <h4 class="member-name">${this.escapeHtml(member.name)}</h4>
+                    <div class="member-code-name">${this.escapeHtml(member.code_name)}</div>
+                </div>
+            </div>
+            <div class="member-card-body">
+                <div class="member-field">
+                    <span class="field-label">角色:</span>
+                    <span class="field-value">${this.escapeHtml(member.role_display)}</span>
+                </div>
+                <div class="member-field">
+                    <span class="field-label">种族:</span>
+                    <span class="field-value">${this.escapeHtml(member.species)}</span>
+                </div>
+                <div class="member-field">
+                    <span class="field-label">模型:</span>
+                    <span class="field-value">${this.escapeHtml(member.model)}</span>
+                </div>
+            </div>
+            <div class="member-card-footer">
+                <div class="member-description">${this.escapeHtml(member.description || '暂无描述')}</div>
+            </div>
+        `;
+        
+        return cardEl;
     }
 
     async loadTaskStats() {

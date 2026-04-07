@@ -132,6 +132,26 @@
                     </div>
                     <div class="timeline-list" id="timeline-list" style="display: none;"></div>
                 </div>
+                
+                <!-- 新增成员卡片区域 -->
+                <div class="members-section">
+                    <div class="timeline-header">
+                        <h3><i class="fas fa-users"></i> 生态成员</h3>
+                        <div class="timeline-controls">
+                            <button class="btn-timeline-refresh" id="refresh-members">
+                                <i class="fas fa-redo"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="members-container">
+                        <div class="loading-small" id="members-loading">
+                            <div class="spinner-small"></div>
+                            <span>加载成员数据...</span>
+                        </div>
+                        <div class="members-list" id="members-list" style="display: none;"></div>
+                    </div>
+                </div>
             </aside>
         </main>
 
