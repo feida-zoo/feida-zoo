@@ -10,6 +10,7 @@ P1-1.5 重构：将工作区管理职责从 Spawner 分离出来
 
 import json
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Any, Union
@@ -50,14 +51,89 @@ class WorkspaceManager:
     def get_workspace_path(self, member_id: str) -> Path:
         """
         获取成员工作区路径
+        安全验证：防止绝对路径逃逸和路径遍历攻击
 
         Args:
             member_id: 成员ID
 
         Returns:
             成员工作区的完整路径
+
+        Raises:
+            ValueError: 如果成员ID包含不安全字符或路径逃逸
         """
-        return self.agents_base_path / member_id
+        # 安全验证：确保成员ID是安全的
+        self._validate_member_id(member_id)
+        
+        # 构建路径并确保规范化
+        workspace_path = (self.agents_base_path / member_id).resolve()
+        
+        # 二次验证：确保路径没有逃逸出基础目录
+        try:
+            workspace_path.relative_to(self.agents_base_path)
+        except ValueError:
+            raise ValueError(
+                f"成员ID '{member_id}' 导致路径逃逸攻击。"
+                f"结果路径：{workspace_path} 不在基础目录 {self.agents_base_path} 内。"
+            )
+        
+        return workspace_path
+    
+    def _validate_member_id(self, member_id: str) -> None:
+        """
+        验证成员ID的安全性
+        
+        Args:
+            member_id: 要验证的成员ID
+            
+        Raises:
+            ValueError: 如果成员ID不安全
+        """
+        if not member_id:
+            raise ValueError("成员ID不能为空")
+        
+        # 检查绝对路径
+        if os.path.isabs(member_id):
+            raise ValueError(f"成员ID不能是绝对路径: '{member_id}'")
+        
+        # 检查路径遍历模式
+        if ".." in member_id:
+            raise ValueError(f"成员ID不能包含路径遍历字符 '..': '{member_id}'")
+        
+        # 检查其他危险模式
+        dangerous_patterns = [
+            r'^/.*',           # 以斜杠开头
+            r'.*/$',           # 以斜杠结尾
+            r'.*//.*',         # 双斜杠
+            r'.*\\\\.*',     # 双反斜杠（Windows）
+            r'.*/\..*',       # 隐藏的路径遍历
+            r'.*\\.\..*',    # Windows隐藏路径遍历
+        ]
+        
+        for pattern in dangerous_patterns:
+            if re.match(pattern, member_id):
+                raise ValueError(f"成员ID包含危险模式: '{member_id}'")
+        
+        # 检查特殊字符（除了字母、数字、下划线、连字符、点）
+        if not re.match(r'^[a-zA-Z0-9_.\-]+$', member_id):
+            raise ValueError(
+                f"成员ID只能包含字母、数字、下划线、连字符和点: '{member_id}'"
+            )
+        
+        # 检查长度限制
+        if len(member_id) > 255:
+            raise ValueError(f"成员ID过长（最大255字符）: '{member_id}'")
+        
+        # 检查保留名称
+        reserved_names = [".", "..", "", "CON", "PRN", "AUX", "NUL", 
+                         "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+                         "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"]
+        if member_id.upper() in [name.upper() for name in reserved_names]:
+            raise ValueError(f"成员ID是保留名称: '{member_id}'")
+        
+        # 检查以点开头（隐藏文件）
+        if member_id.startswith('.'):
+            raise ValueError(f"成员ID不能以点开头（隐藏文件）: '{member_id}'")
 
     def get_meta_file_path(self, member_id: str) -> Path:
         """
@@ -95,7 +171,7 @@ class WorkspaceManager:
             创建的工作区路径
 
         Raises:
-            ValueError: 如果工作区已存在
+            ValueError: 如果工作区已存在或成员ID不安全
         """
         workspace_path = self.get_workspace_path(member_id)
 

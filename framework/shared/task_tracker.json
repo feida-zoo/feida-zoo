@@ -1,241 +1,87 @@
 {
   "version": "1.0.0",
-  "last_updated": "2026-04-05T02:40:00+08:00",
-  "current_phase": "P1",
+  "last_updated": "2026-04-06T18:00:00+08:00",
+  "current_phase": "P2",
   "phases": {
     "P1": {
-      "name": "P1阻断级问题修复",
-      "status": "in_progress",
+      "name": "P1 阻断级问题修复与架构重构",
+      "status": "completed",
       "tasks": [
         {
           "id": "1.1",
           "name": "修复 datetime 导入错误",
-          "file": "framework/core/permissions.py",
-          "severity": "P1",
           "status": "completed",
           "assignee": "weaver",
-          "estimated_hours": 0.25,
-          "actual_hours": 0.5,
-          "created_at": "2026-04-05T00:20:00+08:00",
-          "started_at": "2026-04-05T01:22:00+08:00",
-          "completed_at": "2026-04-05T01:45:00+08:00",
-          "description": "在 permissions.py 顶部添加 from datetime import datetime",
-          "dependencies": [],
-          "verification": [
-            "permissions.py 可以正常编译",
-            "权限检查功能不会因导入错误崩溃"
-          ],
-          "test_cases": [
-            {
-              "type": "UT",
-              "status": "completed",
-              "description": "测试 permissions 导入不会抛出错误",
-              "file": "framework/tests/ut/test_permissions_import.py"
-            }
-          ]
+          "completed_at": "2026-04-05T01:45:00+08:00"
         },
         {
           "id": "1.2",
           "name": "实现配置模板引擎",
-          "file": "framework/core/config_loader.py",
-          "severity": "P1",
           "status": "completed",
           "assignee": "weaver",
-          "estimated_hours": 1.5,
-          "actual_hours": 1.5,
-          "created_at": "2026-04-05T00:20:00+08:00",
-          "started_at": "2026-04-05T02:01:00+08:00",
-          "completed_at": "2026-04-05T02:38:00+08:00",
-          "description": "创建 ConfigLoader 类，支持环境变量、路径变量、相对路径解析",
-          "dependencies": ["1.1"],
-          "verification": [
-            "配置文件可以正确加载",
-            "模板变量正确解析",
-            "路径引用正确解析"
-          ],
-          "test_cases": [
-            {
-              "type": "UT",
-              "status": "completed",
-              "description": "测试环境变量解析 ${env:VAR_NAME}",
-              "file": "framework/tests/ut/test_config_loader_env.py"
-            },
-            {
-              "type": "UT",
-              "status": "completed",
-              "description": "测试路径变量解析 ${paths.xxx}",
-              "file": "framework/tests/ut/test_config_loader_paths.py"
-            },
-            {
-              "type": "UT",
-              "status": "completed",
-              "description": "测试相对路径解析 ${base_dir}/xxx",
-              "file": "framework/tests/ut/test_config_loader_relative.py"
-            },
-            {
-              "type": "ST",
-              "status": "completed",
-              "description": "测试端到端配置加载流程",
-              "file": "framework/tests/st/test_config_loader_e2e.py"
-            }
-          ]
+          "completed_at": "2026-04-05T02:38:00+08:00"
         },
         {
           "id": "1.3",
           "name": "移除路径硬编码",
-          "file": "framework/core/spawner.py, framework/core/permissions.py",
-          "severity": "P1",
           "status": "completed",
           "assignee": "weaver",
-          "estimated_hours": 1.0,
-          "actual_hours": 2.5,
-          "created_at": "2026-04-05T00:20:00+08:00",
-          "started_at": "2026-04-05T11:24:00+08:00",
-          "completed_at": "2026-04-05T16:35:00+08:00",
-          "description": "使用配置系统替换所有硬编码路径，支持环境变量配置",
-          "dependencies": ["1.2"],
-          "verification": [
-            "代码中不再有硬编码的绝对路径",
-            "可以通过环境变量配置根目录",
-            "部署到不同环境时只需修改配置"
-          ],
-          "test_cases": [
-            {
-              "type": "UT",
-              "status": "completed",
-              "description": "测试 Spawner 使用配置化路径初始化",
-              "file": "framework/tests/ut/test_hardcoded_paths.py"
-            },
-            {
-              "type": "UT",
-              "status": "completed",
-              "description": "测试 PermissionManager 使用配置化路径初始化",
-              "file": "framework/tests/ut/test_hardcoded_paths.py"
-            },
-            {
-              "type": "ST",
-              "status": "completed",
-              "description": "测试通过环境变量配置根目录",
-              "file": "framework/tests/st/test_path_config.py"
-            }
-          ],
-          "notes": "经过多轮TDD迭代，最终使用Claude Code彻底清理了所有硬编码路径，包括生产代码和文档。修复了registry.json因误改而导致的成员工作区路径错误。"
+          "completed_at": "2026-04-05T16:35:00+08:00"
         },
         {
           "id": "1.4",
           "name": "实现安全删除机制",
-          "file": "framework/core/workspace.py",
-          "severity": "P1",
           "status": "completed",
           "assignee": "weaver",
-          "estimated_hours": 1.5,
-          "actual_hours": 1.0,
-          "created_at": "2026-04-05T00:20:00+08:00",
-          "started_at": "2026-04-06T13:00:00+08:00",
-          "completed_at": "2026-04-06T13:12:00+08:00",
-          "description": "实现软删除、回收站、恢复、永久删除功能",
-          "dependencies": ["1.3"],
-          "verification": [
-            "删除的成员工作区移动到回收站",
-            "可以从回收站恢复",
-            "永久删除需要二次确认",
-            "记录删除操作日志"
-          ],
-          "test_cases": [
-            {
-              "type": "UT",
-              "status": "completed",
-              "description": "测试软删除功能",
-              "file": "framework/tests/ut/test_workspace_soft_delete.py"
-            },
-            {
-              "type": "UT",
-              "status": "completed",
-              "description": "测试从回收站恢复功能",
-              "file": "framework/tests/ut/test_workspace_restore.py"
-            },
-            {
-              "type": "UT",
-              "status": "completed",
-              "description": "测试永久删除功能",
-              "file": "framework/tests/ut/test_workspace_permanent_delete.py"
-            },
-            {
-              "type": "UT",
-              "status": "completed",
-              "description": "测试日志功能",
-              "file": "framework/tests/ut/test_workspace_logging.py"
-            },
-            {
-              "type": "ST",
-              "status": "completed",
-              "description": "测试完整的删除-恢复-永久删除流程",
-              "file": "framework/tests/st/test_workspace_lifecycle.py"
-            }
-          ],
-          "notes": "TDD重构完成：1. 重构所有测试文件使用真正的Workspace类（26个测试通过），2. 增强Workspace类添加日志功能，3. 创建专门的日志测试（9个测试通过），4. 所有35个测试全部通过，功能完整实现"
+          "completed_at": "2026-04-06T13:12:00+08:00"
         },
         {
           "id": "1.5",
-          "name": "重构架构 - 分离关注点",
-          "file": "framework/core/",
-          "severity": "P1",
-          "status": "pending",
+          "name": "重构架构与原子化并发加固",
+          "status": "completed",
           "assignee": "weaver",
-          "estimated_hours": 2.0,
-          "actual_hours": null,
-          "created_at": "2026-04-05T00:20:00+08:00",
-          "started_at": null,
-          "completed_at": null,
-          "description": "创建 RegistryManager 和 WorkspaceManager，重构 Spawner 和 PermissionManager",
-          "dependencies": ["1.3", "1.4"],
-          "verification": [
-            "每个类职责单一，符合单一职责原则",
-            "代码可测试性提升",
-            "保持原有功能不变"
-          ],
-          "test_cases": [
-            {
-              "type": "UT",
-              "status": "pending",
-              "description": "测试 RegistryManager 所有操作",
-              "file": "framework/tests/ut/test_registry_manager.py"
-            },
-            {
-              "type": "UT",
-              "status": "pending",
-              "description": "测试 WorkspaceManager 所有操作",
-              "file": "framework/tests/ut/test_workspace_manager.py"
-            },
-            {
-              "type": "UT",
-              "status": "pending",
-              "description": "测试重构后的 Spawner 功能",
-              "file": "framework/tests/ut/test_spawner_refactored.py"
-            },
-            {
-              "type": "ST",
-              "status": "pending",
-              "description": "测试端到端成员创建流程",
-              "file": "framework/tests/st/test_member_creation_e2e.py"
-            }
-          ]
+          "completed_at": "2026-04-06T17:30:00+08:00",
+          "description": "分离关注点，并实装 RLock、原子写入与跨进程文件锁。",
+          "notes": "经过毒刺三轮严苛审计，最终通过原子化写入方案彻底封死并发损坏风险。Commit: 0d33980 🐜"
         }
-      ],
-      "statistics": {
-        "total": 5,
-        "pending": 3,
-        "in_progress": 0,
-        "completed": 2,
-        "total_estimated_hours": 6.25,
-        "total_actual_hours": 2.0
-      }
+      ]
+    },
+    "P2": {
+      "name": "P2 功能增强与生态扩展",
+      "status": "pending",
+      "tasks": [
+        {
+          "id": "2.1",
+          "name": "跨成员事件总线原型 (Event Bus)",
+          "severity": "P2",
+          "status": "pending",
+          "assignee": "alpha",
+          "description": "实现基于文件的异步消息队列，支持成员间的 '订阅/发布' 模式。",
+          "verification": ["消息不丢失", "解耦成员唤醒逻辑"]
+        },
+        {
+          "id": "2.2",
+          "name": "Dashboard 动态监控增强",
+          "severity": "P3",
+          "status": "pending",
+          "assignee": "gulu",
+          "description": "在看板上实时展示成员的 CPU/内存占用及活跃 Session 状态。",
+          "verification": ["数据实时更新", "视觉美化"]
+        },
+        {
+          "id": "2.3",
+          "name": "自动化日报/周报系统 (Aeterna)",
+          "severity": "P2",
+          "status": "pending",
+          "assignee": "aeterna",
+          "description": "史官根据每日 memory 自动提炼项目进度，并推送到园长飞书。",
+          "verification": ["内容精准", "定时推送"]
+        }
+      ]
     }
   },
   "metadata": {
-    "created_by": "alpha",
-    "description": "动物园任务追踪器，记录每个任务的状态、依赖关系、测试用例等",
     "tdd_enabled": true,
-    "test_review_required": true
+    "current_sprint": "Sprint 1: The Foundation"
   }
 }
