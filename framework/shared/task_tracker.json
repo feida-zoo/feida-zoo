@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "last_updated": "2026-04-07T13:30:00+08:00",
+  "last_updated": "2026-04-08T17:42:09+08:00",
   "current_phase": "P2",
   "phases": {
     "P1": {
@@ -59,7 +59,11 @@
           "completed_at": "2026-04-06T21:50:00+08:00",
           "description": "实现基于文件的异步消息队列，支持成员间的 '订阅/发布' 模式。",
           "notes": "已完成核心原型开发、毒刺安全审计及 P0 级原子化写入漏洞修复。性能提升 32 倍。",
-          "verification": ["消息不丢失", "解耦成员唤醒逻辑", "原子化写入验证通过"]
+          "verification": [
+            "消息不丢失",
+            "解耦成员唤醒逻辑",
+            "原子化写入验证通过"
+          ]
         },
         {
           "id": "2.2",
@@ -69,7 +73,10 @@
           "assignee": "gulu",
           "description": "在看板上实时展示成员的头像及状态。",
           "notes": "咕噜 🟢 正在为研发中心看板绘制并集成成员真实头像。已完成静态资源部署。",
-          "verification": ["头像显示正常", "样式美化完成"]
+          "verification": [
+            "头像显示正常",
+            "样式美化完成"
+          ]
         },
         {
           "id": "2.3",
@@ -80,7 +87,25 @@
           "completed_at": "2026-04-07T08:50:00+08:00",
           "description": "史官根据每日 memory 自动提炼项目进度，并推送到园长飞书。",
           "notes": "已实现基于 Python 的解析引擎及飞书集成。已部署 cron 定时任务 (22:00 Daily / Mon 09:00 Weekly)。",
-          "verification": ["内容解析精准", "推送成功", "Cron 已部署"]
+          "verification": [
+            "内容解析精准",
+            "推送成功",
+            "Cron 已部署"
+          ]
+        },
+        {
+          "id": "2.4",
+          "name": "全员专属头像补全计划 (Panda, Aeterna, Gulu)",
+          "severity": "P3",
+          "status": "in_progress",
+          "assignee": "gulu",
+          "description": "完成『千人千面』头像定制计划遗留工作：因底层网络代理故障，需在恢复后重绘 Panda（纠正为非圆形构图）、Aeterna（黑曜石神明形态）、Gulu（色彩史莱姆形态）。",
+          "notes": "计划完成时间：明天（2026-04-09）。依赖条件：宿主机代理节点 (127.0.0.1:7890) 恢复正常。",
+          "verification": [
+            "Panda 新头像无黑边非纯圆",
+            "Aeterna 成功渲染",
+            "Gulu 成功渲染"
+          ]
         }
       ]
     },
@@ -97,7 +122,10 @@
           "completed_at": "2026-04-07T20:05:00+08:00",
           "description": "实现全链路可视化协作，支持成员间 @ 主动提醒与工作流自动流转。",
           "notes": "Alpha 🐢 已完成技术设计文档 (P3_1_CollabSystem_Design.md)。织巢 🐜 已完成核心代码开发 (ZooCoordinator 和 SSEManager)。毒刺 🦂 已完成最终源码级安全审计并通过 (LGTM)。结项归档。",
-          "verification": ["可视化对话", "自动任务流转"]
+          "verification": [
+            "可视化对话",
+            "自动任务流转"
+          ]
         }
       ]
     }
