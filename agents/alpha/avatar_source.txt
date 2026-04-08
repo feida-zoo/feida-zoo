@@ -1,0 +1,39 @@
+# Alpha Avatar (星云智核·承天玄龟) - 生成提示词
+
+## 核心描述
+国风科技/赛博修真融合风格，首席架构师玄龟（Alpha）头像。
+
+## 具体元素
+## 风格
+- 国风科技 (Guofeng Tech)
+- 赛博修真 (Cyber-Cultivation)
+
+## 神态
+- 沉稳、睿智
+- 右眼佩戴单片全息AR透镜，镜面有代码流和节点图倒影
+
+## 色彩
+- 主色调：渊玄 (Abyss Black) + 深空蓝 (Deep Space Blue)
+- 点缀色：量子冰蓝 (Quantum Ice Blue) + 荧光矩阵绿 (Fluorescent Matrix Green)
+
+## 科技元素
+- 背甲呈现六边形微服务矩阵服务器结构
+- 背甲缝隙流淌冰蓝色电路光路
+- 上方环绕立体星河与系统架构图全息投影
+
+## 姿态
+- 静卧观全局
+- 一只前爪虚空轻触面前的发光“核心数据节点”
+- 背景：带有微弱网格线的极简暗色深渊
+
+## 生成提示词 (英文)
+A highly detailed digital illustration of a cyber-cultivation black tortoise (Xuanwu) serving as a chief architect. Style: Chinese fantasy cyberpunk fusion (Guofeng Tech). Expression: Calm and extremely wise. Right eye wears a single holographic AR monocle reflecting flowing code and node graphs. Color palette: Abyss Black and Deep Space Blue as main colors, accented with Quantum Ice Blue and Fluorescent Matrix Green. Tech elements: The tortoise shell is constructed of a hexagonal microservice matrix server structure, with ice-blue glowing circuit lines flowing through the seams. Above the tortoise, a 3D holographic projection of a glowing starry river intertwined with a system architecture diagram. Pose: Resting calmly observing the whole situation, with one front claw hovering to touch a glowing 'core data node' floating in front. Background: Minimalist dark abyss with faint tech grid lines. Masterpiece, highly detailed, futuristic UI elements.
+
+## 生成时间
+2026-04-08 15:13 (UTC+8)
+
+## 生成工具
+nano-banana-pro (Gemini 3 Pro Image API) @ 1K resolution
+
+## 创作者
+Gulu 🟢 (史莱姆画师)
