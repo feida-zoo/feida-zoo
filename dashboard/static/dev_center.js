@@ -140,12 +140,12 @@ class ZooDevCenter {
         
         // 如果没有成员详细数据，使用硬编码的成员列表
         const members = membersData.length > 0 ? membersData : [
-            { id: 'alpha', name: '阿尔法', code_name: 'Alpha', role_display: '首席架构师 · 玄龟', model: 'MiniMax-M2.5', avatar_emoji: '🐢' },
-            { id: 'weaver', name: '织巢', code_name: 'Weaver', role_display: '疯狂工程师 · 织巢蚁', model: 'Kimi-K2.5', avatar_emoji: '🐜' },
-            { id: 'duci', name: '毒刺', code_name: 'Duci', role_display: '代码审计师 · 毒刺蝎', model: 'DeepSeek-V3.2', avatar_emoji: '🦂' },
-            { id: 'panda', name: '达达', code_name: 'Panda', role_display: '代理园长 · 熊猫', model: 'DeepSeek-V3.2', avatar_emoji: '🐼' },
-            { id: 'aeterna', name: '永恒史官', code_name: 'Aeterna', role_display: '史官 · 永恒石', model: 'GLM-4.7', avatar_emoji: '🪨' },
-            { id: 'gulu', name: '咕噜', code_name: 'Gulu', role_display: '咕噜球', model: 'GLM-4', avatar_emoji: '🟢' }
+            { id: 'alpha', name: '阿尔法', code_name: 'Alpha', role_display: '首席架构师 · 玄龟', model: 'DeepSeek V4 Flash', avatar_emoji: '🐢' },
+            { id: 'weaver', name: '织巢', code_name: 'Weaver', role_display: '疯狂工程师 · 织巢蚁', model: 'Kimi Coding K2.6', avatar_emoji: '🐜' },
+            { id: 'duci', name: '毒刺', code_name: 'Duci', role_display: '代码审计师 · 毒刺蝎', model: 'GLM-5.1', avatar_emoji: '🦂' },
+            { id: 'panda', name: '达达', code_name: 'Panda', role_display: '调度者 · 熊猫', model: 'MiniMax-M2.7', avatar_emoji: '🐼' },
+            { id: 'aeterna', name: '永恒史官', code_name: 'Aeterna', role_display: '永恒史官 · 磐石', model: 'MiniMax-M2.7', avatar_emoji: '🪨' },
+            { id: 'gulu', name: '咕噜', code_name: 'Gulu', role_display: '画师/UI设计师 · 咕噜', model: 'MiniMax-M2.7', avatar_emoji: '🟢' }
         ];
         
         let html = '<div class="member-status-grid">';
