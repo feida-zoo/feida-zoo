@@ -1,0 +1,63 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景 -->
+  <circle cx="256" cy="256" r="250" fill="#1e1e28"/>
+  
+  <!-- 熊猫头部 -->
+  <circle cx="256" cy="256" r="180" fill="#ffffff"/>
+  
+  <!-- 耳朵 -->
+  <circle cx="166" cy="166" r="50" fill="#000000"/>
+  <circle cx="346" cy="166" r="50" fill="#000000"/>
+  
+  <!-- 现代化黑眼圈 -->
+  <ellipse cx="176" cy="216" rx="60" ry="40" fill="#14141e"/>
+  <ellipse cx="336" cy="216" rx="60" ry="40" fill="#14141e"/>
+  
+  <!-- 科技蓝眼睛 -->
+  <circle cx="176" cy="256" r="20" fill="#409cff"/>
+  <circle cx="336" cy="256" r="20" fill="#409cff"/>
+  
+  <!-- 眼睛高光 -->
+  <circle cx="170" cy="250" r="5" fill="#ffffff"/>
+  <circle cx="330" cy="250" r="5" fill="#ffffff"/>
+  
+  <!-- 鼻子 -->
+  <circle cx="256" cy="296" r="15" fill="#000000"/>
+  
+  <!-- 微笑嘴巴 -->
+  <path d="M216 320 Q256 360 296 320" stroke="#000000" stroke-width="8" fill="none"/>
+  
+  <!-- 悬浮HUD控制面板 -->
+  <circle cx="256" cy="256" r="100" fill="none" stroke="#409cff" stroke-width="2" stroke-dasharray="5,5" opacity="0.6"/>
+  
+  <!-- HUD连接线 -->
+  <line x1="196" y1="196" x2="226" y2="226" stroke="#409cff" stroke-width="4" opacity="0.8"/>
+  <line x1="316" y1="196" x2="286" y2="226" stroke="#409cff" stroke-width="4" opacity="0.8"/>
+  <line x1="196" y1="316" x2="226" y2="286" stroke="#409cff" stroke-width="4" opacity="0.8"/>
+  <line x1="316" y1="316" x2="286" y2="286" stroke="#409cff" stroke-width="4" opacity="0.8"/>
+  
+  <!-- 科技感数据点 -->
+  <circle cx="256" cy="156" r="6" fill="#409cff"/>
+  <circle cx="356" cy="256" r="6" fill="#409cff"/>
+  <circle cx="256" cy="356" r="6" fill="#409cff"/>
+  <circle cx="156" cy="256" r="6" fill="#409cff"/>
+  
+  <!-- HUD界面元素 -->
+  <rect x="206" y="206" width="100" height="40" rx="5" fill="none" stroke="#409cff" stroke-width="2" opacity="0.5"/>
+  <text x="256" y="230" text-anchor="middle" fill="#409cff" font-family="Arial, sans-serif" font-size="12" font-weight="bold">SYSTEM</text>
+  <text x="256" y="245" text-anchor="middle" fill="#409cff" font-family="Arial, sans-serif" font-size="10">ACTIVE</text>
+  
+  <!-- 微侧倾听姿态的指示 -->
+  <circle cx="286" cy="186" r="8" fill="#409cff" opacity="0.7">
+    <animate attributeName="r" values="8;12;8" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- 国风元素点缀 - 祥云纹样 -->
+  <path d="M100 300 Q120 280 140 300 Q160 320 180 300 Q200 280 220 300" fill="none" stroke="#409cff" stroke-width="3" opacity="0.4"/>
+  <path d="M292 380 Q312 360 332 380 Q352 400 372 380" fill="none" stroke="#409cff" stroke-width="3" opacity="0.4"/>
+  
+  <!-- 标题 -->
+  <text x="256" y="480" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="16" font-weight="bold">PANDA · 调度者</text>
+  <text x="256" y="500" text-anchor="middle" fill="#409cff" font-family="Arial, sans-serif" font-size="12">憨厚有力 · 科技掌控</text>
+</svg>
