@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "last_updated": "2026-04-08T17:42:09+08:00",
+  "last_updated": "2026-05-10T13:25:42+08:00",
   "current_phase": "P2",
   "phases": {
     "P1": {
@@ -126,6 +126,47 @@
             "可视化对话",
             "自动任务流转"
           ]
+        },
+        {
+          "id": "3.2",
+          "name": "P2P 架构改造 + Harness 流程引擎设计",
+          "severity": "P2",
+          "status": "in_progress",
+          "assignee": "alpha",
+          "reviewer": "duci",
+          "description": "将 feida-zoo 从 Hub-and-Spoke 改为 P2P Mesh 架构，同时将 SKILL.md 工作流改为 Python Harness 代码引擎",
+          "notes": "设计已过审(毒刺✅)。阶段0(agentToAgent配置)已完成。阶段1交赴织巢🐜开发中。",
+          "design_doc": "alpha_feida_zoo_P2P_Harness_Architecture_v1.0.md",
+          "started_at": "2026-05-10T13:02:03+08:00"
+        },
+        {
+          "id": "3.2.1",
+          "name": "阶段1 — ZooPipeline + ZooMesh 核心开发",
+          "severity": "P2",
+          "status": "in_progress",
+          "assignee": "weaver",
+          "description": "实现 Harness 引擎骨架(ZooPipeline)和 ZooMesh 总线核心代码",
+          "notes": "织巢🐜已接单，正在阅读设计文档",
+          "design_doc": "alpha_feida_zoo_P2P_Harness_Architecture_v1.1.md",
+          "started_at": "2026-05-10T13:25:42+08:00"
+        },
+        {
+          "id": "3.2.2",
+          "name": "阶段2 — SKILL.md 迁移 + YAML 废弃",
+          "severity": "P2",
+          "status": "pending",
+          "assignee": "weaver",
+          "description": "将 SKILL.md 工作流规则迁移到 Harness 代码，废弃 YAML 流程定义",
+          "depends_on": "3.2.1"
+        },
+        {
+          "id": "3.2.3",
+          "name": "阶段3 — Agent 持久化 + 全功能 P2P",
+          "severity": "P2",
+          "status": "pending",
+          "assignee": "weaver",
+          "description": "成员从 mode='run' 切换为持久 session，实现双向通信",
+          "depends_on": "3.2.2"
         }
       ]
     }

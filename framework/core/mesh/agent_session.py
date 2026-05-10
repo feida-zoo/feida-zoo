@@ -118,6 +118,8 @@ class AgentSession:
         1. 递增 msg.json 内的 delivery_count
         2. 如果 delivery_count < max_delivery_attempts → 返回 "retry"
         3. 如果 delivery_count >= max_delivery_attempts → 移动到 dlq/，返回 "dlq"
+
+        P2-2 fix: 使用 temp+rename 原子写入替代 r+原地更新，避免并发竞态。
         """
         queue_dir = self.inbox_dir / "queue"
         msg_file = queue_dir / f"msg_{msg_id}.json"
@@ -125,24 +127,32 @@ class AgentSession:
         if not msg_file.exists():
             return "not_found"
 
-        with open(msg_file, "r+", encoding="utf-8") as f:
+        with open(msg_file, "r", encoding="utf-8") as f:
             msg = json.load(f)
-            msg["delivery_count"] += 1
 
-            if msg["delivery_count"] >= self.config.max_delivery_attempts:
-                # 移入死信队列
-                dlq_dir = self.inbox_dir / "dlq"
-                dlq_target = dlq_dir / f"msg_{msg_id}.json"
-                shutil.move(str(msg_file), str(dlq_target))
-                return "dlq"
+        msg["delivery_count"] += 1
 
-            # 原地更新 delivery_count
-            f.seek(0)
+        if msg["delivery_count"] >= self.config.max_delivery_attempts:
+            # 移入死信队列（先关闭文件句柄再用 rename）
+            dlq_dir = self.inbox_dir / "dlq"
+            dlq_target = dlq_dir / f"msg_{msg_id}.json"
+            temp_file = queue_dir / f"msg_{msg_id}.tmp"
+            with open(temp_file, "w", encoding="utf-8") as f:
+                json.dump(msg, f, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.rename(str(temp_file), str(dlq_target))
+            if msg_file.exists():
+                msg_file.unlink()
+            return "dlq"
+
+        # 非 DLQ：原子写入更新 delivery_count
+        temp_file = queue_dir / f"msg_{msg_id}.tmp"
+        with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(msg, f, ensure_ascii=False)
-            f.truncate()
             f.flush()
             os.fsync(f.fileno())
-
+        os.rename(str(temp_file), str(msg_file))
         return "retry"
 
     # ---- 恢复相关 ----

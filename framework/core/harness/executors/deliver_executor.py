@@ -47,14 +47,8 @@ class DeliverExecutor(PhaseExecutor):
         # - 生成交付文档
         # - 通知任务完成
 
-        # 标记 Pipeline 为完成
-        if not self.pipeline.is_done and not self.pipeline.is_cancelled:
-            try:
-                self.pipeline.mark_done()
-            except Exception:
-                # 如果状态转换失败，直接设置标志位
-                # 这是为了测试兼容性
-                self.pipeline._done = True
+        # 标记 Pipeline 为完成（正常路径）
+        self.pipeline.mark_done()
 
         # 发布阶段完成事件
         self.zoo_mesh.publish_event(

@@ -176,9 +176,12 @@ class ZooPipeline:
 
         return "retry"
 
+    # 授权取消者白名单（仅园长和 Panda）
+    AUTHORIZED_CANCELLERS = {"owner", "panda"}
+
     def cancel(self, requester: str) -> bool:
         """
-        取消 Pipeline（仅园长可调用）。
+        取消 Pipeline（仅园长/Panda 可调用）。
 
         Args:
             requester: 请求取消的操作者 ID
@@ -189,7 +192,10 @@ class ZooPipeline:
         if self._done or self._cancelled:
             return False
 
-        # TODO: 验证 requester 是否为园长（暂时跳过）
+        # P1-3 fix: 验证取消者身份
+        if requester not in self.AUTHORIZED_CANCELLERS:
+            raise PermissionError(f"取消权限不足: {requester} 不在白名单 {self.AUTHORIZED_CANCELLERS}")
+
         StateMachine.transition(self._current_state, "cancelled")
         self._current_state = "cancelled"
         self._current_phase = "cancelled"
@@ -231,12 +237,13 @@ class ZooPipeline:
         for phase in self.PHASES:
             if self._done or self._cancelled:
                 break
-            self._current_phase = phase
-            self._current_state = phase
-            # TODO: 调用 PhaseExecutor 执行阶段
-            # executor = self._get_executor(phase)
-            # success = executor.execute()
-            # if not success: ...
+            # P1-1 fix: 必须通过 advance_to() 进行状态转换校验
+            try:
+                self.advance_to(phase)
+            except InvalidTransition as e:
+                # 非法转换 → escalated
+                self.handle_error(e)
+                break
 
         if not self._done and not self._cancelled:
             self.mark_done()

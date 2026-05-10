@@ -99,10 +99,12 @@ class PhaseExecutor(ABC):
         升级处理：将任务标记为 escalated 状态。
 
         当回退次数超过阈值时调用此方法。
+        P1-4 fix: 通过 StateMachine.handle_error() 正确推进状态，不再直接赋值私有属性。
         """
-        # 设置 Pipeline 状态为 escalated
-        if hasattr(self.pipeline, "_current_state"):
-            self.pipeline._current_state = "escalated"
+        # P1-4 fix: 使用 StateMachine.handle_error() 正确处理状态转换
+        self.pipeline.handle_error(
+            RuntimeError(f"escalate from {self.phase_name} due to rollback threshold")
+        )
 
         # 发布升级事件到事件总线
         self.zoo_mesh.publish_event(

@@ -150,6 +150,11 @@ class TestPhaseExecutor:
         executor = ConcreteExecutor(self.pipeline, "design", self.zoo_mesh)
         self.zoo_mesh.init_task(self.pipeline.task_id)
 
+        # 先推进到 design 状态（从 request → validate → design）
+        # 因为只有 design+ 状态才允许转换到 escalated
+        self.pipeline.advance_to("validate")
+        self.pipeline.advance_to("design")
+
         executor.escalate()
 
         assert self.pipeline.current_state == "escalated"
@@ -158,6 +163,11 @@ class TestPhaseExecutor:
         """escalate 方法应发布事件到事件总线。"""
         executor = ConcreteExecutor(self.pipeline, "design", self.zoo_mesh)
         self.zoo_mesh.init_task(self.pipeline.task_id)
+
+        # 先推进到 design 状态（从 request → validate → design）
+        # 因为只有 design+ 状态才允许转换到 escalated
+        self.pipeline.advance_to("validate")
+        self.pipeline.advance_to("design")
 
         executor.escalate()
 
