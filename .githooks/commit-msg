@@ -8,8 +8,6 @@ COMMIT_MSG_FILE="$1"
 COMMIT_MSG=$(head -n1 "$COMMIT_MSG_FILE")
 
 # 提取第一个字符（或表情符号，在 UTF-8 中可能是多字节）
-FIRST_CHAR=$(echo "$COMMIT_MSG" | grep -oP '^[^\s]')
-
 # 检查是否以合法 Emoji 开头
 VALID=false
 for emoji in $ALLOWED_EMOJIS; do
