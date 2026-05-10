@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "last_updated": "2026-05-10T13:25:42+08:00",
+  "last_updated": "2026-05-10T16:11:30+08:00",
   "current_phase": "P2",
   "phases": {
     "P1": {
@@ -143,21 +143,23 @@
           "id": "3.2.1",
           "name": "阶段1 — ZooPipeline + ZooMesh 核心开发",
           "severity": "P2",
-          "status": "in_progress",
+          "status": "completed",
           "assignee": "weaver",
           "description": "实现 Harness 引擎骨架(ZooPipeline)和 ZooMesh 总线核心代码",
-          "notes": "织巢🐜已接单，正在阅读设计文档",
+          "notes": "织巢🐜完成，毒刺🦂审计通过，阿尔法🐢放行。Commit: b538803",
           "design_doc": "alpha_feida_zoo_P2P_Harness_Architecture_v1.1.md",
-          "started_at": "2026-05-10T13:25:42+08:00"
+          "started_at": "2026-05-10T13:25:42+08:00",
+          "completed_at": "2026-05-10T15:35:59+08:00"
         },
         {
           "id": "3.2.2",
           "name": "阶段2 — SKILL.md 迁移 + YAML 废弃",
           "severity": "P2",
-          "status": "pending",
+          "status": "in_progress",
           "assignee": "weaver",
           "description": "将 SKILL.md 工作流规则迁移到 Harness 代码，废弃 YAML 流程定义",
-          "depends_on": "3.2.1"
+          "depends_on": "3.2.1",
+          "notes": "织巢🐜已接单，正在迁移 SKILL.md 元规则到 Harness validators"
         },
         {
           "id": "3.2.3",
