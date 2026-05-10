@@ -6,12 +6,13 @@
 
 import fcntl
 import json
+import logging
 import os
 import shutil
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 
 @dataclass
@@ -39,6 +40,7 @@ class AgentSession:
         self.agent_id = agent_id
         self.inbox_dir = Path(inbox_dir)
         self.config = InboxConfig()
+        self.on_message_received: Optional[Callable] = None
 
         self._ensure_dirs()
 
@@ -77,6 +79,13 @@ class AgentSession:
             os.fsync(f.fileno())
 
         os.rename(str(temp), str(target))
+
+        if self.on_message_received:
+            try:
+                self.on_message_received(self.agent_id, msg)
+            except Exception as e:
+                logging.getLogger(__name__).warning(f"on_message_received 回调失败: {e}")
+
         return msg_id
 
     def receive(self) -> Optional[Dict]:
