@@ -1,0 +1,45 @@
+#!/bin/bash
+# Git commit-msg hook — 强制 Emoji 签名检查
+# 规则：commit message 必须以以下任一 Emoji 开头
+
+ALLOWED_EMOJIS="🐼 🐢 🐜 🦂 📜 🟢"
+
+COMMIT_MSG_FILE="$1"
+COMMIT_MSG=$(head -n1 "$COMMIT_MSG_FILE")
+
+# 提取第一个字符（或表情符号，在 UTF-8 中可能是多字节）
+FIRST_CHAR=$(echo "$COMMIT_MSG" | grep -oP '^[^\s]')
+
+# 检查是否以合法 Emoji 开头
+VALID=false
+for emoji in $ALLOWED_EMOJIS; do
+    if [[ "$COMMIT_MSG" == "$emoji"* ]]; then
+        VALID=true
+        break
+    fi
+done
+
+if [ "$VALID" = false ]; then
+    cat << 'EOF'
+
+⚠️ 提交被拒绝：缺少或使用了错误的 Emoji 签名！
+
+请在 commit message 开头添加对应的成员 Emoji：
+
+  🐼  Panda（调度者）
+  🐢  Alpha（架构师）
+  🐜  Weaver（工程师）
+  🦂  Duci（审计师）
+  📜  Aeterna（史官）
+  🟢  Gulu（画师）
+
+正确的格式示例：
+  🐼 chore: 更新配置文件
+  🐢 feat: 新增架构设计文档
+  🐜 fix: 修复看板数据源故障
+
+EOF
+    exit 1
+fi
+
+exit 0
