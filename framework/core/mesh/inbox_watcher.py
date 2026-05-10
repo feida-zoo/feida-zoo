@@ -27,27 +27,35 @@ class InboxWatcher:
             registry_path: agent 注册表 JSON 路径
             on_wakeup: 回调函数，签名 (agent_id: str) -> None
         """
+        import threading
         self.mesh_dir = Path(mesh_dir)
         self.registry_path = registry_path
         self.on_wakeup = on_wakeup
         self._running = False
         self._last_check: Dict[str, float] = {}  # agent_id -> last mtime checked
+        self._thread: Optional[threading.Thread] = None
 
     def start(self) -> None:
-        """启动看门狗（轮询模式，兼容无 watchdog 的环境）"""
-        import json
+        """启动看门狗（守护线程模式）"""
         self._running = True
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        logger.info("InboxWatcher 守护线程已启动")
 
+    def _run(self) -> None:
+        """实际轮询逻辑，在守护线程中运行"""
+        import json
         # 加载注册表获取所有 agent_id
         try:
             with open(self.registry_path) as f:
                 registry = json.load(f)
             agent_ids = list(registry.get("agents", {}).keys())
+        except FileNotFoundError as e:
+            raise RuntimeError(f"注册表文件不存在: {e}")
+        except json.JSONDecodeError as e:
+            raise RuntimeError(f"注册表 JSON 解析失败: {e}")
         except Exception as e:
-            logger.warning(f"无法加载注册表: {e}，使用默认 agent 列表")
-            agent_ids = ["weaver", "duci", "aeterna", "gulu", "alpha"]
-
-        logger.info(f"InboxWatcher 启动，监控 {len(agent_ids)} 个 agent: {agent_ids}")
+            raise RuntimeError(f"无法加载注册表: {e}")
 
         # 启动时初始化 _last_check，避免首次轮询将历史消息当作新消息
         for agent_id in agent_ids:

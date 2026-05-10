@@ -155,6 +155,40 @@ class TestAgentSessionAck:
         session.ack("nonexistent-id")  # should not raise
 
 
+class TestOnMessageReceivedCallback:
+    """Test on_message_received callback."""
+
+    def test_on_message_received_callback(self, tmp_path):
+        """send() 时应触发 on_message_received 回调"""
+        inbox_dir = tmp_path / "inbound" / "weaver"
+        received = []
+
+        session = AgentSession("weaver", str(inbox_dir))
+        session.on_message_received = lambda agent_id, msg: received.append((agent_id, msg))
+
+        msg_id = session.send("alpha", "测试消息")
+
+        assert len(received) == 1
+        assert received[0][0] == "weaver"
+        assert received[0][1]["body"] == "测试消息"
+        assert received[0][1]["id"] == msg_id
+
+    def test_on_message_received_multiple(self, tmp_path):
+        """多次 send 应触发多次回调"""
+        inbox_dir = tmp_path / "inbound" / "weaver"
+        received = []
+
+        session = AgentSession("weaver", str(inbox_dir))
+        session.on_message_received = lambda agent_id, msg: received.append((agent_id, msg))
+
+        session.send("alpha", "first")
+        session.send("beta", "second")
+
+        assert len(received) == 2
+        assert received[0][1]["body"] == "first"
+        assert received[1][1]["body"] == "second"
+
+
 class TestAgentSessionNack:
     """Test negative acknowledgment."""
 

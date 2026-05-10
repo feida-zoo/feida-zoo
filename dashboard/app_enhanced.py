@@ -12,7 +12,7 @@ import threading
 import fcntl
 from pathlib import Path
 from datetime import datetime
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Dict, List, Optional, Set
 import queue
 
@@ -21,8 +21,8 @@ from git_adapter import get_git_adapter, get_git_watcher
 
 # 配置
 PORT = 18792  # 使用新端口避免冲突
-PROJECT_ROOT = Path("/home/afei/workspace/code/feida_zoo")
-PANDA_ROOT = Path("/home/afei/workspace/panda")
+PROJECT_ROOT = Path("/Users/zoo/workspace/code/feida_zoo")
+PANDA_ROOT = Path("/Users/zoo/workspace/members/panda")
 REGISTRY_PATH = PROJECT_ROOT / "framework" / "data" / "registry.json"
 TASK_TRACKER_PATH = PROJECT_ROOT / "framework" / "shared" / "task_tracker.json"
 AGENTS_DIR = PANDA_ROOT / "agents"
@@ -424,9 +424,15 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
     def _serve_avatar(self):
         """服务成员头像"""
         member_id = self.path.split('/')[-1]
+        # 优先从 AGENTS_DIR 查找（panda/agents/<member_id>/avatar.png）
         avatar_path = AGENTS_DIR / member_id / "avatar.png"
         if avatar_path.exists():
             self._serve_file(avatar_path, 'image/png')
+            return
+        # fallback：直接从成员自身目录查找（members/<member_id>/avatar.png）
+        fallback_path = Path("/Users/zoo/workspace/members") / member_id / "avatar.png"
+        if fallback_path.exists():
+            self._serve_file(fallback_path, 'image/png')
         else:
             self.send_error(404)
     
@@ -595,7 +601,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
 
 def run_server():
     """运行服务器"""
-    server = HTTPServer(('0.0.0.0', PORT), ZooDevCenterHandler)
+    server = ThreadingHTTPServer(('0.0.0.0', PORT), ZooDevCenterHandler)
     print(f"🚀 Zoo Dev-Center v1.0 启动成功!")
     print(f"📊 看板地址: http://localhost:{PORT}")
     print(f"📈 API 端点:")

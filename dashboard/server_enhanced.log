@@ -1,1 +1,13 @@
-127.0.0.1 - - [06/Apr/2026 19:01:34] "GET /events HTTP/1.1" 200 -
+127.0.0.1 - - [10/May/2026 18:44:22] "GET /api/system-info HTTP/1.1" 200 -
+127.0.0.1 - - [10/May/2026 18:44:31] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [10/May/2026 18:44:43] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [10/May/2026 18:44:43] "GET /static/style.css HTTP/1.1" 200 -
+127.0.0.1 - - [10/May/2026 18:44:43] "GET /static/dev_center.css HTTP/1.1" 200 -
+127.0.0.1 - - [10/May/2026 18:44:43] "GET /static/dev_center.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/May/2026 18:44:45] "GET /api/task-stats HTTP/1.1" 200 -
+127.0.0.1 - - [10/May/2026 18:44:45] "GET /api/kanban HTTP/1.1" 200 -
+127.0.0.1 - - [10/May/2026 18:44:45] "GET /api/git-timeline HTTP/1.1" 200 -
+127.0.0.1 - - [10/May/2026 18:44:45] "GET /api/git-stats HTTP/1.1" 200 -
+127.0.0.1 - - [10/May/2026 18:44:45] "GET /api/members HTTP/1.1" 200 -
+127.0.0.1 - - [10/May/2026 18:44:45] "GET /api/member-status HTTP/1.1" 200 -
+127.0.0.1 - - [10/May/2026 18:44:45] "GET /events HTTP/1.1" 200 -

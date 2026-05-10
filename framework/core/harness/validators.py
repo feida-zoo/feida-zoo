@@ -90,7 +90,7 @@ def check_release_signal(review_text: str) -> bool:
     """元规则 #4：代码合入放行信号检查。
 
     必须出现明确放行关键词之一（LGTM / 通过 / 可以合入），
-    无放行语 → 不放行。
+    且不能包含「条件性通过」，无放行语 → 不放行。
 
     Args:
         review_text: 审核结论文本
@@ -101,7 +101,9 @@ def check_release_signal(review_text: str) -> bool:
     if not review_text:
         return False
     normalized = review_text.lower().strip()
-    return normalized in RELEASE_SIGNALS
+    if "条件性通过" in normalized:
+        return False
+    return any(signal in normalized for signal in RELEASE_SIGNALS)
 
 
 def check_tdd_compliance(test_file: str, source_file: str) -> List[str]:

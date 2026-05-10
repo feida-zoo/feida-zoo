@@ -6,6 +6,7 @@
 import logging
 import os
 import time
+import threading
 from pathlib import Path
 from threading import Timer
 from typing import Callable, Dict, Optional
@@ -72,6 +73,7 @@ class AsyncDeliveryWatcher:
         self.mesh_dir = Path(mesh_dir)
         self._expectations: Dict[str, DeliveryExpectation] = {}
         self._running = False
+        self._lock = threading.Lock()
 
     def expect_delivery(
         self,
@@ -95,26 +97,30 @@ class AsyncDeliveryWatcher:
             on_timeout=on_timeout,
             on_error=on_error,
         )
-        self._expectations[task_id] = exp
+        with self._lock:
+            self._expectations[task_id] = exp
         exp.start()
         logger.info(f"注册交付期望: task_id={task_id}, from={from_agent}, pattern={expected_pattern}")
 
     def cancel_expectation(self, task_id: str) -> None:
         """取消一个交付期望"""
-        if task_id in self._expectations:
-            self._expectations[task_id].cancel()
-            del self._expectations[task_id]
-            logger.info(f"取消交付期望: task_id={task_id}")
+        with self._lock:
+            if task_id in self._expectations:
+                self._expectations[task_id].cancel()
+                del self._expectations[task_id]
+                logger.info(f"取消交付期望: task_id={task_id}")
 
     def notify_delivered(self, task_id: str, file_path: str) -> None:
         """Event Bus 调用此方法通知交付完成"""
-        if task_id in self._expectations:
+        with self._lock:
+            if task_id not in self._expectations:
+                return
             exp = self._expectations[task_id]
-            exp.cancel()
             del self._expectations[task_id]
-            if exp.on_delivered:
-                exp.on_delivered(task_id, file_path)
-            logger.info(f"交付完成: task_id={task_id}, file={file_path}")
+        exp.cancel()
+        if exp.on_delivered:
+            exp.on_delivered(task_id, file_path)
+        logger.info(f"交付完成: task_id={task_id}, file={file_path}")
 
     def start_filesystem_watch(self) -> None:
         """启动文件系统兜底检测（轮询模式）"""
@@ -126,7 +132,8 @@ class AsyncDeliveryWatcher:
             time.sleep(2)
 
     def stop(self) -> None:
-        self._running = False
+        with self._lock:
+            self._running = False
         # 取消所有未完成期望的计时器，避免守护线程在解释器退出后仍触发
         for task_id in list(self._expectations.keys()):
             self._expectations[task_id].cancel()
@@ -135,7 +142,10 @@ class AsyncDeliveryWatcher:
         """检查所有期望的交付目录"""
         import fnmatch
 
-        for task_id, exp in list(self._expectations.items()):
+        with self._lock:
+            expectations = list(self._expectations.items())
+
+        for task_id, exp in expectations:
             try:
                 delivery_path = Path(exp.delivery_dir)
                 if not delivery_path.exists():
@@ -148,5 +158,6 @@ class AsyncDeliveryWatcher:
                         break
             except Exception as e:
                 logger.warning(f"检查文件系统交付失败: task_id={task_id}, error={e}")
-                if task_id in self._expectations:
-                    self._expectations[task_id].on_error(task_id, str(e))
+                with self._lock:
+                    if task_id in self._expectations:
+                        self._expectations[task_id].on_error(task_id, str(e))
