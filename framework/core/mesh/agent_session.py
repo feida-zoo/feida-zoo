@@ -1,9 +1,10 @@
 """Agent 收件箱会话管理。
 
 实现 send/receive/ack/nack 协议，每消息独立文件（msg_<uuid>.json），
-原子写入（temp+rename）。设计约束来自文档 §2.1。
+原子写入（temp+rename）+ 文件锁。设计约束来自文档 §2.1。
 """
 
+import fcntl
 import json
 import os
 import shutil
@@ -119,41 +120,49 @@ class AgentSession:
         2. 如果 delivery_count < max_delivery_attempts → 返回 "retry"
         3. 如果 delivery_count >= max_delivery_attempts → 移动到 dlq/，返回 "dlq"
 
-        P2-2 fix: 使用 temp+rename 原子写入替代 r+原地更新，避免并发竞态。
+        P2-2 fix: 使用 temp+rename + 文件锁确保并发安全。
         """
         queue_dir = self.inbox_dir / "queue"
         msg_file = queue_dir / f"msg_{msg_id}.json"
+        lock_file = queue_dir / f".lock_{msg_id}"
 
         if not msg_file.exists():
             return "not_found"
 
-        with open(msg_file, "r", encoding="utf-8") as f:
-            msg = json.load(f)
+        # P2-2 fix: 使用文件锁确保 read-modify-write 原子性
+        with open(lock_file, "w") as lock_fp:
+            fcntl.flock(lock_fp.fileno(), fcntl.LOCK_EX)
 
-        msg["delivery_count"] += 1
+            try:
+                with open(msg_file, "r", encoding="utf-8") as f:
+                    msg = json.load(f)
 
-        if msg["delivery_count"] >= self.config.max_delivery_attempts:
-            # 移入死信队列（先关闭文件句柄再用 rename）
-            dlq_dir = self.inbox_dir / "dlq"
-            dlq_target = dlq_dir / f"msg_{msg_id}.json"
-            temp_file = queue_dir / f"msg_{msg_id}.tmp"
-            with open(temp_file, "w", encoding="utf-8") as f:
-                json.dump(msg, f, ensure_ascii=False)
-                f.flush()
-                os.fsync(f.fileno())
-            os.rename(str(temp_file), str(dlq_target))
-            if msg_file.exists():
-                msg_file.unlink()
-            return "dlq"
+                msg["delivery_count"] += 1
 
-        # 非 DLQ：原子写入更新 delivery_count
-        temp_file = queue_dir / f"msg_{msg_id}.tmp"
-        with open(temp_file, "w", encoding="utf-8") as f:
-            json.dump(msg, f, ensure_ascii=False)
-            f.flush()
-            os.fsync(f.fileno())
-        os.rename(str(temp_file), str(msg_file))
-        return "retry"
+                unique_suffix = str(uuid.uuid4())[:8]
+
+                if msg["delivery_count"] >= self.config.max_delivery_attempts:
+                    dlq_dir = self.inbox_dir / "dlq"
+                    dlq_target = dlq_dir / f"msg_{msg_id}.json"
+                    temp_file = queue_dir / f".tmp_{msg_id}_{unique_suffix}.json"
+                    with open(temp_file, "w", encoding="utf-8") as f:
+                        json.dump(msg, f, ensure_ascii=False)
+                        f.flush()
+                        os.fsync(f.fileno())
+                    os.rename(str(temp_file), str(dlq_target))
+                    if msg_file.exists():
+                        msg_file.unlink()
+                    return "dlq"
+
+                temp_file = queue_dir / f".tmp_{msg_id}_{unique_suffix}.json"
+                with open(temp_file, "w", encoding="utf-8") as f:
+                    json.dump(msg, f, ensure_ascii=False)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.rename(str(temp_file), str(msg_file))
+                return "retry"
+            finally:
+                fcntl.flock(lock_fp.fileno(), fcntl.LOCK_UN)
 
     # ---- 恢复相关 ----
 

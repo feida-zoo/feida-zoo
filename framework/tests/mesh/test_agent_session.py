@@ -1,6 +1,7 @@
 """Tests for AgentSession inbox operations."""
 
 import json
+import multiprocessing
 import os
 import time
 import uuid
@@ -199,6 +200,49 @@ class TestAgentSessionNack:
         session = AgentSession("weaver", str(inbox_dir))
         result = session.nack("nonexistent-id")
         assert result == "not_found"
+
+
+def _concurrent_nack_worker(inbox_dir_str: str, msg_id: str, iterations: int, max_attempts: int):
+    """Worker function for concurrent nack testing."""
+    session = AgentSession("weaver", inbox_dir_str)
+    session.config.max_delivery_attempts = max_attempts
+    for _ in range(iterations):
+        session.nack(msg_id)
+
+
+class TestAgentSessionConcurrentNack:
+    """Test concurrent nack operations for atomic write safety."""
+
+    def test_nack_concurrent_atomic_write(self, tmp_path):
+        inbox_dir = tmp_path / "inbound" / "weaver"
+        inbox_dir_str = str(inbox_dir)
+        session = AgentSession("weaver", inbox_dir_str)
+        msg_id = session.send("alpha", "test message")
+
+        num_processes = 4
+        iterations_per_process = 5
+        max_attempts = num_processes * iterations_per_process + 1
+        session.config.max_delivery_attempts = max_attempts
+
+        processes = []
+        for _ in range(num_processes):
+            p = multiprocessing.Process(
+                target=_concurrent_nack_worker,
+                args=(inbox_dir_str, msg_id, iterations_per_process, max_attempts)
+            )
+            processes.append(p)
+            p.start()
+
+        for p in processes:
+            p.join()
+
+        queue_dir = inbox_dir / "queue"
+        files = list(queue_dir.glob("msg_*.json"))
+        assert len(files) == 1
+        with open(files[0]) as f:
+            msg = json.load(f)
+        expected_delivery_count = num_processes * iterations_per_process
+        assert msg["delivery_count"] == expected_delivery_count
 
 
 class TestAgentSessionRecovery:

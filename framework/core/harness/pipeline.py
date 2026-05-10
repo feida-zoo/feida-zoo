@@ -237,6 +237,8 @@ class ZooPipeline:
         for phase in self.PHASES:
             if self._done or self._cancelled:
                 break
+            if phase == self._current_state:
+                continue
             # P1-1 fix: 必须通过 advance_to() 进行状态转换校验
             try:
                 self.advance_to(phase)

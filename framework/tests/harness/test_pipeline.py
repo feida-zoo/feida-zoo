@@ -157,6 +157,15 @@ class TestZooPipelineCancel:
         assert second is False
         ZooPipeline.reset_instance()
 
+    def test_cancel_by_unauthorized_raises_permission_error(self):
+        ZooPipeline.reset_instance()
+        p = ZooPipeline(task_id="t1", agent_id="weaver")
+        with pytest.raises(PermissionError):
+            p.cancel("weaver")
+        with pytest.raises(PermissionError):
+            p.cancel("alpha")
+        ZooPipeline.reset_instance()
+
 
 class TestZooPipelineMarkDone:
     """测试完成标记"""
