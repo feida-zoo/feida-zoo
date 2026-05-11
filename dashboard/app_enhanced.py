@@ -10,11 +10,15 @@ import os
 import time
 import threading
 import fcntl
+import requests
 from pathlib import Path
 from datetime import datetime
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Dict, List, Optional, Set
 import queue
+
+# ZooMesh HTTP endpoint
+ZOO_MESH_HTTP = os.environ.get("ZOO_MESH_HTTP_URL", "http://127.0.0.1:18793")
 
 # 导入 Git 适配器
 from git_adapter import get_git_adapter, get_git_watcher
@@ -169,9 +173,29 @@ class MemberStatusManager:
             return self.status_cache
 
     def _detect_member_active_status(self, member_id: str) -> str:
-        """检测单个成员的活跃状态"""
-        # 简化版：先返回idle，后续可以根据需要扩展
-        return "idle"
+        """检测单个成员的实际活跃状态（检查 openclaw 进程）"""
+        try:
+            import subprocess
+            # 检查是否有该成员的 openclaw 进程在运行
+            result = subprocess.run(
+                ["pgrep", "-f", f"openclaw.*{member_id}"],
+                capture_output=True, text=True, timeout=3
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                pids = result.stdout.strip().split('\n')
+                for pid in pids:
+                    try:
+                        p = subprocess.run(["ps", "-p", pid, "-o", "state="],
+                                          capture_output=True, text=True, timeout=2)
+                        state = p.stdout.strip()
+                        if state and state not in ('Z', 'T'):
+                            return "executing"
+                    except:
+                        continue
+            return "idle"
+        except Exception as e:
+            print(f"检测成员 {member_id} 状态失败: {e}")
+            return "unknown"
 
 
 
@@ -384,27 +408,34 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         """处理 GET 请求"""
         try:
-            if self.path == '/':
+            from urllib.parse import urlparse
+            parsed_path = urlparse(self.path).path
+            
+            if parsed_path == '/':
                 self._serve_dev_center()
-            elif self.path == '/api/members':
+            elif parsed_path == '/api/members':
                 self._send_json(self._get_member_data())
-            elif self.path == '/api/member-status':
+            elif parsed_path == '/api/member-status':
                 self._send_json(self.status_manager.get_all_status())
-            elif self.path == '/api/kanban':
+            elif parsed_path == '/api/kanban':
                 self._send_json(self._get_kanban_data())
-            elif self.path == '/api/task-stats':
+            elif parsed_path == '/api/task-stats':
                 self._send_json(self.task_manager.get_task_stats())
-            elif self.path == '/api/git-timeline':
+            elif parsed_path == '/api/projects':
+                self._send_json(self.git_adapter.get_all_projects())
+            elif parsed_path == '/api/git-timeline':
                 self._send_json(self._get_git_timeline())
-            elif self.path == '/api/git-stats':
+            elif parsed_path == '/api/git-stats':
                 self._send_json(self.git_adapter.get_commit_stats())
             elif self.path == '/api/system-info':
                 self._send_json(self._get_system_info())
+            elif self.path.startswith('/api/chat'):
+                self._handle_chat_api()
             elif self.path == '/events':
                 self._handle_sse()
-            elif self.path.startswith('/avatar/'):
+            elif parsed_path.startswith('/avatar/'):
                 self._serve_avatar()
-            elif self.path.startswith('/static/'):
+            elif parsed_path.startswith('/static/'):
                 self._serve_static_file()
             else:
                 self.send_error(404)
@@ -412,18 +443,55 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             print(f"处理请求 {self.path} 时出错: {e}")
             self.send_error(500, str(e))
     
+    def _handle_chat_api(self):
+        """Proxy chat requests to ZooMesh daemon"""
+        if self.method == 'GET':
+            try:
+                r = requests.get(f"{ZOO_MESH_HTTP}/api/chat", timeout=5)
+                self._send_json(r.json())
+            except Exception:
+                self._send_json([])
+        elif self.method == 'POST':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(length)
+                data = json.loads(body)
+                data['from'] = 'dashboard'
+                r = requests.post(f"{ZOO_MESH_HTTP}/api/chat", json=data, timeout=5)
+                self._send_json(r.json())
+            except Exception:
+                self.send_response(503)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "ZooMesh unavailable"}).encode())
+
     def _serve_dev_center(self):
-        """服务研发中心主页面"""
+        """服务研发中心主页面，并嵌入聊天面板"""
         dev_center_path = TEMPLATES_DIR / 'dev_center.html'
         if not dev_center_path.exists():
-            # 如果 dev_center.html 不存在，回退到 index.html
             dev_center_path = TEMPLATES_DIR / 'index.html'
-        
-        self._serve_file(dev_center_path, 'text/html')
+
+        with open(dev_center_path, 'rb') as f:
+            html = f.read().decode('utf-8')
+
+        # Inject chat panel before </body>
+        chat_panel_path = TEMPLATES_DIR / 'chat_panel.html'
+        if chat_panel_path.exists():
+            with open(chat_panel_path, 'r', encoding='utf-8') as f:
+                panel_html = f.read()
+            html = html.replace('</body>', panel_html + '</body>')
+
+        content = html.encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', len(content))
+        self.end_headers()
+        self.wfile.write(content)
     
     def _serve_avatar(self):
         """服务成员头像"""
-        member_id = self.path.split('/')[-1]
+        from urllib.parse import urlparse
+        member_id = urlparse(self.path).path.split('/')[-1]
         # 优先从 AGENTS_DIR 查找（panda/agents/<member_id>/avatar.png）
         avatar_path = AGENTS_DIR / member_id / "avatar.png"
         if avatar_path.exists():
@@ -438,7 +506,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
     
     def _serve_static_file(self):
         """服务静态文件"""
-        file_path = STATIC_DIR / self.path.split('/static/')[-1]
+        from urllib.parse import urlparse
+        file_path = STATIC_DIR / urlparse(self.path).path.split('/static/')[-1]
         if file_path.exists() and file_path.is_file():
             # 根据文件扩展名确定 Content-Type
             if file_path.suffix == '.css':
@@ -541,11 +610,19 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
         }
     
     def _get_git_timeline(self):
-        """获取 Git 时间线数据"""
-        commits = self.git_adapter.get_recent_commits(limit=20)
+        """获取 Git 时间线数据（支持项目筛选）"""
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        project = (params.get('project') or ['feida_zoo'])[0]
+        
+        commits = self.git_adapter.get_recent_commits_for_project(project, limit=20)
+        stats = self.git_adapter.get_commit_stats_for_project(project)
         return {
             "commits": [commit.to_dict() for commit in commits],
-            "stats": self.git_adapter.get_commit_stats(),
+            "stats": stats,
+            "projects": self.git_adapter.get_all_projects(),
+            "current_project": project,
             "last_updated": datetime.now().isoformat()
         }
     

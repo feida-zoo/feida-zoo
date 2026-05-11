@@ -131,11 +131,11 @@
           "id": "3.2",
           "name": "P2P 架构改造 + Harness 流程引擎设计",
           "severity": "P2",
-          "status": "in_progress",
+          "status": "in_review",
           "assignee": "alpha",
           "reviewer": "duci",
           "description": "将 feida-zoo 从 Hub-and-Spoke 改为 P2P Mesh 架构，同时将 SKILL.md 工作流改为 Python Harness 代码引擎",
-          "notes": "设计已过审(毒刺✅)。阶段0(agentToAgent配置)已完成。阶段1交赴织巢🐜开发中。",
+          "notes": "全链路已交付。阶段0-3完成，毒刺条件性通过(200 passed)。6个P2修复已完成(187b980)。",
           "design_doc": "alpha_feida_zoo_P2P_Harness_Architecture_v1.0.md",
           "started_at": "2026-05-10T13:02:03+08:00"
         },
@@ -166,11 +166,12 @@
           "id": "3.2.3",
           "name": "阶段3 — Agent 持久化 + 全功能 P2P",
           "severity": "P2",
-          "status": "in_progress",
+          "status": "completed",
           "assignee": "weaver",
           "description": "成员从 mode='run' 切换为持久 session，实现双向通信",
           "depends_on": "3.2.2",
-          "notes": "织巢🐜已接单，正在实现 inbox_watcher + delivery_watcher + session 持久化"
+          "notes": "织巢🐜完成阶段3核心代码(69fc7f7)及6个P2修复(187b980)。53测试通过。",
+          "completed_at": "2026-05-11T00:30:00+08:00"
         }
       ]
     }
