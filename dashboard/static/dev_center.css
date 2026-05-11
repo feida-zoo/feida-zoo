@@ -901,6 +901,97 @@ body {
     100% { transform: scale(1); }
 }
 
+/* 项目切换器样式 */
+.project-switcher {
+    display: flex;
+    align-items: center;
+}
+
+.project-select {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 15px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-family: inherit;
+    outline: none;
+    max-width: 140px;
+    transition: all var(--transition-speed);
+}
+
+.project-select:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.project-select option {
+    background: #16a085;
+    color: white;
+}
+
+/* 成员卡片头像样式 */
+.member-avatar-img {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+}
+
+.member-avatar-fallback {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+/* 聊天室信息样式 */
+.chatroom-info {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.85rem;
+}
+
+.chatroom-info i {
+    color: #3498db;
+}
+
+/* 成员状态网格增强 */
+.member-status-item {
+    padding: 10px;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.member-status-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateX(2px);
+}
+
+/* 状态标签增强 */
+.status-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.status-label {
+    font-size: 0.75rem;
+}
+
 /* 成员卡片样式 */
 .members-section {
     margin-top: 20px;

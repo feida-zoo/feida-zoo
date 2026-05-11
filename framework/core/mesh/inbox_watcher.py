@@ -2,6 +2,7 @@
 Inbox 看门狗
 监控 inbox 目录文件变化，新消息到达时触发 Agent 唤醒
 """
+import threading
 import time
 import logging
 from pathlib import Path
@@ -27,7 +28,6 @@ class InboxWatcher:
             registry_path: agent 注册表 JSON 路径
             on_wakeup: 回调函数，签名 (agent_id: str) -> None
         """
-        import threading
         self.mesh_dir = Path(mesh_dir)
         self.registry_path = registry_path
         self.on_wakeup = on_wakeup

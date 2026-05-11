@@ -47,3 +47,17 @@ class LockedJsonlWriter:
             finally:
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         return events
+
+    def read_recent(self, limit: int = 50) -> List[dict]:
+        "Read last `limit` lines with shared lock."
+        if not os.path.exists(self.path):
+            return []
+        with open(self.path, "r") as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+            try:
+                lines = f.readlines()
+                recent = [json.loads(l) for l in lines[-limit:] if l.strip()]
+                return recent
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+

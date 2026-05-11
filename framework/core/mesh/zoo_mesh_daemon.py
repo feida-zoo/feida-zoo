@@ -8,13 +8,13 @@ import json
 import logging
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 import urllib.parse
 
 FRAMEWORK_DIR = os.environ.get("ZOO_FRAMEWORK_DIR", "/Users/zoo/workspace/code/feida_zoo/framework")
 MESH_DIR = os.environ.get("ZOO_MESH_DIR", "/Users/zoo/workspace/members/panda/zoo_mesh")
 HTTP_PORT = int(os.environ.get("ZOO_MESH_HTTP_PORT", "18793"))
 
-# Add framework parent to path for absolute imports
 sys.path.insert(0, str(Path(FRAMEWORK_DIR).parent))
 
 from core.mesh.zoo_mesh import ZooMesh
@@ -29,21 +29,25 @@ class ChatWriter:
     """聊天消息持久化写入器"""
 
     def __init__(self, mesh_dir: str):
-        self.chat_file = Path(mesh_dir) / "chat" / "messages.jsonl"
-        self.chat_file.parent.mkdir(parents=True, exist_ok=True)
+        chat_file = Path(mesh_dir) / "chat" / "messages.jsonl"
+        chat_file.parent.mkdir(parents=True, exist_ok=True)
+        self._writer = None  # set below after LockedJsonlWriter import
+        self._chat_file = chat_file
+        self._init_writer()
+
+    def _init_writer(self):
+        from core.mesh.locked_jsonl import LockedJsonlWriter
+        self._writer = LockedJsonlWriter(str(self._chat_file))
 
     def append(self, msg: dict) -> None:
-        with open(self.chat_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(msg, ensure_ascii=False) + "\n")
-            f.flush()
-            os.fsync(f.fileno())
+        if self._writer is None:
+            self._init_writer()
+        self._writer.append(msg)
 
     def read_recent(self, limit: int = 50) -> list:
-        if not self.chat_file.exists():
-            return []
-        with open(self.chat_file, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-        return [json.loads(l) for l in lines[-limit:] if l.strip()]
+        if self._writer is None:
+            self._init_writer()
+        return self._writer.read_recent(limit)
 
 
 # ── Rate Limiting ──────────────────────────────────────────────────────────────
@@ -61,17 +65,20 @@ def check_rate_limit(source: str) -> bool:
     return True
 
 
+# ── Token Cache (loaded once at startup) ──────────────────────────────────────
+_ZOO_TOKENS: dict = {
+    "alpha": os.environ.get("ZOO_TOKEN_ALPHA", ""),
+    "weaver": os.environ.get("ZOO_TOKEN_WEAVER", ""),
+    "duci": os.environ.get("ZOO_TOKEN_DUCI", ""),
+    "gulu": os.environ.get("ZOO_TOKEN_GULU", ""),
+    "aeterna": os.environ.get("ZOO_TOKEN_AETERNA", ""),
+    "panda": os.environ.get("ZOO_TOKEN_PANDA", ""),
+}
+
+
 def verify_token(agent_id: str, token: str) -> bool:
-    """Verify X-Zoo-Auth token for a known agent"""
-    valid = {
-        "alpha": os.environ.get("ZOO_TOKEN_ALPHA", ""),
-        "weaver": os.environ.get("ZOO_TOKEN_WEAVER", ""),
-        "duci": os.environ.get("ZOO_TOKEN_DUCI", ""),
-        "gulu": os.environ.get("ZOO_TOKEN_GULU", ""),
-        "aeterna": os.environ.get("ZOO_TOKEN_AETERNA", ""),
-        "panda": os.environ.get("ZOO_TOKEN_PANDA", ""),
-    }
-    expected = valid.get(agent_id, "")
+    """Verify X-Zoo-Auth token against cached tokens (read once at startup)."""
+    expected = _ZOO_TOKENS.get(agent_id, "")
     return bool(expected and token == expected)
 
 
@@ -110,17 +117,14 @@ class Handler(BaseHTTPRequestHandler):
         agent_id = data.get("from", "")
         content = data.get("content", "")
 
-        # Rate limit check
         if not check_rate_limit(agent_id):
             self._json(429, {"error": "rate limit exceeded"})
             return
 
-        # Length limit
         if len(content) > 2000:
             self._json(413, {"error": "message too long (max 2000 chars)"})
             return
 
-        # Token verification (non dashboard/human agents)
         if agent_id not in ("dashboard", "human"):
             token = self.headers.get("X-Zoo-Auth", "")
             if not verify_token(agent_id, token):
@@ -173,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
         pass  # Silence default logging
 
 
-# ── Module-level globals (always initialized so tests can import) ───────────────
+# ── Module-level globals ─────────────────────────────────────────────────────────
 chat = ChatWriter(MESH_DIR)
 mesh = None  # ZooMesh instance set by main()
 
@@ -185,7 +189,6 @@ def main():
 
     mesh = ZooMesh()
     mesh.init(MESH_DIR)
-    # chat is already initialized above
 
     # Daemon threads
     registry_path = str(Path(FRAMEWORK_DIR) / "shared" / "zoo_registry.json")
@@ -197,8 +200,11 @@ def main():
     threading.Thread(target=dw.start_filesystem_watch, daemon=True).start()
     logger.info("✅ DeliveryWatcher 已启动")
 
-    # HTTP server
-    server = HTTPServer(("127.0.0.1", HTTP_PORT), Handler)
+    # HTTP server - threaded
+    class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+        daemon_threads = True
+
+    server = ThreadingHTTPServer(("127.0.0.1", HTTP_PORT), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     logger.info(f"✅ HTTP API 已启动: http://127.0.0.1:{HTTP_PORT}")
 

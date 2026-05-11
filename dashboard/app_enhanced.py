@@ -430,7 +430,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             elif self.path == '/api/system-info':
                 self._send_json(self._get_system_info())
             elif self.path.startswith('/api/chat'):
-                self._handle_chat_api()
+                self._handle_chat_get()
             elif self.path == '/events':
                 self._handle_sse()
             elif parsed_path.startswith('/avatar/'):
@@ -442,28 +442,60 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
         except Exception as e:
             print(f"处理请求 {self.path} 时出错: {e}")
             self.send_error(500, str(e))
-    
-    def _handle_chat_api(self):
-        """Proxy chat requests to ZooMesh daemon"""
-        if self.method == 'GET':
+
+    def do_POST(self):
+        """处理 POST 请求"""
+        try:
+            from urllib.parse import urlparse
+            parsed_path = urlparse(self.path).path
+
+            if parsed_path == '/api/chat':
+                self._handle_chat_post()
+            else:
+                self.send_error(404)
+        except Exception as e:
+            print(f"处理 POST 请求 {self.path} 时出错: {e}")
+            self.send_error(500, str(e))
+
+    def _handle_chat_get(self):
+        """Proxy GET chat history to ZooMesh daemon"""
+        try:
+            r = requests.get(f"{ZOO_MESH_HTTP}/api/chat", timeout=5)
+            self._send_json(r.json())
+        except Exception:
+            self._send_json([])
+
+    def _handle_chat_post(self):
+        """Proxy POST chat message to ZooMesh daemon"""
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length)
             try:
-                r = requests.get(f"{ZOO_MESH_HTTP}/api/chat", timeout=5)
-                self._send_json(r.json())
-            except Exception:
-                self._send_json([])
-        elif self.method == 'POST':
-            try:
-                length = int(self.headers.get('Content-Length', 0))
-                body = self.rfile.read(length)
-                data = json.loads(body)
-                data['from'] = 'dashboard'
-                r = requests.post(f"{ZOO_MESH_HTTP}/api/chat", json=data, timeout=5)
-                self._send_json(r.json())
-            except Exception:
-                self.send_response(503)
+                data = json.loads(body) if body else {}
+            except json.JSONDecodeError:
+                self.send_response(400)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": "ZooMesh unavailable"}).encode())
+                self.wfile.write(json.dumps({"error": "invalid json"}).encode())
+                return
+
+            content = (data.get('content') or '').strip()
+            if not content:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "content required"}).encode())
+                return
+
+            data['from'] = 'dashboard'
+            data['content'] = content
+            r = requests.post(f"{ZOO_MESH_HTTP}/api/chat", json=data, timeout=5)
+            self._send_json(r.json())
+        except Exception:
+            self.send_response(503)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "ZooMesh unavailable"}).encode())
 
     def _serve_dev_center(self):
         """服务研发中心主页面，并嵌入聊天面板"""

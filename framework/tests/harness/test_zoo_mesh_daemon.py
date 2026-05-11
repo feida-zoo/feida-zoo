@@ -108,19 +108,22 @@ def test_message_too_long_logic():
 
 # ── Token Verification ────────────────────────────────────────────────────────
 def test_verify_token_no_env(monkeypatch):
+    """No token set → reject"""
     monkeypatch.setenv("ZOO_TOKEN_WEAVER", "")
     assert verify_token("weaver", "") is False
     assert verify_token("weaver", "tok123") is False
 
 
 def test_verify_token_match(monkeypatch):
-    monkeypatch.setenv("ZOO_TOKEN_WEAVER", "secret123")
-    monkeypatch.setenv("ZOO_TOKEN_ALPHA", "alpha456")
+    """Matching token → accept"""
+    import core.mesh.zoo_mesh_daemon as daemon
+    # Set tokens directly - they are cached at import time
+    daemon._ZOO_TOKENS["weaver"] = "secret123"
+    daemon._ZOO_TOKENS["alpha"] = "alpha456"
     assert verify_token("weaver", "secret123") is True
     assert verify_token("alpha", "alpha456") is True
     assert verify_token("weaver", "wrong") is False
     assert verify_token("weaver", "") is False
-
 
 # ── HTTP Integration Tests ────────────────────────────────────────────────────
 def test_health_endpoint(running_server):
@@ -151,47 +154,35 @@ def test_post_chat_message(running_server):
 
 
 def test_post_rate_limited(running_server, monkeypatch):
-    monkeypatch.setenv("ZOO_TOKEN_WEAVER", "test")
-
+    """10 messages → 11th should be rate limited"""
     import core.mesh.zoo_mesh_daemon as daemon
     monkeypatch.setattr(daemon, "RATE_LIMIT", {})
+    daemon._ZOO_TOKENS["weaver"] = "test"
 
     payload = json.dumps({"from": "weaver", "content": "test"}).encode()
+    headers = {"Content-Type": "application/json", "X-Zoo-Auth": "test"}
+
     for _ in range(10):
-        req = urllib.request.Request(
-            f"{running_server}/api/chat",
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "X-Zoo-Auth": "test",
-            },
-            method="POST",
-        )
+        req = urllib.request.Request(f"{running_server}/api/chat", data=payload, headers=headers, method="POST")
         urllib.request.urlopen(req, timeout=5)
 
-    req = urllib.request.Request(
-        f"{running_server}/api/chat",
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "X-Zoo-Auth": "test",
-        },
-        method="POST",
-    )
+    req = urllib.request.Request(f"{running_server}/api/chat", data=payload, headers=headers, method="POST")
     with pytest.raises(urllib.error.HTTPError) as exc:
         urllib.request.urlopen(req, timeout=5)
     assert exc.value.code == 429
 
 
 def test_post_message_too_long(running_server, monkeypatch):
+    """Message > 2000 chars → 413"""
     import core.mesh.zoo_mesh_daemon as daemon
     monkeypatch.setattr(daemon, "RATE_LIMIT", {})
+    daemon._ZOO_TOKENS["weaver"] = "test"
 
     payload = json.dumps({"from": "weaver", "content": "x" * 2001}).encode()
     req = urllib.request.Request(
         f"{running_server}/api/chat",
         data=payload,
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", "X-Zoo-Auth": "test"},
         method="POST",
     )
     with pytest.raises(urllib.error.HTTPError) as exc:
@@ -200,8 +191,10 @@ def test_post_message_too_long(running_server, monkeypatch):
 
 
 def test_post_invalid_token(running_server, monkeypatch):
+    """Wrong token → 403"""
     import core.mesh.zoo_mesh_daemon as daemon
     monkeypatch.setattr(daemon, "RATE_LIMIT", {})
+    daemon._ZOO_TOKENS["weaver"] = "test"
 
     payload = json.dumps({"from": "weaver", "content": "hi"}).encode()
     req = urllib.request.Request(
@@ -216,6 +209,7 @@ def test_post_invalid_token(running_server, monkeypatch):
 
 
 def test_invalid_json(running_server):
+    """Invalid JSON body → 400"""
     payload = b"not valid json"
     req = urllib.request.Request(
         f"{running_server}/api/chat",

@@ -32,7 +32,26 @@ class GitCommit:
 
 
 class GitAdapter:
-    """Git 适配器类"""
+    """Git 适配器类 - 支持多仓库"""
+    
+    # 项目定义
+    PROJECTS = {
+        "feida_zoo": {
+            "path": "/Users/zoo/workspace/code/feida_zoo",
+            "name": "feida-zoo",
+            "emoji": "🏗️"
+        },
+        "panda": {
+            "path": "/Users/zoo/workspace/members/panda",
+            "name": "panda",
+            "emoji": "🐼"
+        },
+        "members": {
+            "path": "/Users/zoo/workspace/members",
+            "name": "members",
+            "emoji": "🏠"
+        }
+    }
     
     # 成员 Emoji 映射表
     MEMBER_EMOJI_MAP = {
@@ -65,8 +84,7 @@ class GitAdapter:
         else:
             self.repo_path = Path(repo_path)
         
-        if not self._is_git_repo():
-            raise ValueError(f"路径 {self.repo_path} 不是一个有效的 Git 仓库")
+        # 不抛出异常，让 get_recent_commits 等方法自行容错
     
     def _is_git_repo(self) -> bool:
         """检查是否为 Git 仓库"""
@@ -136,6 +154,36 @@ class GitAdapter:
             member=member
         )
     
+    def get_all_projects(self) -> Dict:
+        """获取所有项目列表"""
+        return self.PROJECTS
+    
+    def get_recent_commits_for_project(self, project_key: str, limit: int = 50) -> List[GitCommit]:
+        """获取指定项目的最近提交"""
+        if project_key not in self.PROJECTS:
+            return []
+        old_path = self.repo_path
+        self.repo_path = Path(self.PROJECTS[project_key]["path"])
+        try:
+            commits = self.get_recent_commits(limit=limit)
+        except:
+            commits = []
+        self.repo_path = old_path
+        return commits
+    
+    def get_commit_stats_for_project(self, project_key: str) -> Dict:
+        """获取指定项目的提交统计"""
+        if project_key not in self.PROJECTS:
+            return {"total_commits": 0, "members": {}}
+        old_path = self.repo_path
+        self.repo_path = Path(self.PROJECTS[project_key]["path"])
+        try:
+            stats = self.get_commit_stats()
+        except:
+            stats = {"total_commits": 0, "members": {}}
+        self.repo_path = old_path
+        return stats
+    
     def get_recent_commits(self, limit: int = 50) -> List[GitCommit]:
         """
         获取最近的提交记录
@@ -147,10 +195,15 @@ class GitAdapter:
             GitCommit 对象列表
         """
         # Git log 格式: 哈希|作者名|作者邮箱|日期|消息
+        if not self._is_git_repo():
+            return []
         format_str = "%H|%an|%ae|%ad|%s"
         cmd = ["git", "log", f"--pretty=format:{format_str}", f"--max-count={limit}"]
         
-        stdout, stderr = self._run_git_command(cmd)
+        try:
+            stdout, stderr = self._run_git_command(cmd)
+        except:
+            return []
         if stderr:
             print(f"Git 命令警告: {stderr}")
         

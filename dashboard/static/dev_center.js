@@ -10,16 +10,35 @@ class ZooDevCenter {
         this.autoRefreshInterval = null;
         this.lastKanbanUpdate = null;
         this.lastTimelineUpdate = null;
+        this.currentProject = 'feida_zoo';
         
         // 成员 Emoji 映射
         this.memberEmojiMap = {
-      'alpha': '🐢',
-      'weaver': '🐜',
-      'stinger': '🦂',
-      'panda': '🐼',
-      'aeterna': '📜',
-      'gulu': '🟢'
-    };
+            'alpha': '🐢',
+            'weaver': '🐜',
+            'stinger': '🦂',
+            'duci': '🦂',
+            'panda': '🐼',
+            'aeterna': '📜',
+            'gulu': '🟢'
+        };
+        
+        // 成员名称统一映射（无论后端返回什么name，前端统一显示）
+        this.memberNameMap = {
+            'alpha': '阿尔法',
+            'weaver': '织巢',
+            'duci': '毒刺',
+            'aeterna': '史官',
+            'gulu': '咕噜',
+            'panda': '达达'
+        };
+        
+        // 状态文本映射
+        this.statusTextMap = {
+            'executing': '执行中',
+            'idle': '空闲',
+            'unknown': '离线'
+        };
         
         // 初始化
         this.init();
@@ -138,13 +157,16 @@ class ZooDevCenter {
         const membersData = data.members || [];
         const statusData = data.status || {};
         
-        // 如果没有成员详细数据，使用硬编码的成员列表
-        const members = membersData.length > 0 ? membersData : [
+        // 如果没有成员详细数据，使用完整的成员列表（统一显示名称）
+        const members = membersData.length > 0 ? membersData.map(m => ({
+            ...m,
+            name: this.memberNameMap[m.id] || m.name
+        })) : [
             { id: 'alpha', name: '阿尔法', code_name: 'Alpha', role_display: '首席架构师 · 玄龟', model: 'DeepSeek V4 Flash', avatar_emoji: '🐢' },
-            { id: 'weaver', name: '织巢', code_name: 'Weaver', role_display: '疯狂工程师 · 织巢蚁', model: 'Kimi Coding K2.6', avatar_emoji: '🐜' },
+            { id: 'weaver', name: '织巢', code_name: 'Weaver', role_display: '疯狂工程师 · 织巢蚁', model: 'MiniMax-M2.7', avatar_emoji: '🐜' },
             { id: 'duci', name: '毒刺', code_name: 'Duci', role_display: '代码审计师 · 毒刺蝎', model: 'GLM-5.1', avatar_emoji: '🦂' },
             { id: 'panda', name: '达达', code_name: 'Panda', role_display: '调度者 · 熊猫', model: 'MiniMax-M2.7', avatar_emoji: '🐼' },
-            { id: 'aeterna', name: '永恒史官', code_name: 'Aeterna', role_display: '永恒史官 · 磐石', model: 'MiniMax-M2.7', avatar_emoji: '🪨' },
+            { id: 'aeterna', name: '史官', code_name: 'Aeterna', role_display: '永恒史官 · 磐石', model: 'MiniMax-M2.7', avatar_emoji: '🪨' },
             { id: 'gulu', name: '咕噜', code_name: 'Gulu', role_display: '画师/UI设计师 · 咕噜', model: 'MiniMax-M2.7', avatar_emoji: '🟢' }
         ];
         
@@ -153,7 +175,7 @@ class ZooDevCenter {
         members.forEach(member => {
             const status = statusData[member.id] || 'unknown';
             const statusClass = status === 'executing' ? 'status-executing' : (status === 'idle' ? 'status-idle' : 'status-unknown');
-            const statusText = status === 'executing' ? '执行中' : (status === 'idle' ? '空闲' : '未知');
+            const statusText = this.statusTextMap[status] || '未知';
             
             html += `
                 <div class="member-status-item">
@@ -162,7 +184,7 @@ class ZooDevCenter {
                         <span class="member-name">${member.name}</span>
                     </div>
                     <div class="member-details-mini">
-                        <span class="member-role" title="角色">${member.role_display || '未知角色'}</span>
+                        <span class="member-role" title="${this.escapeHtml(member.role_display || '')}">${this.escapeHtml(member.role_display || '未知角色')}</span>
                         <span class="member-model" title="模型">${member.model || '未知模型'}</span>
                     </div>
                     <div class="status-badge ${statusClass}">
@@ -176,7 +198,7 @@ class ZooDevCenter {
         html += '</div>';
         listEl.innerHTML = html;
         
-        // 同时更新看板中的头像状态
+        // 更新看板中的头像状态
         this.updateKanbanAssigneeStatus(statusData);
     }
     
@@ -253,7 +275,9 @@ class ZooDevCenter {
             gridEl.className = 'members-grid';
             
             memberData.forEach(member => {
-                const memberCard = this.createMemberCard(member);
+                // 统一名称显示
+                const displayName = this.memberNameMap[member.id] || member.name;
+                const memberCard = this.createMemberCard({...member, name: displayName});
                 gridEl.appendChild(memberCard);
             });
             
@@ -269,31 +293,34 @@ class ZooDevCenter {
         const cardEl = document.createElement('div');
         cardEl.className = 'member-card';
         
-        // 获取成员 Emoji
+        // 获取成员 Emoji 和头像
         const memberEmoji = member.avatar_emoji || this.memberEmojiMap[member.id] || '🐾';
+        const displayName = this.memberNameMap[member.id] || member.name;
         
         cardEl.innerHTML = `
             <div class="member-card-header">
                 <div class="member-avatar">
-                    ${memberEmoji}
+                    <img src="/avatar/${member.id}" alt="${this.escapeHtml(displayName)}" 
+                         class="member-avatar-img" 
+                         onerror="this.style.display='none'; this.parentElement.innerHTML='${memberEmoji}'; this.parentElement.className='member-avatar member-avatar-fallback';">
                 </div>
                 <div class="member-title">
-                    <h4 class="member-name">${this.escapeHtml(member.name)}</h4>
-                    <div class="member-code-name">${this.escapeHtml(member.code_name)}</div>
+                    <h4 class="member-name">${this.escapeHtml(displayName)}</h4>
+                    <div class="member-code-name">${this.escapeHtml(member.code_name || '')}</div>
                 </div>
             </div>
             <div class="member-card-body">
                 <div class="member-field">
                     <span class="field-label">角色:</span>
-                    <span class="field-value">${this.escapeHtml(member.role_display)}</span>
+                    <span class="field-value">${this.escapeHtml(member.role_display || '')}</span>
                 </div>
                 <div class="member-field">
                     <span class="field-label">种族:</span>
-                    <span class="field-value">${this.escapeHtml(member.species)}</span>
+                    <span class="field-value">${this.escapeHtml(member.species || '')}</span>
                 </div>
                 <div class="member-field">
                     <span class="field-label">模型:</span>
-                    <span class="field-value">${this.escapeHtml(member.model)}</span>
+                    <span class="field-value">${this.escapeHtml(member.model || '')}</span>
                 </div>
             </div>
             <div class="member-card-footer">
@@ -354,11 +381,12 @@ class ZooDevCenter {
         listEl.style.display = 'none';
         
         try {
-            const response = await fetch('/api/git-timeline');
+            const response = await fetch(`/api/git-timeline?project=${this.currentProject}`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             
             const data = await response.json();
             this.renderGitTimeline(data);
+            this.renderProjectSwitcher(data.projects);
             this.lastTimelineUpdate = new Date();
         } catch (error) {
             console.error('加载Git时间线失败:', error);
@@ -369,6 +397,26 @@ class ZooDevCenter {
                 </div>
             `;
         }
+    }
+    
+    renderProjectSwitcher(projects) {
+        const containerEl = document.getElementById('project-switcher');
+        if (!containerEl || !projects) return;
+        
+        containerEl.innerHTML = `
+            <select id="project-select" class="project-select">
+                ${Object.entries(projects).map(([key, proj]) => `
+                    <option value="${key}" ${key === this.currentProject ? 'selected' : ''}>
+                        ${proj.emoji} ${proj.name}
+                    </option>
+                `).join('')}
+            </select>
+        `;
+        
+        document.getElementById('project-select').addEventListener('change', (e) => {
+            this.currentProject = e.target.value;
+            this.loadGitTimeline();
+        });
     }
     
     async loadGitStats() {
