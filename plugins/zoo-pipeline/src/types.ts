@@ -1,79 +1,89 @@
-// ZooPipeline 插件类型定义
+/**
+ * SDK type stubs for zoo-pipeline plugin.
+ *
+ * These replace the openclaw/plugin-sdk imports since that package
+ * is not accessible via standard npm resolution in this environment.
+ * OpenClaw injects the real API at runtime.
+ */
 
-/** 插件配置 */
-export interface ZooPipelineConfig {
-  daemonPath?: string;
-  meshDir?: string;
-  frameworkDir?: string;
-  httpPort?: string;
-}
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-/** 入站消息上下文 */
-export interface InboundContext {
-  senderId?: string;
-  sessionKey?: string;
-}
-
-/** inbound_claim 事件 */
-export interface InboundClaimEvent {
-  content: string;
-  ctx?: InboundContext;
-}
-
-/** gateway_start 事件 */
-export interface GatewayStartEvent {
-  ctx?: {
-    config?: {
-      zooPipeline?: ZooPipelineConfig;
-    };
-  };
-}
-
-/** claim 结果 */
-export interface ClaimResult {
-  claim: boolean;
-  syntheticReply?: string;
-}
-
-/** 日志接口 */
 export interface PluginLogger {
-  info(message: string, ...args: unknown[]): void;
-  warn(message: string, ...args: unknown[]): void;
-  error(message: string, ...args: unknown[]): void;
-  debug(message: string, ...args: unknown[]): void;
+  info(msg: string): void;
+  warn(msg: string): void;
+  error(msg: string): void;
+  debug(msg: string): void;
 }
 
-/** Hook 优先级选项 */
-export interface HookOptions {
-  priority?: number;
-}
-
-/** 插件 API */
-export interface PluginAPI {
+export interface OpenClawPluginApi {
+  id: string;
+  name: string;
+  version?: string;
+  description?: string;
+  source: string;
+  rootDir?: string;
+  config: {
+    plugins?: Record<string, Record<string, unknown>>;
+    [key: string]: unknown;
+  };
   logger: PluginLogger;
-  on<T>(
-    event: string,
-    handler: (event: T) => ClaimResult | Promise<ClaimResult | void> | void,
-    options?: HookOptions,
+  pluginConfig?: Record<string, unknown>;
+  registerHook(
+    hook: "inbound_claim",
+    handler: (
+      event: PluginHookInboundClaimEvent,
+      ctx: Record<string, unknown>,
+    ) =>
+      | Promise<PluginHookInboundClaimResult | void>
+      | PluginHookInboundClaimResult
+      | void,
+    opts?: { priority?: number },
+  ): void;
+  registerHook(
+    hook: "gateway_start",
+    handler: (event: PluginHookGatewayStartEvent) => Promise<void> | void,
+    opts?: { priority?: number },
   ): void;
 }
 
-/** 任务文件结构 */
-export interface TaskFile {
-  type: string;
+export interface PluginHookInboundClaimEvent {
   content: string;
-  sender: string;
-  sessionKey: string;
-  timestamp: string;
-  id: string;
+  body?: string;
+  bodyForAgent?: string;
+  transcript?: string;
+  timestamp?: number;
+  channel: string;
+  accountId?: string;
+  conversationId?: string;
+  parentConversationId?: string;
+  senderId?: string;
+  [key: string]: unknown;
 }
 
-/** 插件入口定义 */
-export interface PluginEntry {
+export interface PluginHookInboundClaimResult {
+  handled: boolean;
+  reply?: {
+    content: string;
+    channel?: string;
+    mediaUrl?: string;
+    mediaType?: string;
+  };
+}
+
+export interface PluginHookGatewayStartEvent {
+  port: number;
+}
+
+export interface DefinePluginEntryOptions {
   id: string;
   name: string;
-  version: string;
-  register(api: PluginAPI): void;
+  description: string;
+  register: (api: OpenClawPluginApi) => void;
 }
 
-export type PluginEntryFn = (entry: PluginEntry) => void;
+export interface DefinedPluginEntry {
+  id: string;
+  name: string;
+  description: string;
+  register: (api: OpenClawPluginApi) => void;
+}

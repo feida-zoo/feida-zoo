@@ -4,6 +4,12 @@
   "description": "Zoo Pipeline Plugin for OpenClaw",
   "type": "module",
   "main": "dist/index.js",
+  "openclaw": {
+    "extensions": ["./dist/index.js"],
+    "compat": {
+      "minGatewayVersion": "2026.3.24-beta.2"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit"
