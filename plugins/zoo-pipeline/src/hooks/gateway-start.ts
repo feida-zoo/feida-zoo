@@ -26,7 +26,7 @@ let isRunning = false;
 
 // ── 注册 hook ──────────────────────────────────────────────────────────────────
 export function registerGatewayStart(api: OpenClawPluginApi): void {
-  api.registerHook(
+  api.on(
     "gateway_start",
     async (_event: PluginHookGatewayStartEvent) => {
       const pluginConfig =

@@ -30,7 +30,7 @@ async function writeTaskAtomically(
 
   const fileName = `${taskId}.json`;
   const filePath = join(tasksDir, fileName);
-  // Write to SAME directory → avoids cross-filesystem EXDEV
+  // Write to SAME directory → avoids cross-filesystem EXDEV on macOS
   const tmpPath = join(
     tasksDir,
     `.tmp_${randomBytes(4).toString("hex")}_${taskId}`,
@@ -43,7 +43,7 @@ async function writeTaskAtomically(
 
 // ── Register hook ───────────────────────────────────────────────────────────
 export function registerInboundClaim(api: OpenClawPluginApi): void {
-  api.registerHook(
+  api.on(
     "inbound_claim",
     async (
       event: PluginHookInboundClaimEvent,
@@ -52,7 +52,7 @@ export function registerInboundClaim(api: OpenClawPluginApi): void {
 
       // Word-boundary match: /task but not /taskmaster
       if (!/^\/task\b/.test(text)) {
-        return { handled: false };
+        return { claim: false };
       }
 
       const taskContent = text.replace(/^\/task\b/, "").trim();
@@ -60,11 +60,9 @@ export function registerInboundClaim(api: OpenClawPluginApi): void {
       // Empty task → guide user
       if (!taskContent) {
         return {
-          handled: true,
-          reply: {
-            content:
-              "🐢 指令格式: `/task <你的需求描述>`\n\n例如: `/task 帮我查一下日志`",
-          },
+          claim: true,
+          syntheticReply:
+            "🐢 指令格式: `/task <你的需求描述>`\n\n例如: `/task 帮我查一下日志`",
         };
       }
 
@@ -95,18 +93,18 @@ export function registerInboundClaim(api: OpenClawPluginApi): void {
       } catch (err) {
         api.logger.error(`${LOG_PREFIX} 写入任务文件失败: ${err}`);
         return {
-          handled: true,
-          reply: {
-            content: "🐢 抱歉，写入任务时出现异常，请联系管理员。",
-          },
+          claim: true,
+          syntheticReply: "🐢 抱歉，写入任务时出现异常，请联系管理员。",
         };
       }
 
+      const truncated =
+        taskContent.length > 60
+          ? taskContent.slice(0, 60) + "…"
+          : taskContent;
       return {
-        handled: true,
-        reply: {
-          content: `🐢 工单已收到: "${taskContent.slice(0, 60)}${taskContent.length > 60 ? "…" : ""}"\n正在分派中...`,
-        },
+        claim: true,
+        syntheticReply: `🐢 工单已收到: "${truncated}"\n正在分派中...`,
       };
     },
     { priority: 80 },

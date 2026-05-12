@@ -28,7 +28,8 @@ export interface OpenClawPluginApi {
   };
   logger: PluginLogger;
   pluginConfig?: Record<string, unknown>;
-  registerHook(
+  // SDK uses api.on() not api.registerHook()
+  on(
     hook: "inbound_claim",
     handler: (
       event: PluginHookInboundClaimEvent,
@@ -39,7 +40,7 @@ export interface OpenClawPluginApi {
       | void,
     opts?: { priority?: number },
   ): void;
-  registerHook(
+  on(
     hook: "gateway_start",
     handler: (event: PluginHookGatewayStartEvent) => Promise<void> | void,
     opts?: { priority?: number },
@@ -60,14 +61,10 @@ export interface PluginHookInboundClaimEvent {
   [key: string]: unknown;
 }
 
+// SDK returns { claim, syntheticReply }
 export interface PluginHookInboundClaimResult {
-  handled: boolean;
-  reply?: {
-    content: string;
-    channel?: string;
-    mediaUrl?: string;
-    mediaType?: string;
-  };
+  claim: boolean;
+  syntheticReply?: string;
 }
 
 export interface PluginHookGatewayStartEvent {

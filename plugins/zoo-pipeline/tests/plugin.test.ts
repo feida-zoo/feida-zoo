@@ -1,173 +1,143 @@
 /**
  * Tests for zoo-pipeline plugin hooks
+ * Uses node:test + node:assert (Node 22+)
  */
-import { describe, it, expect, beforeEach } from "bun:test";
-import { randomBytes } from "crypto";
+import { test } from "node:test";
+import assert from "node:assert";
 
-// ── Test utilities ───────────────────────────────────────────────────────────
+// ── Tests ───────────────────────────────────────────────────────────────────
 
-/** Minimal mock of OpenClawPluginApi */
-function makeMockApi() {
-  const logs: Array<{ level: string; msg: string }> = [];
-  return {
-    id: "zoo-pipeline",
-    name: "Zoo Pipeline",
-    description: "test",
-    source: "test",
-    config: {},
-    logger: {
-      info: (msg: string) => logs.push({ level: "info", msg }),
-      warn: (msg: string) => logs.push({ level: "warn", msg }),
-      error: (msg: string) => logs.push({ level: "error", msg }),
-      debug: () => {},
-    },
-    pluginConfig: {},
-    _logs: logs,
-    registerHook: (
-      hook: string,
-      handler: (...args: unknown[]) => unknown,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ): any => ({ hook, handler }),
+test("inbound_claim: /task message is matched", () => {
+  const text = "/task 分析日志";
+  const matched = /^\/task\b/.test(text);
+  assert.strictEqual(matched, true, '"/task 分析日志" should match');
+});
+
+test("inbound_claim: /taskmaster is NOT matched (word boundary)", () => {
+  const text = "/taskmaster 分析日志";
+  const matched = /^\/task\b/.test(text);
+  assert.strictEqual(matched, false, '"/taskmaster" should NOT match /task\\b');
+});
+
+test("inbound_claim: plain text without / is NOT matched", () => {
+  const text = "task 分析日志";
+  const matched = /^\/task\b/.test(text);
+  assert.strictEqual(matched, false, '"task 分析日志" should NOT match');
+});
+
+test("inbound_claim: /task with empty content extracts empty string", () => {
+  const text = "/task";
+  const taskContent = text.replace(/^\/task\b/, "").trim();
+  assert.strictEqual(taskContent, "", "empty /task should give empty content");
+});
+
+test("inbound_claim: /task with content extracts correctly", () => {
+  const text = "/task 帮我分析日志";
+  const taskContent = text.replace(/^\/task\b/, "").trim();
+  assert.strictEqual(taskContent, "帮我分析日志");
+});
+
+test("inbound_claim: empty task returns guide reply", () => {
+  const taskContent = "";
+  let result;
+  if (!taskContent) {
+    result = {
+      claim: true,
+      syntheticReply:
+        "🐢 指令格式: `/task <你的需求描述>`\n\n例如: `/task 帮我查一下日志`",
+    };
+  }
+  assert.strictEqual(result?.claim, true);
+  assert.ok(result?.syntheticReply?.includes("指令格式"));
+});
+
+test("inbound_claim: successful capture returns claim + syntheticReply", () => {
+  const taskContent = "分析一下日志";
+  const truncated =
+    taskContent.length > 60
+      ? taskContent.slice(0, 60) + "…"
+      : taskContent;
+  const result = {
+    claim: true,
+    syntheticReply: `🐢 工单已收到: "${truncated}"\n正在分派中...`,
   };
-}
-
-// ── inbound_claim hook tests ─────────────────────────────────────────────────
-
-describe("inbound_claim hook - /task matching", () => {
-  it("should NOT match /taskmaster (word boundary)", () => {
-    const text = "/taskmaster 分析日志";
-    const matched = /^\/task\b/.test(text);
-    expect(matched).toBe(false);
-  });
-
-  it("should match /task followed by space", () => {
-    const text = "/task 分析日志";
-    const matched = /^\/task\b/.test(text);
-    expect(matched).toBe(true);
-  });
-
-  it("should match /task followed by nothing (empty command)", () => {
-    const text = "/task";
-    const matched = /^\/task\b/.test(text);
-    expect(matched).toBe(true);
-  });
-
-  it("should NOT match plain 'task without slash'", () => {
-    const text = "task 分析日志";
-    const matched = /^\/task\b/.test(text);
-    expect(matched).toBe(false);
-  });
+  assert.strictEqual(result.claim, true);
+  assert.ok(result.syntheticReply?.startsWith("🐢 工单已收到:"));
+  assert.ok(result.syntheticReply?.includes("分析一下日志"));
 });
 
-describe("inbound_claim hook - syntheticReply generation", () => {
-  it("should generate proper reply for empty /task", () => {
-    const text = "/task";
-    const taskContent = text.replace(/^\/task\b/, "").trim();
-    expect(taskContent).toBe("");
-  });
-
-  it("should extract task content correctly", () => {
-    const text = "/task 帮我分析一下日志";
-    const taskContent = text.replace(/^\/task\b/, "").trim();
-    expect(taskContent).toBe("帮我分析一下日志");
-  });
-
-  it("should truncate long task content in reply", () => {
-    const longContent = "a".repeat(80);
-    const truncated =
-      longContent.slice(0, 60) + (longContent.length > 60 ? "…" : "");
-    expect(truncated.length).toBe(61);
-    expect(truncated.endsWith("…")).toBe(true);
-  });
+test("inbound_claim: non-/task message returns claim:false", () => {
+  const text = "hello world";
+  if (!/^\/task\b/.test(text)) {
+    const result = { claim: false };
+    assert.strictEqual(result.claim, false);
+  }
 });
 
-// ── gateway-start crash counter tests ───────────────────────────────────────
+test("hook registration: api.on stores handlers", () => {
+  const registeredHooks: Array<{
+    hook: string;
+    handler: (...args: unknown[]) => unknown;
+  }> = [];
 
-describe("gateway-start crash counter", () => {
-  it("MAX_CRASH_COUNT should be 5", () => {
-    const MAX_CRASH_COUNT = 5;
-    expect(MAX_CRASH_COUNT).toBe(5);
-  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const api: any = {
+    on(hook: string, handler: (...args: unknown[]) => unknown, _opts?: unknown): void {
+      registeredHooks.push({ hook, handler });
+    },
+  };
 
-  it("should stop restart after 5 crashes", () => {
-    const MAX_CRASH_COUNT = 5;
-    let crashCount = 5;
-    const shouldRestart = crashCount < MAX_CRASH_COUNT;
-    expect(shouldRestart).toBe(false);
-  });
+  const handler = () => ({ claim: false });
+  api.on("inbound_claim", handler, { priority: 80 });
+  api.on("gateway_start", () => {}, { priority: 50 });
 
-  it("should reset crashCount to 0 on successful health check", () => {
-    let crashCount = 3;
-    crashCount = 0; // health check succeeded
-    expect(crashCount).toBe(0);
-  });
+  assert.strictEqual(registeredHooks.length, 2);
+  assert.strictEqual(registeredHooks[0].hook, "inbound_claim");
+  assert.strictEqual(registeredHooks[1].hook, "gateway_start");
 });
 
-// ── task-writer atomic write tests ─────────────────────────────────────────
+test("atomic write: tmpPath is in same directory as filePath (no EXDEV)", () => {
+  const tasksDir = "/tmp/test_mesh/inbound/tasks";
+  const taskId = "task_123456_abc123";
+  const filePath = `${tasksDir}/${taskId}.json`;
+  const tmpPath = `${tasksDir}/.tmp_abc123_${taskId}`;
 
-describe("task-writer atomic write", () => {
-  it("should generate unique task IDs", () => {
-    const ids = new Set<string>();
-    for (let i = 0; i < 100; i++) {
-      const ts = Date.now();
-      const rnd = randomBytes(4).toString("hex");
-      ids.add(`task_${ts}_${rnd}`);
-    }
-    // With timing variance, most IDs should be unique
-    expect(ids.size).toBeGreaterThan(90);
-  });
-
-  it("should put tmp file in same directory as target to avoid EXDEV", () => {
-    // Simulate what writeTaskAtomically does
-    const tasksDir = "/tmp/test_mesh/inbound/tasks";
-    const taskId = "task_123456_abc123";
-    const fileName = `${taskId}.json`;
-    const filePath = `${tasksDir}/${fileName}`;
-    const tmpPath = `${tasksDir}/.tmp_${randomBytes(4).toString("hex")}_${taskId}`;
-
-    // Both paths are in the same directory
-    expect(tmpPath.startsWith(tasksDir)).toBe(true);
-    expect(filePath.startsWith(tasksDir)).toBe(true);
-  });
+  assert.ok(filePath.startsWith(tasksDir), "filePath should be under tasksDir");
+  assert.ok(tmpPath.startsWith(tasksDir), "tmpPath should be under tasksDir");
 });
 
-// ── plugin entry structure test ─────────────────────────────────────────────
+test("crash counter: stops restart after MAX_CRASH_COUNT (5)", () => {
+  const MAX_CRASH_COUNT = 5;
+  let crashCount = 5;
+  const shouldRestart = crashCount < MAX_CRASH_COUNT;
+  assert.strictEqual(shouldRestart, false, "should NOT restart at crashCount >= 5");
+});
 
-describe("plugin structure", () => {
-  it("should export a default definePluginEntry call", () => {
-    // This is a structural test - verify the expected fields exist
-    const pluginDef = {
-      id: "zoo-pipeline",
-      name: "Zoo Pipeline",
-      description: "飝龘动物园 Pipeline 编排引擎",
-    };
-    expect(pluginDef.id).toBe("zoo-pipeline");
-    expect(pluginDef.name).toBe("Zoo Pipeline");
-  });
+test("crash counter: health success resets crashCount to 0", () => {
+  let crashCount = 3;
+  crashCount = 0; // on health success
+  assert.strictEqual(crashCount, 0);
+});
 
-  it("should have correct openclaw.plugin.json structure", () => {
-    const manifest = {
-      id: "zoo-pipeline",
-      name: "Zoo Pipeline",
-      description: "飝龘动物园 Pipeline 编排引擎 — 入口守卫 + ZooMesh 守护进程管理",
-      contracts: {},
-      activation: { onStartup: true },
-    };
-    expect(manifest.id).toBe("zoo-pipeline");
-    expect(manifest.activation.onStartup).toBe(true);
-  });
+test("plugin manifest: has correct id and onStartup activation", () => {
+  const manifest = {
+    id: "zoo-pipeline",
+    activation: { onStartup: true },
+  };
+  assert.strictEqual(manifest.id, "zoo-pipeline");
+  assert.strictEqual(manifest.activation.onStartup, true);
+});
 
-  it("should have correct package.json openclaw field", () => {
-    const pkg = {
-      name: "zoo-pipeline",
-      version: "1.0.0",
-      type: "module",
-      openclaw: {
-        extensions: ["./dist/index.js"],
-        compat: { minGatewayVersion: "2026.3.24-beta.2" },
-      },
-    };
-    expect(pkg.openclaw.extensions[0]).toBe("./dist/index.js");
-    expect(pkg.openclaw.compat.minGatewayVersion).toBe("2026.3.24-beta.2");
-  });
+test("package.json: has openclaw.compat field", () => {
+  const pkg = {
+    name: "zoo-pipeline",
+    version: "1.0.0",
+    type: "module",
+    openclaw: {
+      extensions: ["./dist/index.js"],
+      compat: { minGatewayVersion: "2026.3.24-beta.2" },
+    },
+  };
+  assert.strictEqual(pkg.openclaw.compat.minGatewayVersion, "2026.3.24-beta.2");
+  assert.strictEqual(pkg.openclaw.extensions[0], "./dist/index.js");
 });
