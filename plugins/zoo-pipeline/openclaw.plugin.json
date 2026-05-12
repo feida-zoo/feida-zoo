@@ -1,0 +1,32 @@
+{
+  "id": "zoo-pipeline",
+  "name": "Zoo Pipeline",
+  "description": "飝龘动物园 Pipeline 编排引擎 — 入口守卫 + 守护进程管理",
+  "contracts": {},
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "daemonPath": {
+        "type": "string",
+        "description": "ZooMesh daemon Python 脚本路径"
+      },
+      "meshDir": {
+        "type": "string",
+        "description": "ZooMesh 数据目录"
+      },
+      "frameworkDir": {
+        "type": "string",
+        "description": "feida_zoo framework 目录"
+      },
+      "httpPort": {
+        "type": "string",
+        "description": "ZooMesh HTTP API 端口",
+        "default": "18793"
+      }
+    },
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "zoo-pipeline",
+  "version": "1.0.0",
+  "description": "Zoo Pipeline Plugin for OpenClaw",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.4.0"
+  }
+}
