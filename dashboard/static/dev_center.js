@@ -1,6 +1,49 @@
 // Zoo Dev-Center JavaScript
 // 实现四象限看板、Git时间线和实时更新的交互功能
 
+// ===== Tab 切换 =====
+function switchTab(tabId) {
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tabId);
+    });
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(el => {
+        el.classList.toggle('active', el.id === 'tab-' + tabId);
+    });
+    // Resize kanban if needed
+    if (tabId === 'kanban' && window.zooDevCenter) {
+        setTimeout(() => window.zooDevCenter.loadKanbanData(), 100);
+    }
+    // Load chat messages when switching to chat tab
+    if (tabId === 'chat') {
+        loadChat();
+        // 切到聊天室 tab 自动滚到底
+        setTimeout(() => {
+            const chatDiv = document.getElementById('chat-messages');
+            if (chatDiv) chatDiv.scrollTop = chatDiv.scrollHeight;
+        }, 200);
+        if (window._chatInterval) {
+            clearInterval(window._chatInterval);
+        }
+        window._chatInterval = setInterval(loadChat, 3000);
+    } else if (window._chatInterval) {
+        clearInterval(window._chatInterval);
+    }
+    // Load requirements list when switching to requirements tab
+    if (tabId === 'requirements') {
+        loadRequirementsList();
+    }
+    // Load members when switching to members tab
+    if (tabId === 'members') {
+        window.zooDevCenter.loadMembers();
+    }
+    // Load issues when switching to issues tab
+    if (tabId === 'issues') {
+        loadIssues();
+    }
+}
+
 class ZooDevCenter {
     constructor() {
         this.baseUrl = window.location.origin;
@@ -11,6 +54,16 @@ class ZooDevCenter {
         this.lastKanbanUpdate = null;
         this.lastTimelineUpdate = null;
         this.currentProject = 'feida_zoo';
+        
+        // @mention support
+        this.mentionAgents = [
+            { id: 'alpha', name: '阿尔法', emoji: '🐢' },
+            { id: 'weaver', name: '织巢', emoji: '🐜' },
+            { id: 'duci', name: '毒刺', emoji: '🦂' },
+            { id: 'aeterna', name: '史官', emoji: '🪨' },
+            { id: 'gulu', name: '咕噜', emoji: '🟢' },
+            { id: 'panda', name: '达达', emoji: '🐼' }
+        ];
         
         // 成员 Emoji 映射
         this.memberEmojiMap = {
@@ -48,6 +101,9 @@ class ZooDevCenter {
         // 绑定事件监听器
         this.bindEvents();
         
+        // 初始化 @mention 支持
+        this.initMentionSupport();
+        
         // 加载初始数据
         this.loadInitialData();
         
@@ -56,38 +112,48 @@ class ZooDevCenter {
         
         // 启动自动刷新
         this.startAutoRefresh();
+        
+        // 初始化聊天
+        this.initChat();
     }
     
     bindEvents() {
         // 刷新看板按钮
-        document.getElementById('refresh-kanban').addEventListener('click', () => {
-            this.loadKanbanData();
-        });
+        const refreshKanban = document.getElementById('refresh-kanban');
+        if (refreshKanban) {
+            refreshKanban.addEventListener('click', () => {
+                this.loadKanbanData();
+            });
+        }
         
         // 刷新时间线按钮
-        document.getElementById('refresh-timeline').addEventListener('click', () => {
-            this.loadGitTimeline();
-        });
-        
-        // 刷新成员按钮
-        const refreshMembersBtn = document.getElementById('refresh-members');
-        if (refreshMembersBtn) {
-            refreshMembersBtn.addEventListener('click', () => {
-                this.loadMemberCards();
+        const refreshTimeline = document.getElementById('refresh-timeline');
+        if (refreshTimeline) {
+            refreshTimeline.addEventListener('click', () => {
+                this.loadGitTimeline();
             });
         }
         
         // 模态框关闭按钮
-        document.getElementById('modal-close').addEventListener('click', () => {
-            this.closeTaskModal();
-        });
+        const modalClose = document.getElementById('modal-close');
+        if (modalClose) {
+            modalClose.addEventListener('click', () => {
+                this.closeTaskModal();
+            });
+        }
         
         // 点击模态框背景关闭
-        document.getElementById('task-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'task-modal') {
-                this.closeTaskModal();
-            }
-        });
+        const taskModal = document.getElementById('task-modal');
+        if (taskModal) {
+            taskModal.addEventListener('click', (e) => {
+                if (e.target.id === 'task-modal') {
+                    this.closeTaskModal();
+                }
+            });
+        }
+        
+        // 每小时刷新成员数据
+        this._membersRefreshInterval = null;
         
         // 键盘快捷键
         document.addEventListener('keydown', (e) => {
@@ -99,6 +165,121 @@ class ZooDevCenter {
                 this.loadKanbanData();
             }
         });
+    }
+    
+    initMentionSupport() {
+        const input = document.getElementById('chat-input');
+        if (!input) return;
+        
+        const dropdown = document.getElementById('mention-dropdown');
+        let mentionActive = false;
+        let mentionQuery = '';
+        let selectedIndex = -1;
+        
+        input.addEventListener('input', () => {
+            const pos = input.selectionStart;
+            const text = input.value.substring(0, pos);
+            const atMatch = text.match(/@(\w*)$/);
+            
+            if (atMatch) {
+                mentionQuery = atMatch[1].toLowerCase();
+                mentionActive = true;
+                const filtered = this.mentionAgents.filter(a => 
+                    a.id.includes(mentionQuery) || a.name.includes(mentionQuery)
+                );
+                
+                if (filtered.length > 0) {
+                    dropdown.style.display = 'block';
+                    dropdown.innerHTML = filtered.map((a, i) => 
+                        `<div class="mention-item ${i === 0 ? 'active' : ''}" data-id="${a.id}">
+                            <span class="mention-emoji">${a.emoji}</span>
+                            <span>@${a.id}</span>
+                            <span class="mention-name">${a.name}</span>
+                        </div>`
+                    ).join('');
+                    selectedIndex = 0;
+                    
+                    dropdown.querySelectorAll('.mention-item').forEach((el, i) => {
+                        el.addEventListener('click', () => {
+                            this.insertMention(input, el.dataset.id);
+                            dropdown.style.display = 'none';
+                            mentionActive = false;
+                        });
+                        el.addEventListener('mouseenter', () => {
+                            dropdown.querySelectorAll('.mention-item').forEach(e => e.classList.remove('active'));
+                            el.classList.add('active');
+                            selectedIndex = i;
+                        });
+                    });
+                } else {
+                    dropdown.style.display = 'none';
+                }
+            } else {
+                dropdown.style.display = 'none';
+                mentionActive = false;
+            }
+        });
+        
+        input.addEventListener('keydown', (e) => {
+            if (!mentionActive || dropdown.style.display === 'none') return;
+            
+            const items = dropdown.querySelectorAll('.mention-item');
+            if (items.length === 0) return;
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedIndex = (selectedIndex + 1) % items.length;
+                items.forEach((el, i) => el.classList.toggle('active', i === selectedIndex));
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+                items.forEach((el, i) => el.classList.toggle('active', i === selectedIndex));
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                const activeItem = dropdown.querySelector('.mention-item.active');
+                if (activeItem) {
+                    this.insertMention(input, activeItem.dataset.id);
+                    dropdown.style.display = 'none';
+                    mentionActive = false;
+                }
+            } else if (e.key === 'Escape') {
+                dropdown.style.display = 'none';
+                mentionActive = false;
+            }
+        });
+        
+        // Click outside to close
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.chat-mention-wrapper')) {
+                dropdown.style.display = 'none';
+                mentionActive = false;
+            }
+        });
+    }
+    
+    insertMention(input, agentId) {
+        const pos = input.selectionStart;
+        const before = input.value.substring(0, pos);
+        const after = input.value.substring(pos);
+        const atIdx = before.lastIndexOf('@');
+        const prefix = before.substring(0, atIdx);
+        input.value = prefix + '@' + agentId + ' ' + after;
+        const newPos = prefix.length + agentId.length + 2;
+        input.setSelectionRange(newPos, newPos);
+        input.focus();
+    }
+    
+    initChat() {
+        // Enter key sends message
+        const input = document.getElementById('chat-input');
+        if (input) {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendChat();
+                }
+            });
+        }
     }
     
     loadInitialData() {
@@ -502,6 +683,40 @@ class ZooDevCenter {
             <div class="task-count">${columnData.tasks.length}</div>
         `;
         
+        columnEl.appendChild(headerEl);
+        
+        // Request column gets inline add form
+        if (statusKey === 'request') {
+            const formEl = document.createElement('div');
+            formEl.className = 'request-add-form';
+            formEl.innerHTML = `
+                <input type="text" id="request-title-input" placeholder="新需求标题..." />
+                <div class="add-row">
+                    <select id="request-assignee-select">
+                        <option value="">指派给...</option>
+                        <option value="alpha">🐢 阿尔法</option>
+                        <option value="weaver">🐜 织巢</option>
+                        <option value="duci">🦂 毒刺</option>
+                        <option value="aeterna">🪨 史官</option>
+                        <option value="gulu">🟢 咕噜</option>
+                        <option value="panda">🐼 达达</option>
+                    </select>
+                    <button onclick="submitRequestRequirement()">添加</button>
+                </div>
+            `;
+            columnEl.appendChild(formEl);
+            
+            // Enter key in title input
+            const titleInput = document.getElementById('request-title-input');
+            if (titleInput) {
+                titleInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        submitRequestRequirement();
+                    }
+                });
+            }
+        }
+        
         // 任务列表
         const tasksListEl = document.createElement('div');
         tasksListEl.className = 'tasks-list';
@@ -520,7 +735,6 @@ class ZooDevCenter {
             });
         }
         
-        columnEl.appendChild(headerEl);
         columnEl.appendChild(tasksListEl);
         
         return columnEl;
@@ -763,6 +977,22 @@ class ZooDevCenter {
             }
         });
         
+        this.eventSource.addEventListener('pipeline_status', (event) => {
+            this.eventCount++;
+            this.updateEventCount();
+            
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'pipeline_update') {
+                    // Refresh kanban to show updated pipeline state
+                    this.loadKanbanData();
+                    console.log('Pipeline状态已更新:', data.data);
+                }
+            } catch (e) {
+                console.error('pipeline_status解析错误:', e);
+            }
+        });
+        
         this.eventSource.addEventListener('heartbeat', (event) => {
             this.eventCount++;
             this.updateEventCount();
@@ -853,6 +1083,112 @@ class ZooDevCenter {
         }, 5000);
     }
     
+    // ===== 成员管理 Tab 方法 =====
+    
+    async loadMembers() {
+        const loadingEl = document.getElementById('members-tab-loading');
+        const gridEl = document.getElementById('members-card-grid');
+        
+        if (!loadingEl || !gridEl) return;
+        
+        loadingEl.style.display = 'flex';
+        gridEl.style.display = 'none';
+        
+        try {
+            const response = await fetch('/api/members');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const members = await response.json();
+            this.renderMembersTab(members);
+        } catch (error) {
+            console.error('加载成员数据失败:', error);
+            loadingEl.innerHTML = `
+                <div style="text-align: center; color: #f38ba8;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                    <p>加载成员数据失败</p>
+                </div>
+            `;
+        }
+        
+        // 设置每小时自动刷新
+        if (this._membersRefreshInterval) {
+            clearInterval(this._membersRefreshInterval);
+        }
+        this._membersRefreshInterval = setInterval(() => {
+            this.loadMembers();
+        }, 3600000); // 1小时
+    }
+    
+    renderMembersTab(members) {
+        const loadingEl = document.getElementById('members-tab-loading');
+        const gridEl = document.getElementById('members-card-grid');
+        
+        if (!gridEl || !loadingEl) return;
+        
+        gridEl.innerHTML = '';
+        
+        if (!members || members.length === 0) {
+            gridEl.innerHTML = '<div class="empty-state" style="padding:40px;text-align:center;"><i class="fas fa-users" style="font-size:3rem;color:#585b70;margin-bottom:12px;"></i><p style="color:#6c7086;">暂无成员数据</p></div>';
+            gridEl.style.display = 'block';
+            loadingEl.style.display = 'none';
+            return;
+        }
+        
+        members.forEach(m => {
+            const card = document.createElement('div');
+            card.className = 'member-tab-card';
+            
+            const status = m.status || 'unknown';
+            const statusClass = (status === 'executing' || status === 'online') ? 'online' :
+                               (status === 'idle' || status === 'sleeping') ? 'idle' : 'offline';
+            const statusText = this.memberTabStatusText(status);
+            const emoji = m.avatar_emoji || this.memberEmojiMap[m.id] || '🐾';
+            const displayName = this.memberNameMap[m.id] || m.name || m.id;
+            
+            card.innerHTML = `
+                <div class="member-tab-card-header">
+                    <div class="member-tab-avatar">
+                        <img src="/static/avatars/${m.id}.png" alt="${this.escapeHtml(displayName)}"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="member-tab-avatar-fallback">${emoji}</div>
+                    </div>
+                    <div class="member-tab-status-indicator ${statusClass}"
+                         title="${statusText}"></div>
+                </div>
+                <div class="member-tab-card-body">
+                    <h3 class="member-tab-name">${this.escapeHtml(displayName)}</h3>
+                    <div class="member-tab-totem">${emoji}</div>
+                    <div class="member-tab-role-badge">${this.escapeHtml(m.role_display || '未知')}</div>
+                    <div class="member-tab-model">🧠 ${this.escapeHtml(m.model || '未知')}</div>
+                    <div class="member-tab-status-text ${statusClass}">${statusText}</div>
+                </div>
+            `;
+            gridEl.appendChild(card);
+        });
+        
+        gridEl.style.display = 'grid';
+        loadingEl.style.display = 'none';
+        
+        // 更新最后更新时间
+        const updateEl = document.getElementById('members-last-update');
+        if (updateEl) {
+            const now = new Date();
+            updateEl.textContent = `最后更新: ${now.toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
+        }
+    }
+    
+    memberTabStatusText(status) {
+        const map = {
+            'online': '🟢 在线',
+            'executing': '🟢 在线',
+            'idle': '🟡 空闲',
+            'sleeping': '💤 休眠',
+            'dead': '🔴 离线',
+            'terminated': '🔴 离线',
+            'unknown': '⚫ 离线'
+        };
+        return map[status] || '⚫ 离线';
+    }
+    
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
@@ -860,7 +1196,393 @@ class ZooDevCenter {
     }
 }
 
+// ===== Global Chat Functions =====
+function loadChat() {
+    if (!window.zooDevCenter) return;
+    const div = document.getElementById('chat-messages');
+    if (!div) return;
+    
+    fetch('/api/chat')
+        .then(r => r.json())
+        .then(msgs => {
+            div.innerHTML = msgs.map(m => {
+                const hasMention = m.mentioned ? '<span class="mention-badge">📨 已转发</span>' : '';
+                return `<div class="chat-message-item">
+                    <strong class="msg-from">${escapeHtml(m.from)}</strong>:
+                    ${escapeHtml(m.content)}
+                    <span class="msg-time">${m.timestamp || ''}</span>
+                    ${hasMention}
+                </div>`;
+            }).join('');
+            div.scrollTop = div.scrollHeight;
+        })
+        .catch(e => console.error('loadChat error:', e));
+}
+
+function sendChat() {
+    const input = document.getElementById('chat-input');
+    if (!input) return;
+    const content = input.value.trim();
+    if (!content) return;
+    input.value = '';
+    
+    fetch('/api/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({content})
+    })
+    .then(r => r.json())
+    .then(() => {
+        loadChat();
+        // Also refresh kanban to show new backlog items
+        if (window.zooDevCenter) {
+            window.zooDevCenter.loadKanbanData();
+        }
+    })
+    .catch(e => console.error('sendChat error:', e));
+}
+
+function escapeHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ===== Issue Functions =====
+function loadIssues() {
+    const list = document.getElementById('issues-list');
+    if (!list) return;
+    
+    list.innerHTML = '<div class="loading"><div class="spinner"></div><p>加载中...</p></div>';
+    
+    const statusFilter = document.getElementById('issue-status-filter')?.value || 'all';
+    const priorityFilter = document.getElementById('issue-priority-filter')?.value || 'all';
+    const searchQuery = document.getElementById('issue-search')?.value || '';
+    
+    let url = '/api/issues';
+    const params = [];
+    if (statusFilter !== 'all') params.push('status=' + encodeURIComponent(statusFilter));
+    if (priorityFilter !== 'all') params.push('priority=' + encodeURIComponent(priorityFilter));
+    if (searchQuery.trim()) params.push('search=' + encodeURIComponent(searchQuery.trim()));
+    if (params.length) url += '?' + params.join('&');
+    
+    fetch(url)
+        .then(r => r.json())
+        .then(issues => {
+            if (!issues || issues.length === 0) {
+                list.innerHTML = '<div class="empty-state" style="padding:40px;text-align:center;color:#6c7086;"><i class="fas fa-inbox" style="font-size:3rem;margin-bottom:12px;color:#585b70;"></i><p style="font-size:1rem;">暂无问题</p><p style="font-size:0.85rem;margin-top:6px;">点击上方"新建问题"按钮创建</p></div>';
+                return;
+            }
+            
+            const priorityLabels = { 'P0': 'P0 紧急', 'P1': 'P1 高', 'P2': 'P2 中', 'P3': 'P3 低' };
+            const priorityClasses = { 'P0': 'p0', 'P1': 'p1', 'P2': 'p2', 'P3': 'p3' };
+            const statusLabels = { 'open': '待处理', 'in_progress': '处理中', 'resolved': '已解决', 'closed': '已关闭' };
+            const statusClasses = { 'open': 'open', 'in_progress': 'in-progress', 'resolved': 'resolved', 'closed': 'closed' };
+            const agentNames = {
+                'alpha': '🐢 阿尔法', 'weaver': '🐜 织巢', 'duci': '🦂 毒刺',
+                'aeterna': '🪨 史官', 'gulu': '🟢 咕噜', 'panda': '🐼 达达'
+            };
+            
+            // Build next-status options for quick actions
+            const nextStatusMap = {
+                'open': 'in_progress',
+                'in_progress': 'resolved',
+                'resolved': 'closed',
+                'closed': 'open'
+            };
+            const nextActionLabels = {
+                'open': '开始处理',
+                'in_progress': '标记解决',
+                'resolved': '关闭问题',
+                'closed': '重新打开'
+            };
+            
+            list.innerHTML = issues.map(issue => {
+                const nextStatus = nextStatusMap[issue.status] || 'open';
+                const nextLabel = nextActionLabels[issue.status] || '操作';
+                const created = issue.created_at ? new Date(issue.created_at).toLocaleString('zh-CN') : '';
+                
+                return `
+                    <div class="issue-card priority-${priorityClasses[issue.priority] || 'p3'}">
+                        <div class="issue-card-left">
+                            <div class="issue-priority-badge priority-${priorityClasses[issue.priority] || 'p3'}">${priorityLabels[issue.priority] || issue.priority}</div>
+                        </div>
+                        <div class="issue-card-body">
+                            <div class="issue-title-row">
+                                <span class="issue-title">${escapeHtml(issue.title)}</span>
+                                <span class="issue-status-badge status-${statusClasses[issue.status] || 'open'}">${statusLabels[issue.status] || issue.status}</span>
+                            </div>
+                            ${issue.description ? `<div class="issue-desc">${escapeHtml(issue.description)}</div>` : ''}
+                            <div class="issue-meta">
+                                <span class="issue-assignee"><i class="fas fa-user"></i> ${agentNames[issue.assignee] || escapeHtml(issue.assignee) || '未指派'}</span>
+                                <span class="issue-time"><i class="fas fa-clock"></i> ${created}</span>
+                            </div>
+                        </div>
+                        <div class="issue-card-actions">
+                            <button class="issue-btn-action" onclick="updateIssueStatus('${issue.id}', '${nextStatus}')" title="${nextLabel}">
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                            <button class="issue-btn-delete" onclick="deleteIssue('${issue.id}')" title="删除问题">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        })
+        .catch(e => {
+            console.error('loadIssues error:', e);
+            list.innerHTML = '<div style="padding:40px;text-align:center;color:#e74c3c;"><i class="fas fa-exclamation-triangle" style="font-size:2rem;margin-bottom:10px;"></i><p>加载失败</p></div>';
+        });
+}
+
+function showCreateIssueForm() {
+    const modal = document.getElementById('issue-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        document.getElementById('issue-title').value = '';
+        document.getElementById('issue-desc').value = '';
+        document.getElementById('issue-priority').value = 'P3';
+        document.getElementById('issue-assignee').value = '';
+        document.getElementById('issue-title').focus();
+    }
+}
+
+function closeIssueModal() {
+    document.getElementById('issue-modal').style.display = 'none';
+}
+
+function submitIssue() {
+    const title = document.getElementById('issue-title');
+    const desc = document.getElementById('issue-desc');
+    const priority = document.getElementById('issue-priority');
+    const assignee = document.getElementById('issue-assignee');
+    
+    if (!title || !title.value.trim()) {
+        title.focus();
+        title.style.borderColor = '#e74c3c';
+        setTimeout(() => { title.style.borderColor = ''; }, 2000);
+        return;
+    }
+    
+    fetch('/api/issues', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            title: title.value.trim(),
+            description: desc ? desc.value.trim() : '',
+            priority: priority ? priority.value : 'P3',
+            assignee: assignee ? assignee.value : ''
+        })
+    })
+    .then(r => r.json())
+    .then(() => {
+        closeIssueModal();
+        loadIssues();
+        const toast = document.createElement('div');
+        toast.className = 'success-toast';
+        toast.innerHTML = '<i class="fas fa-check-circle"></i> 问题已创建';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    })
+    .catch(e => {
+        console.error('submitIssue error:', e);
+        alert('创建失败: ' + e.message);
+    });
+}
+
+function updateIssueStatus(id, newStatus) {
+    fetch('/api/issues/' + id, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ status: newStatus })
+    })
+    .then(r => r.json())
+    .then(() => {
+        loadIssues();
+    })
+    .catch(e => {
+        console.error('updateIssueStatus error:', e);
+        alert('更新状态失败: ' + e.message);
+    });
+}
+
+function deleteIssue(id) {
+    if (!confirm('确定要删除这个问题吗？')) return;
+    
+    fetch('/api/issues/' + id, {
+        method: 'DELETE'
+    })
+    .then(r => r.json())
+    .then(() => {
+        loadIssues();
+        const toast = document.createElement('div');
+        toast.className = 'success-toast';
+        toast.innerHTML = '<i class="fas fa-check-circle"></i> 问题已删除';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    })
+    .catch(e => {
+        console.error('deleteIssue error:', e);
+        alert('删除失败: ' + e.message);
+    });
+}
+
+// Close issue modal when clicking outside
+if (document) {
+    document.addEventListener('click', function(e) {
+        if (e.target && e.target.id === 'issue-modal') {
+            closeIssueModal();
+        }
+    });
+}
+
+// Keyboard shortcut: Escape closes issue modal
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('issue-modal');
+        if (modal && modal.style.display === 'flex') {
+            closeIssueModal();
+        }
+    }
+});
+
+// ===== Requirement Functions =====
+function submitRequirement() {
+    const title = document.getElementById('req-title');
+    const desc = document.getElementById('req-desc');
+    const assignee = document.getElementById('req-assignee');
+    const btn = document.getElementById('req-submit-btn');
+    
+    if (!title || !title.value.trim()) {
+        title.focus();
+        title.style.borderColor = '#e74c3c';
+        setTimeout(() => { title.style.borderColor = ''; }, 2000);
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 提交中...';
+    
+    fetch('/api/requirements', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            title: title.value.trim(),
+            description: desc ? desc.value.trim() : '',
+            assignee: assignee ? assignee.value : ''
+        })
+    })
+    .then(r => r.json())
+    .then(req => {
+        title.value = '';
+        if (desc) desc.value = '';
+        if (assignee) assignee.value = '';
+        
+        // Show success toast
+        const toast = document.createElement('div');
+        toast.className = 'success-toast';
+        toast.innerHTML = '<i class="fas fa-check-circle"></i> 需求已提交';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+        
+        // Refresh lists
+        loadRequirementsList();
+        if (window.zooDevCenter) {
+            window.zooDevCenter.loadKanbanData();
+        }
+    })
+    .catch(e => {
+        console.error('submitRequirement error:', e);
+        alert('提交失败: ' + e.message);
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> 提交需求';
+    });
+}
+
+function submitRequestRequirement() {
+    const titleInput = document.getElementById('request-title-input');
+    const assigneeSelect = document.getElementById('request-assignee-select');
+    
+    if (!titleInput || !titleInput.value.trim()) {
+        if (titleInput) { titleInput.focus(); titleInput.style.borderColor = '#e74c3c'; setTimeout(() => { titleInput.style.borderColor = ''; }, 2000); }
+        return;
+    }
+    
+    fetch('/api/requirements', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            title: titleInput.value.trim(),
+            description: '',
+            assignee: assigneeSelect ? assigneeSelect.value : ''
+        })
+    })
+    .then(r => r.json())
+    .then(() => {
+        titleInput.value = '';
+        if (assigneeSelect) assigneeSelect.value = '';
+        if (window.zooDevCenter) {
+            window.zooDevCenter.loadKanbanData();
+        }
+    })
+    .catch(e => console.error('submitRequestRequirement error:', e));
+}
+
+function loadRequirementsList() {
+    const list = document.getElementById('req-list');
+    if (!list) return;
+    
+    fetch('/api/requirements')
+        .then(r => r.json())
+        .then(reqs => {
+            if (!reqs || reqs.length === 0) {
+                list.innerHTML = '<div class="empty-state" style="padding:30px;text-align:center;color:#95a5a6;"><i class="fas fa-inbox" style="font-size:2rem;margin-bottom:10px;"></i><p>暂无需求</p></div>';
+                return;
+            }
+            
+            const statusLabels = {
+                'request': '📥 需求池',
+                'design': '🎨 设计中',
+                'ui_design': '🎨 UI设计中',
+                'review': '📋 审核中',
+                'develop': '🔧 开发中',
+                'test': '🧪 测试中',
+                'audit_final': '🔍 审计中',
+                'done': '✅ 已完成',
+                'exception': '⚠️ 异常'
+            };
+            
+            const agentNames = {
+                'alpha': '🐢 阿尔法',
+                'weaver': '🐜 织巢',
+                'duci': '🦂 毒刺',
+                'aeterna': '🪨 史官',
+                'gulu': '🟢 咕噜',
+                'panda': '🐼 达达'
+            };
+            
+            list.innerHTML = reqs.slice().reverse().map(r => `
+                <div class="req-list-item">
+                    <div class="req-title">${escapeHtml(r.title)}</div>
+                    <div class="req-meta">
+                        <span><i class="fas fa-tag"></i> <span class="req-status-badge ${r.status}">${statusLabels[r.status] || r.status}</span></span>
+                        <span><i class="fas fa-user"></i> ${agentNames[r.assignee] || '未指派'}</span>
+                        <span><i class="fas fa-clock"></i> ${r.created_at ? new Date(r.created_at).toLocaleString('zh-CN') : ''}</span>
+                    </div>
+                </div>
+            `).join('');
+        })
+        .catch(e => {
+            console.error('loadRequirementsList error:', e);
+            list.innerHTML = '<div style="padding:20px;text-align:center;color:#e74c3c;">加载失败</div>';
+        });
+}
+
 // 页面加载完成后初始化应用
 document.addEventListener('DOMContentLoaded', () => {
     window.zooDevCenter = new ZooDevCenter();
+    // Load requirements list if that tab is visible
+    loadRequirementsList();
 });

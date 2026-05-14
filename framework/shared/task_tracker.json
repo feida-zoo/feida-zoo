@@ -131,13 +131,14 @@
           "id": "3.2",
           "name": "P2P 架构改造 + Harness 流程引擎设计",
           "severity": "P2",
-          "status": "in_review",
+          "status": "completed",
           "assignee": "alpha",
           "reviewer": "duci",
           "description": "将 feida-zoo 从 Hub-and-Spoke 改为 P2P Mesh 架构，同时将 SKILL.md 工作流改为 Python Harness 代码引擎",
-          "notes": "全链路已交付。阶段0-3完成，毒刺条件性通过(200 passed)。6个P2修复已完成(187b980)。",
+          "notes": "Harness 架构设计 v1.1 经毒刺审计通过，Pipeline 引擎及9阶段流水线已全自动运行 ✅",
           "design_doc": "alpha_feida_zoo_P2P_Harness_Architecture_v1.0.md",
-          "started_at": "2026-05-10T13:02:03+08:00"
+          "started_at": "2026-05-10T13:02:03+08:00",
+          "completed_at": "2026-05-13T23:19:00+08:00"
         },
         {
           "id": "3.2.1",

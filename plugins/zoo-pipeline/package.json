@@ -5,7 +5,9 @@
   "type": "module",
   "main": "dist/index.js",
   "openclaw": {
-    "extensions": ["./dist/index.js"],
+    "extensions": [
+      "./dist/index.js"
+    ],
     "compat": {
       "minGatewayVersion": "2026.3.24-beta.2"
     }
@@ -17,5 +19,8 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "openclaw": "file:/opt/homebrew/lib/node_modules/openclaw"
   }
 }

@@ -22,16 +22,18 @@ class StateMachine:
     飝龘动物园任务状态机
 
     完整状态：
-      request → validate → design → review → develop → audit → final_check → deliver → done
+      request → validate → design → review → develop → test → audit → final_check → deliver → done
       (cancelled, timed_out, escalated 为异常/终态分支)
     """
 
     TRANSITIONS = {
         "request":     ["validate", "cancelled"],
         "validate":    ["request", "design", "cancelled"],
-        "design":      ["review", "cancelled", "timed_out", "escalated"],
+        "design":      ["ui_design", "cancelled", "timed_out", "escalated"],
+        "ui_design":   ["review", "design", "cancelled", "timed_out", "escalated"],
         "review":      ["design", "develop", "cancelled", "timed_out", "escalated"],
-        "develop":     ["audit", "cancelled", "timed_out", "escalated"],
+        "develop":     ["test", "cancelled", "timed_out", "escalated"],
+        "test":        ["audit", "develop", "cancelled", "timed_out", "escalated"],
         "audit":       ["develop", "final_check", "cancelled", "timed_out", "escalated"],
         "final_check": ["deliver", "develop", "cancelled", "escalated"],
         "deliver":     ["done", "cancelled", "escalated"],

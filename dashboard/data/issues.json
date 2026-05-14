@@ -1,0 +1,38 @@
+[
+  {
+    "id": "e330e511-0123-4038-9dc3-9daabe6c054f",
+    "title": "测试问题",
+    "description": "功能验证",
+    "priority": "P2",
+    "status": "open",
+    "assignee": "",
+    "created_at": "2026-05-14T11:54:27.428148",
+    "updated_at": "2026-05-14T11:54:27.428148",
+    "resolved_at": null,
+    "source": "dashboard"
+  },
+  {
+    "id": "a0a23afa-34ee-48ae-b8bb-84a3883b5b37",
+    "title": "看板里出现了聊天室界面,压缩了看板",
+    "description": "",
+    "priority": "P1",
+    "status": "open",
+    "assignee": "weaver",
+    "created_at": "2026-05-14T14:08:13.894098",
+    "updated_at": "2026-05-14T14:08:59.043111",
+    "resolved_at": "2026-05-14T14:08:57.209803",
+    "source": "dashboard"
+  },
+  {
+    "id": "1cee3b24-803f-4116-8e69-0561d97ea468",
+    "title": "成员管理界面和问题管理界面有聊天室页面,过于冗余",
+    "description": "",
+    "priority": "P3",
+    "status": "open",
+    "assignee": "weaver",
+    "created_at": "2026-05-14T14:14:30.071589",
+    "updated_at": "2026-05-14T14:14:30.071589",
+    "resolved_at": null,
+    "source": "dashboard"
+  }
+]

@@ -15,7 +15,8 @@ class InboxWatcher:
     """
     Inbox 看门狗
 
-    监控 <mesh_dir>/inbound/<agent_id>/queue/ 目录，
+    监控 <mesh_dir>/<agent_id>/queue/ 目录，
+    <mesh_dir> 应包含 inbound 子目录，例如传入 "framework/shared/zoomesh/inbound"。
     当新的 msg_<uuid>.json 写入时触发唤醒。
 
     设计来源：alpha_feida_zoo_P2P_Harness_Architecture_v1.1.md §2.13
@@ -24,7 +25,8 @@ class InboxWatcher:
     def __init__(self, mesh_dir: str, registry_path: str, on_wakeup=None):
         """
         Args:
-            mesh_dir: ZooMesh 根目录，如 "framework/shared/zoomesh"
+            mesh_dir: 包含 inbound 子目录的路径（实际为 ZooMesh 根目录 + "/inbound"），
+                      内部拼接为 <mesh_dir>/<agent_id>/queue
             registry_path: agent 注册表 JSON 路径
             on_wakeup: 回调函数，签名 (agent_id: str) -> None
         """
@@ -72,7 +74,7 @@ class InboxWatcher:
 
     def _init_baseline(self, agent_id: str) -> None:
         """启动时建立 mtime 基线，避免历史消息被误判为新消息。"""
-        queue_dir = self.mesh_dir / "inbound" / agent_id / "queue"
+        queue_dir = self.mesh_dir / agent_id / "queue"
         if not queue_dir.exists():
             self._last_check[agent_id] = 0.0
             return
@@ -87,7 +89,7 @@ class InboxWatcher:
 
     def _check_inbox(self, agent_id: str) -> None:
         """检查单个 agent 的 inbox 是否有新消息"""
-        queue_dir = self.mesh_dir / "inbound" / agent_id / "queue"
+        queue_dir = self.mesh_dir / agent_id / "queue"
         if not queue_dir.exists():
             return
 

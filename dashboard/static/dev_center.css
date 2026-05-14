@@ -15,9 +15,11 @@
     
     /* 看板列颜色 */
     --backlog-color: #f8f9fa;
-    --in-progress-color: #e3f2fd;
-    --in-review-color: #fff3e0;
+    --design-color: #e8eaf6;
+    --develop-color: #e3f2fd;
+    --audit-color: #fff3e0;
     --done-color: #e8f5e9;
+    --exception-color: #fce4ec;
     
     /* 布局变量 */
     --header-height: 70px;
@@ -143,6 +145,55 @@ body {
     100% { transform: rotate(360deg); }
 }
 
+/* Tab 导航 */
+.tab-nav {
+    display: flex;
+    background: white;
+    border-bottom: 2px solid var(--border-color);
+    padding: 0 20px;
+    gap: 0;
+    box-shadow: 0 1px 4px var(--shadow-color);
+    z-index: 50;
+}
+
+.tab-btn {
+    padding: 12px 24px;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-size: 1rem;
+    font-family: inherit;
+    color: var(--gray-color);
+    transition: all var(--transition-speed);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.tab-btn:hover {
+    color: var(--dark-color);
+    background: rgba(0,0,0,0.02);
+}
+
+.tab-btn.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+    font-weight: 600;
+}
+
+/* Tab 内容 */
+.tab-content {
+    display: none;
+    flex: 1;
+    overflow: auto;
+}
+
+.tab-content.active {
+    display: flex;
+}
+
 /* 主内容区 */
 .dev-center-main {
     display: flex;
@@ -150,6 +201,16 @@ body {
     padding: 20px;
     gap: 20px;
     overflow: hidden;
+}
+
+/* 统计仪表盘 - 网格布局 */
+.stats-dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+    width: 100%;
+    overflow-y: auto;
+    padding-bottom: 20px;
 }
 
 /* 侧边栏样式 */
@@ -225,35 +286,37 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 20px;
+    padding: 14px 20px;
     background: linear-gradient(135deg, var(--primary-color), #2980b9);
     color: white;
+    flex-shrink: 0;
 }
 
 .kanban-header h2 {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 1.3rem;
+    font-size: 1.15rem;
     margin: 0;
 }
 
 .kanban-actions {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 12px;
 }
 
 .btn-refresh {
     background: rgba(255, 255, 255, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.3);
     color: white;
-    padding: 8px 15px;
+    padding: 6px 12px;
     border-radius: 20px;
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    font-size: 0.85rem;
     transition: all var(--transition-speed);
 }
 
@@ -265,47 +328,68 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     opacity: 0.9;
 }
 
 /* 看板列容器 */
 .kanban-container {
     flex: 1;
-    padding: 20px;
-    overflow: auto;
+    padding: 14px;
+    overflow: hidden;
 }
 
 .kanban-columns {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
+    grid-template-columns: repeat(9, 1fr);
+    gap: 10px;
     height: 100%;
 }
 
 .kanban-column {
     background: var(--backlog-color);
     border-radius: var(--border-radius);
-    padding: 15px;
+    padding: 10px;
     display: flex;
     flex-direction: column;
-    min-height: 500px;
+    overflow: hidden;
 }
 
 .kanban-column.backlog {
     background: var(--backlog-color);
 }
 
-.kanban-column.in-progress {
-    background: var(--in-progress-color);
+.kanban-column.design {
+    background: var(--design-color);
 }
 
-.kanban-column.in-review {
-    background: var(--in-review-color);
+.kanban-column.ui-design {
+    background: #fce4ec;
+}
+
+/* 粉色渐变背景 + 列标题微调 */
+.kanban-column.ui-design .column-header {
+    border-bottom-color: #f8bbd0;
+}
+
+.kanban-column.develop {
+    background: var(--develop-color);
+}
+
+.kanban-column.test {
+    background: #fff3e0;
+}
+
+.kanban-column.audit {
+    background: var(--audit-color);
 }
 
 .kanban-column.done {
     background: var(--done-color);
+}
+
+.kanban-column.exception {
+    background: var(--exception-color);
 }
 
 .column-header {
@@ -333,6 +417,55 @@ body {
     flex: 1;
     overflow-y: auto;
     padding-right: 5px;
+    min-height: 0;
+}
+
+/* Backlog 象限顶部新增需求表单 */
+.kanban-column.backlog .backlog-add-form {
+    margin-bottom: 10px;
+    padding: 10px;
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    flex-shrink: 0;
+}
+
+.kanban-column.backlog .backlog-add-form input,
+.kanban-column.backlog .backlog-add-form select {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-family: inherit;
+    box-sizing: border-box;
+    margin-bottom: 6px;
+}
+
+.kanban-column.backlog .backlog-add-form .add-row {
+    display: flex;
+    gap: 6px;
+}
+
+.kanban-column.backlog .backlog-add-form .add-row select {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.kanban-column.backlog .backlog-add-form .add-row button {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+}
+
+.kanban-column.backlog .backlog-add-form .add-row button:hover {
+    background: #2980b9;
 }
 
 .task-card {
@@ -1128,5 +1261,951 @@ body {
     
     .member-name {
         font-size: 0.9rem;
+    }
+}
+
+/* ===== Tab 3: 聊天室 ===== */
+
+/* 聊天室 tab-content 层：禁止滚动，由其内部的 chat-tab-container 接管 */
+#tab-chat.tab-content {
+    overflow: hidden;
+    height: calc(100vh - 190px);
+    display: flex;
+    flex-direction: column;
+}
+
+#tab-chat.tab-content.active {
+    display: flex;
+}
+.chat-tab-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background: #1e1e2e;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: var(--card-shadow);
+    min-height: 0;  /* flex 子项 min-height 修复 */
+}
+
+.chat-header {
+    padding: 16px;
+    background: #181825;
+    border-bottom: 1px solid #313244;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chat-header h3 {
+    margin: 0;
+    color: #cdd6f4;
+    font-size: 1.1rem;
+}
+
+.chat-header h3 i {
+    color: #89b4fa;
+    margin-right: 8px;
+}
+
+.chat-info {
+    color: #6c7086;
+    font-size: 0.85rem;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    color: #cdd6f4;
+    font-size: 0.9rem;
+    min-height: 0;  /* flex 子项 min-height 修复 */
+}
+
+.chat-message-item {
+    padding: 10px 12px;
+    background: #313244;
+    border-radius: 8px;
+    word-break: break-all;
+    line-height: 1.5;
+}
+
+.chat-message-item .msg-from {
+    color: #89b4fa;
+    font-weight: 600;
+    margin-right: 6px;
+}
+
+.chat-message-item .msg-time {
+    font-size: 0.75rem;
+    color: #585b70;
+    margin-left: 8px;
+}
+
+.chat-message-item .mention-badge {
+    display: inline-block;
+    background: rgba(137, 180, 250, 0.2);
+    color: #89b4fa;
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.chat-input-area {
+    padding: 12px 16px;
+    border-top: 1px solid #313244;
+    display: flex;
+    gap: 10px;
+    background: #181825;
+}
+
+.chat-mention-wrapper {
+    flex: 1;
+    position: relative;
+}
+
+#chat-input {
+    width: 100%;
+    background: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+#chat-input:focus {
+    border-color: #89b4fa;
+}
+
+#chat-input::placeholder {
+    color: #585b70;
+}
+
+#chat-send-btn {
+    background: #89b4fa;
+    color: #1e1e2e;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+
+#chat-send-btn:hover {
+    background: #b4d0fb;
+}
+
+#chat-send-btn i {
+    margin-right: 4px;
+}
+
+/* Mention 下拉提示 */
+.mention-dropdown {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    background: #313244;
+    border: 1px solid #45475a;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+    z-index: 100;
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.3);
+}
+
+.mention-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    color: #cdd6f4;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    transition: background 0.15s;
+}
+
+.mention-item:hover,
+.mention-item.active {
+    background: #45475a;
+}
+
+.mention-item .mention-emoji {
+    font-size: 1.1rem;
+}
+
+.mention-item .mention-name {
+    color: #a6adc8;
+}
+
+/* ===== Tab 4: 需求管理 ===== */
+.requirements-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    width: 100%;
+    overflow-y: auto;
+    padding-bottom: 20px;
+}
+
+.req-form-card,
+.req-list-card {
+    background: white;
+    border-radius: var(--border-radius);
+    padding: 24px;
+    box-shadow: var(--card-shadow);
+}
+
+.req-form-card h3,
+.req-list-card h3 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    color: var(--dark-color);
+    font-size: 1.1rem;
+}
+
+.req-form-card h3 i { color: var(--primary-color); }
+.req-list-card h3 i { color: var(--info-color); }
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: var(--dark-color);
+}
+
+.form-group .required {
+    color: var(--danger-color);
+}
+
+.form-group input[type="text"],
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    color: var(--dark-color);
+    background: var(--light-color);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+}
+
+.btn-submit {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-submit:hover {
+    background: #2980b9;
+}
+
+.btn-submit:disabled {
+    background: var(--gray-color);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.req-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.req-list-item {
+    padding: 12px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    background: var(--light-color);
+    transition: box-shadow 0.2s;
+}
+
+.req-list-item:hover {
+    box-shadow: 0 2px 8px var(--shadow-color);
+}
+
+.req-list-item .req-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+    color: var(--dark-color);
+}
+
+.req-list-item .req-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 0.8rem;
+    color: var(--gray-color);
+}
+
+.req-list-item .req-meta span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.req-list-item .req-status-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.req-status-badge.request { background: #f8f9fa; color: #636e72; border: 1px solid #dfe6e9; }
+.req-status-badge.design { background: #e8eaf6; color: #3949ab; border: 1px solid #c5cae9; }
+.req-status-badge.review { background: #f3e5f5; color: #7b1fa2; border: 1px solid #e1bee7; }
+.req-status-badge.develop { background: #e3f2fd; color: #1976d2; border: 1px solid #bbdefb; }
+.req-status-badge.test { background: #fff3e0; color: #f57c00; border: 1px solid #ffe0b2; }
+.req-status-badge.audit_final { background: #fff3e0; color: #f57c00; border: 1px solid #ffe0b2; }
+.req-status-badge.done { background: #e8f5e9; color: #388e3c; border: 1px solid #c8e6c9; }
+.req-status-badge.exception { background: #fce4ec; color: #d32f2f; border: 1px solid #f8bbd0; }
+
+.success-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #2ecc71;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@media (max-width: 992px) {
+    .requirements-container {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ===== Tab 5: 成员管理 ===== */
+.members-tab-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    background: #1e1e2e;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: var(--card-shadow);
+}
+
+.members-tab-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background: #181825;
+    border-bottom: 1px solid #313244;
+}
+
+.members-tab-header h2 {
+    margin: 0;
+    color: #cdd6f4;
+    font-size: 1.15rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.members-tab-header h2 i {
+    color: #89b4fa;
+}
+
+.members-last-update {
+    color: #585b70;
+    font-size: 0.8rem;
+}
+
+.members-tab-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px;
+    color: #6c7086;
+}
+
+/* 成员卡片网格 — 3列 */
+.members-card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    padding: 24px;
+    overflow-y: auto;
+    max-height: calc(100vh - 250px);
+}
+
+/* 成员管理卡片 */
+.member-tab-card {
+    background: #313244;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #45475a;
+    transition: all 0.25s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.member-tab-card:hover {
+    transform: translateY(-4px);
+    border-color: #89b4fa;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.member-tab-card-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 28px 20px 12px;
+    background: linear-gradient(180deg, #181825 0%, #313244 100%);
+}
+
+.member-tab-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 3px solid rgba(137, 180, 250, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #45475a;
+    transition: border-color 0.2s;
+}
+
+.member-tab-card:hover .member-tab-avatar {
+    border-color: #89b4fa;
+}
+
+.member-tab-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.member-tab-avatar-fallback {
+    display: none;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.4rem;
+}
+
+/* 状态指示器（悬浮在头像右上角） */
+.member-tab-status-indicator {
+    position: absolute;
+    top: 32px;
+    right: calc(50% - 48px);
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 3px solid #313244;
+    transition: background 0.3s, box-shadow 0.3s;
+}
+
+.member-tab-status-indicator.online {
+    background: #a6e3a1;
+    box-shadow: 0 0 8px rgba(166, 227, 161, 0.6);
+}
+
+.member-tab-status-indicator.idle {
+    background: #f9e2af;
+    box-shadow: 0 0 8px rgba(249, 226, 175, 0.6);
+}
+
+.member-tab-status-indicator.offline {
+    background: #585b70;
+    box-shadow: 0 0 8px rgba(88, 91, 112, 0.4);
+}
+
+.member-tab-card-body {
+    padding: 12px 20px 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.member-tab-name {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #cdd6f4;
+    line-height: 1.3;
+}
+
+.member-tab-totem {
+    font-size: 2rem;
+    line-height: 1;
+    margin: 2px 0;
+}
+
+.member-tab-role-badge {
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 12px;
+    background: rgba(137, 180, 250, 0.15);
+    color: #89b4fa;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border: 1px solid rgba(137, 180, 250, 0.25);
+}
+
+.member-tab-model {
+    font-size: 0.85rem;
+    color: #a6adc8;
+    background: rgba(69, 71, 90, 0.5);
+    padding: 3px 12px;
+    border-radius: 8px;
+    margin-top: 4px;
+}
+
+.member-tab-status-text {
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 2px 0;
+}
+
+.member-tab-status-text.online {
+    color: #a6e3a1;
+}
+
+.member-tab-status-text.idle {
+    color: #f9e2af;
+}
+
+.member-tab-status-text.offline {
+    color: #585b70;
+}
+
+/* 响应式调整 */
+@media (max-width: 1200px) {
+    .members-card-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .members-card-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .member-tab-avatar {
+        width: 64px;
+        height: 64px;
+    }
+    
+    .member-tab-name {
+        font-size: 1rem;
+    }
+}
+
+/* ===== Tab 6: 🐛 问题管理 ===== */
+.issues-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    background: #1e1e2e;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: var(--card-shadow);
+}
+
+.issues-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background: #181825;
+    border-bottom: 1px solid #313244;
+}
+
+.issues-header h2 {
+    margin: 0;
+    color: #cdd6f4;
+    font-size: 1.15rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.issues-header h2 i {
+    color: #f9e2af;
+}
+
+.btn-create-issue {
+    background: #a6e3a1;
+    color: #1e1e2e;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-create-issue:hover {
+    background: #b8ebc2;
+}
+
+.issues-toolbar {
+    display: flex;
+    gap: 10px;
+    padding: 12px 24px;
+    background: #181825;
+    border-bottom: 1px solid #313244;
+    align-items: center;
+}
+
+.issues-toolbar select,
+.issues-toolbar input[type="text"] {
+    background: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.issues-toolbar select:focus,
+.issues-toolbar input[type="text"]:focus {
+    border-color: #89b4fa;
+}
+
+.issues-toolbar select {
+    cursor: pointer;
+    min-width: 120px;
+}
+
+.issues-toolbar input[type="text"] {
+    flex: 1;
+    min-width: 150px;
+}
+
+.issues-toolbar input[type="text"]::placeholder {
+    color: #585b70;
+}
+
+.issues-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: calc(100vh - 320px);
+}
+
+/* Issue card */
+.issue-card {
+    display: flex;
+    gap: 12px;
+    background: #313244;
+    border-radius: 10px;
+    padding: 14px 16px;
+    border: 1px solid #45475a;
+    transition: all 0.2s;
+    border-left: 4px solid #585b70;
+}
+
+.issue-card:hover {
+    border-color: #89b4fa;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.issue-card.priority-p0 {
+    border-left-color: #f38ba8;
+}
+
+.issue-card.priority-p1 {
+    border-left-color: #fab387;
+}
+
+.issue-card.priority-p2 {
+    border-left-color: #f9e2af;
+}
+
+.issue-card.priority-p3 {
+    border-left-color: #585b70;
+}
+
+.issue-card-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-width: 60px;
+}
+
+.issue-priority-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.issue-priority-badge.priority-p0 {
+    background: rgba(243, 139, 168, 0.2);
+    color: #f38ba8;
+    border: 1px solid rgba(243, 139, 168, 0.3);
+}
+
+.issue-priority-badge.priority-p1 {
+    background: rgba(250, 179, 135, 0.2);
+    color: #fab387;
+    border: 1px solid rgba(250, 179, 135, 0.3);
+}
+
+.issue-priority-badge.priority-p2 {
+    background: rgba(249, 226, 175, 0.2);
+    color: #f9e2af;
+    border: 1px solid rgba(249, 226, 175, 0.3);
+}
+
+.issue-priority-badge.priority-p3 {
+    background: rgba(88, 91, 112, 0.3);
+    color: #a6adc8;
+    border: 1px solid rgba(88, 91, 112, 0.4);
+}
+
+.issue-card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.issue-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+
+.issue-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #cdd6f4;
+    word-break: break-word;
+}
+
+.issue-status-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.issue-status-badge.status-open {
+    background: rgba(137, 180, 250, 0.2);
+    color: #89b4fa;
+    border: 1px solid rgba(137, 180, 250, 0.3);
+}
+
+.issue-status-badge.status-in-progress {
+    background: rgba(249, 226, 175, 0.2);
+    color: #f9e2af;
+    border: 1px solid rgba(249, 226, 175, 0.3);
+}
+
+.issue-status-badge.status-resolved {
+    background: rgba(166, 227, 161, 0.2);
+    color: #a6e3a1;
+    border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.issue-status-badge.status-closed {
+    background: rgba(88, 91, 112, 0.3);
+    color: #585b70;
+    border: 1px solid rgba(88, 91, 112, 0.4);
+}
+
+.issue-desc {
+    font-size: 0.8rem;
+    color: #a6adc8;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.issue-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 0.78rem;
+    color: #585b70;
+}
+
+.issue-meta span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.issue-card-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    justify-content: center;
+    align-items: center;
+}
+
+.issue-btn-action,
+.issue-btn-delete {
+    background: transparent;
+    border: 1px solid #45475a;
+    color: #a6adc8;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    font-size: 0.85rem;
+}
+
+.issue-btn-action:hover {
+    background: rgba(137, 180, 250, 0.2);
+    border-color: #89b4fa;
+    color: #89b4fa;
+}
+
+.issue-btn-delete:hover {
+    background: rgba(243, 139, 168, 0.2);
+    border-color: #f38ba8;
+    color: #f38ba8;
+}
+
+/* Issue form modal */
+.issue-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.issue-form .form-row {
+    display: flex;
+    gap: 12px;
+}
+
+.issue-form .form-row .form-group {
+    flex: 1;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.btn-cancel {
+    background: #45475a;
+    color: #cdd6f4;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-cancel:hover {
+    background: #585b70;
+}
+
+@media (max-width: 768px) {
+    .issues-toolbar {
+        flex-wrap: wrap;
+    }
+    .issues-toolbar select {
+        flex: 1;
+        min-width: 100px;
+    }
+    .issue-card {
+        flex-wrap: wrap;
+    }
+    .issue-card-actions {
+        flex-direction: row;
+        width: 100%;
+        justify-content: flex-end;
     }
 }

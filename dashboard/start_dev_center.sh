@@ -13,7 +13,7 @@ sleep 1
 
 # 启动增强版服务器
 echo "📡 启动增强版服务器 (端口: 18792)..."
-nohup python3 dashboard/app_enhanced.py > dashboard/server_enhanced.log 2>&1 &
+nohup venv/bin/python dashboard/app_enhanced.py > dashboard/server_enhanced.log 2>&1 &
 
 # 等待服务器启动
 sleep 2

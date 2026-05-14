@@ -69,6 +69,7 @@ class ZooMesh:
         self._event_writer = LockedJsonlWriter(str(self.events_dir / "events.jsonl"))
         self._subscriptions: Dict[str, List[Callable]] = {}
         self._registry = ZooRegistry()
+        self._registry.register_defaults()
         self._initialized = True
 
     # ---- Event Bus ----
