@@ -16,8 +16,8 @@
     "title": "看板里出现了聊天室界面,压缩了看板",
     "description": "",
     "priority": "P1",
-    "status": "open",
-    "assignee": "weaver",
+    "status": "resolved",
+    "assignee": "alpha",
     "created_at": "2026-05-14T14:08:13.894098",
     "updated_at": "2026-05-14T14:08:59.043111",
     "resolved_at": "2026-05-14T14:08:57.209803",
@@ -28,11 +28,11 @@
     "title": "成员管理界面和问题管理界面有聊天室页面,过于冗余",
     "description": "",
     "priority": "P3",
-    "status": "open",
-    "assignee": "weaver",
+    "status": "resolved",
+    "assignee": "alpha",
     "created_at": "2026-05-14T14:14:30.071589",
     "updated_at": "2026-05-14T14:14:30.071589",
-    "resolved_at": null,
+    "resolved_at": "2026-05-14T15:00:00.000000",
     "source": "dashboard"
   }
 ]

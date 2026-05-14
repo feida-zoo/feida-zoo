@@ -51,7 +51,7 @@ PHASE_DEFAULT_AGENT = {
     "validate": "alpha",       # 架构师评估需求边界与可行性
     "design": "alpha",
     "review": "duci",
-    "develop": "weaver",
+    "develop": "alpha",         # 阿尔法直连 Claude Code 执行开发
     "test": "duci",
     "audit": "duci",
     "final_check": "panda",
@@ -336,12 +336,18 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
 
 def _handle_phase_complete(body: str, agent_id: str) -> None:
     """处理 Agent 的 phase_complete/pipeline_ack 回复，推进到下一阶段。"""
-    # 提取 pipeline_id
+    # 提取 pipeline_id（格式: pl_xxxxxxxx 或 PI_DONE:pl_xxxxxxxx）
     pipeline_id = None
     for token in body.split():
-        if token.startswith("pl_") or token.startswith("PI_DONE:"):
+        if token.startswith("pl_"):
             pipeline_id = token
             break
+        if "PI_DONE:" in token:
+            # PI_DONE:pl_xxxxxxxx → 提取 pl_xxxxxxxx
+            m = re.search(r'(pl_[a-f0-9]+)', token)
+            if m:
+                pipeline_id = m.group(1)
+                break
 
     # 从 requirements 中查找
     if not pipeline_id:
@@ -493,10 +499,7 @@ def check_rate_limit(source: str) -> bool:
 # ── Token Cache ────────────────────────────────────────────────────────────────
 _ZOO_TOKENS: dict = {
     "alpha": os.environ.get("ZOO_TOKEN_ALPHA", ""),
-    "weaver": os.environ.get("ZOO_TOKEN_WEAVER", ""),
     "duci": os.environ.get("ZOO_TOKEN_DUCI", ""),
-    "gulu": os.environ.get("ZOO_TOKEN_GULU", ""),
-    "aeterna": os.environ.get("ZOO_TOKEN_AETERNA", ""),
     "panda": os.environ.get("ZOO_TOKEN_PANDA", ""),
 }
 
@@ -573,7 +576,7 @@ class Handler(BaseHTTPRequestHandler):
             if mesh is not None:
                 registry_agents = mesh._registry.list_agents() if hasattr(mesh, '_registry') else []
                 if not registry_agents:
-                    registry_agents = ["alpha", "weaver", "duci", "aeterna", "gulu", "panda"]
+                    registry_agents = ["alpha", "duci", "panda"]
                 if target_agent in registry_agents:
                     mentioned = target_agent
                     msg['mentioned'] = mentioned

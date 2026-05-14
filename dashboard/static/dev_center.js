@@ -58,31 +58,21 @@ class ZooDevCenter {
         // @mention support
         this.mentionAgents = [
             { id: 'alpha', name: '阿尔法', emoji: '🐢' },
-            { id: 'weaver', name: '织巢', emoji: '🐜' },
             { id: 'duci', name: '毒刺', emoji: '🦂' },
-            { id: 'aeterna', name: '史官', emoji: '🪨' },
-            { id: 'gulu', name: '咕噜', emoji: '🟢' },
             { id: 'panda', name: '达达', emoji: '🐼' }
         ];
         
         // 成员 Emoji 映射
         this.memberEmojiMap = {
             'alpha': '🐢',
-            'weaver': '🐜',
-            'stinger': '🦂',
             'duci': '🦂',
-            'panda': '🐼',
-            'aeterna': '📜',
-            'gulu': '🟢'
+            'panda': '🐼'
         };
         
         // 成员名称统一映射（无论后端返回什么name，前端统一显示）
         this.memberNameMap = {
             'alpha': '阿尔法',
-            'weaver': '织巢',
             'duci': '毒刺',
-            'aeterna': '史官',
-            'gulu': '咕噜',
             'panda': '达达'
         };
         
@@ -344,11 +334,8 @@ class ZooDevCenter {
             name: this.memberNameMap[m.id] || m.name
         })) : [
             { id: 'alpha', name: '阿尔法', code_name: 'Alpha', role_display: '首席架构师 · 玄龟', model: 'DeepSeek V4 Flash', avatar_emoji: '🐢' },
-            { id: 'weaver', name: '织巢', code_name: 'Weaver', role_display: '疯狂工程师 · 织巢蚁', model: 'MiniMax-M2.7', avatar_emoji: '🐜' },
             { id: 'duci', name: '毒刺', code_name: 'Duci', role_display: '代码审计师 · 毒刺蝎', model: 'GLM-5.1', avatar_emoji: '🦂' },
-            { id: 'panda', name: '达达', code_name: 'Panda', role_display: '调度者 · 熊猫', model: 'MiniMax-M2.7', avatar_emoji: '🐼' },
-            { id: 'aeterna', name: '史官', code_name: 'Aeterna', role_display: '永恒史官 · 磐石', model: 'MiniMax-M2.7', avatar_emoji: '🪨' },
-            { id: 'gulu', name: '咕噜', code_name: 'Gulu', role_display: '画师/UI设计师 · 咕噜', model: 'MiniMax-M2.7', avatar_emoji: '🟢' }
+            { id: 'panda', name: '达达', code_name: 'Panda', role_display: '调度者 · 熊猫', model: 'MiniMax-M2.7', avatar_emoji: '🐼' }
         ];
         
         let html = '<div class="member-status-grid">';
@@ -391,8 +378,8 @@ class ZooDevCenter {
             const assigneeName = nameSpan.textContent.trim();
             // 简单映射名称到ID
             const nameToId = {
-                '阿尔法': 'alpha', '织巢': 'weaver', '毒刺': 'duci', 
-                '达达': 'panda', '史官': 'aeterna', '史官 (Aeterna)': 'aeterna', '咕噜': 'gulu'
+                '阿尔法': 'alpha', '毒刺': 'duci', 
+                '达达': 'panda'
             };
             
             const id = nameToId[assigneeName] || assigneeName.toLowerCase();
@@ -695,10 +682,7 @@ class ZooDevCenter {
                     <select id="request-assignee-select">
                         <option value="">指派给...</option>
                         <option value="alpha">🐢 阿尔法</option>
-                        <option value="weaver">🐜 织巢</option>
                         <option value="duci">🦂 毒刺</option>
-                        <option value="aeterna">🪨 史官</option>
-                        <option value="gulu">🟢 咕噜</option>
                         <option value="panda">🐼 达达</option>
                     </select>
                     <button onclick="submitRequestRequirement()">添加</button>
@@ -1278,8 +1262,8 @@ function loadIssues() {
             const statusLabels = { 'open': '待处理', 'in_progress': '处理中', 'resolved': '已解决', 'closed': '已关闭' };
             const statusClasses = { 'open': 'open', 'in_progress': 'in-progress', 'resolved': 'resolved', 'closed': 'closed' };
             const agentNames = {
-                'alpha': '🐢 阿尔法', 'weaver': '🐜 织巢', 'duci': '🦂 毒刺',
-                'aeterna': '🪨 史官', 'gulu': '🟢 咕噜', 'panda': '🐼 达达'
+                'alpha': '🐢 阿尔法', 'duci': '🦂 毒刺',
+                'panda': '🐼 达达'
             };
             
             // Build next-status options for quick actions
@@ -1556,10 +1540,8 @@ function loadRequirementsList() {
             
             const agentNames = {
                 'alpha': '🐢 阿尔法',
-                'weaver': '🐜 织巢',
+                'alpha': '🐢 阿尔法',
                 'duci': '🦂 毒刺',
-                'aeterna': '🪨 史官',
-                'gulu': '🟢 咕噜',
                 'panda': '🐼 达达'
             };
             

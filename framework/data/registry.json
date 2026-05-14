@@ -28,32 +28,6 @@
         "personality": "沉稳、深邃、远见卓识"
       }
     },
-    "weaver": {
-      "id": "weaver",
-      "name": "织巢",
-      "code_name": "Weaver",
-      "role": "engineer",
-      "model": "MiniMax-M2.7",
-      "workspace": "/home/afei/workspace/panda/agents/weaver",
-      "status": "active",
-      "created_at": "2026-04-04T21:40:00+08:00",
-      "updated_at": "2026-04-04T21:40:00+08:00",
-      "capabilities": [
-        "code_implementation",
-        "engineering_delivery",
-        "technical_execution",
-        "system_integration",
-        "debugging",
-        "optimization"
-      ],
-      "metadata": {
-        "avatar": "🐜",
-        "title": "疯狂工程师 · 织巢蚁",
-        "description": "负责代码实现与工程落地",
-        "language": "zh-CN",
-        "personality": "勤劳、高效、精益求精"
-      }
-    },
     "duci": {
       "id": "duci",
       "name": "毒刺",
@@ -77,56 +51,6 @@
         "description": "负责安全审计与质量把关",
         "language": "zh-CN",
         "personality": "严谨、敏锐、不留情面"
-      }
-    },
-    "aeterna": {
-      "id": "aeterna",
-      "name": "永恒史官",
-      "code_name": "Aeterna",
-      "role": "historian",
-      "model": "MiniMax-M2.7",
-      "workspace": "/home/afei/workspace/panda/agents/aeterna",
-      "status": "active",
-      "created_at": "2026-04-04T21:40:00+08:00",
-      "updated_at": "2026-04-04T21:40:00+08:00",
-      "capabilities": [
-        "memory_archiving",
-        "knowledge_preservation",
-        "history_tracking",
-        "context_management",
-        "documentation"
-      ],
-      "metadata": {
-        "avatar": "🪨",
-        "title": "永恒史官 · 磐石",
-        "description": "负责记忆归档与知识沉淀",
-        "language": "zh-CN",
-        "personality": "沉稳、可靠、博闻强记"
-      }
-    },
-    "gulu": {
-      "id": "gulu",
-      "name": "咕噜",
-      "code_name": "Gulu",
-      "role": "artist",
-      "model": "MiniMax-M2.7",
-      "workspace": "/home/afei/workspace/panda/agents/gulu",
-      "status": "active",
-      "created_at": "2026-04-04T21:40:00+08:00",
-      "updated_at": "2026-04-04T21:40:00+08:00",
-      "capabilities": [
-        "visual_design",
-        "ui_ux_design",
-        "image_generation",
-        "creative_design",
-        "brand_design"
-      ],
-      "metadata": {
-        "avatar": "🟢",
-        "title": "画师/UI设计师 · 咕噜",
-        "description": "负责视觉呈现",
-        "language": "zh-CN",
-        "personality": "创意、活泼、追求完美"
       }
     },
     "panda": {
@@ -159,7 +83,7 @@
     "core_team": {
       "name": "核心团队",
       "description": "动物园核心成员",
-      "members": ["alpha", "weaver", "duci", "aeterna", "gulu"]
+      "members": ["alpha", "duci", "panda"]
     },
     "admin_team": {
       "name": "管理团队",

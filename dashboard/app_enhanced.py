@@ -50,10 +50,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 # ZooRegistry 提供核心信息，MEMBERS_INFO 补充角色描述、Emoji、种族等展示数据
 MEMBERS_INFO = {
     "alpha":   {"name": "阿尔法 Alpha", "role": "首席架构师", "emoji": "🐢", "species": "玄龟"},
-    "weaver":  {"name": "织巢 Weaver", "role": "疯狂工程师", "emoji": "🐜", "species": "蚂蚁"},
     "duci":    {"name": "毒刺 Duci",   "role": "无情审计师", "emoji": "🦂", "species": "蝎子"},
-    "aeterna": {"name": "埃特娜 Aeterna", "role": "永恒史官", "emoji": "🪨", "species": "黑曜石"},
-    "gulu":    {"name": "咕噜 Gulu",   "role": "美术设计师", "emoji": "🟢", "species": "史莱姆"},
     "panda":   {"name": "达达 Panda",  "role": "中枢调度大管家", "emoji": "🐼", "species": "熊猫"},
 }
 

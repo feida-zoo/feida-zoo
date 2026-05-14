@@ -11,10 +11,7 @@ from typing import Dict, Optional
 # 静态 Label 路由表（不依赖 session_key）
 _DEFAULT_LABEL_MAP = {
     "alpha":   {"label": "alpha-zoomesh",   "model": "deepseek/deepseek-v4-flash"},
-    "weaver":  {"label": "weaver-zoomesh",  "model": "minimax/MiniMax-M2.7"},
     "duci":    {"label": "duci-zoomesh",    "model": "glm-5.1"},
-    "aeterna": {"label": "aeterna-zoomesh", "model": "minimax/MiniMax-M2.7"},
-    "gulu":    {"label": "gulu-zoomesh",    "model": "minimax/MiniMax-M2.7"},
     "panda":   {"label": "panda-zoomesh",   "model": "minimax/MiniMax-M2.7"},
 }
 
