@@ -1270,12 +1270,7 @@ body {
 #tab-chat.tab-content {
     overflow: hidden;
     height: calc(100vh - 190px);
-    display: flex;
     flex-direction: column;
-}
-
-#tab-chat.tab-content.active {
-    display: flex;
 }
 .chat-tab-container {
     display: flex;
