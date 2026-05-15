@@ -945,6 +945,47 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             issues.append(issue)
             self._save_issues(issues)
 
+            # 推送到 ZooMesh 触发 Pipeline（基于 Duci 审计设计要求）
+            pipeline_id = f"pl_{uuid.uuid4().hex[:8]}"
+            pipeline_payload = {
+                "type": "pipeline_request",
+                "task_id": pipeline_id,
+                "requirement_id": issue["id"],
+                "title": title,
+                "description": issue["description"],
+                "assignee": issue["assignee"] or "alpha",
+                "source": "issue",
+                "timestamp": now
+            }
+            try:
+                resp = requests.post(
+                    f"{ZOO_MESH_HTTP}/api/chat",
+                    json={
+                        'from': 'dashboard',
+                        'content': f"@panda 新Pipeline请求: {json.dumps(pipeline_payload, ensure_ascii=False)}"
+                    },
+                    timeout=5
+                )
+                if resp.status_code == 200:
+                    issue['pipeline_id'] = pipeline_id
+                    issue['pipeline_status'] = 'pushed'
+                else:
+                    issue['pipeline_status'] = 'push_failed'
+                    print(f"ZooMesh push 返回非200: {resp.status_code}")
+            except requests.exceptions.Timeout:
+                issue['pipeline_status'] = 'push_failed'
+                print(f"ZooMesh push 超时（5s）")
+            except Exception as e:
+                issue['pipeline_status'] = 'push_failed'
+                print(f"ZooMesh push 异常: {e}")
+            # 二次保存 pipeline 字段，失败降级（不影响 issue 已创建的事实）
+            try:
+                self._save_issues(issues)
+            except Exception as e:
+                print(f"保存 pipeline 字段失败（降级）: {e}")
+                issue.pop('pipeline_id', None)
+                issue.pop('pipeline_status', None)
+
             self._send_json(issue)
         except Exception as e:
             self.send_response(500)
