@@ -945,33 +945,6 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             issues.append(issue)
             self._save_issues(issues)
 
-            # 自动推送到 ZooMesh 触发 Pipeline
-            try:
-                import uuid as _uuid
-                pipeline_id = f"pl_{_uuid.uuid4().hex[:8]}"
-                pipeline_payload = {
-                    "type": "pipeline_request",
-                    "task_id": pipeline_id,
-                    "requirement_id": issue["id"],
-                    "title": title,
-                    "description": issue["description"],
-                    "assignee": issue["assignee"] or "alpha",
-                    "priority": issue["priority"],
-                    "source": "issue",
-                    "timestamp": now
-                }
-                requests.post(
-                    f"{ZOO_MESH_HTTP}/api/chat",
-                    json={
-                        'from': 'dashboard',
-                        'content': f"@panda 新Pipeline请求: {json.dumps(pipeline_payload, ensure_ascii=False)}"
-                    },
-                    timeout=5
-                )
-                issue['pipeline_id'] = pipeline_id
-            except Exception as e:
-                print(f"ZooMesh Pipeline 推送失败: {e}")
-
             self._send_json(issue)
         except Exception as e:
             self.send_response(500)
