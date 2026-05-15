@@ -1164,7 +1164,7 @@ class ZooDevCenter {
         const map = {
             'online': '🟢 在线',
             'executing': '🟢 在线',
-            'idle': '🟡 空闲',
+            'idle': '🟢 空闲',
             'sleeping': '💤 休眠',
             'dead': '🔴 离线',
             'terminated': '🔴 离线',

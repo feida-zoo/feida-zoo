@@ -1266,11 +1266,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
         """获取看板数据，对接完整 Harness Pipeline"""
         kanban_tasks = {status: [] for status in KANBAN_STATUS}
         
-        # 1. 从 task_tracker.json 加载已有任务（已按新 KANBAN_STATUS 键分配）
-        tracker_tasks = self.task_manager.get_kanban_tasks()
-        for col_key, tasks in tracker_tasks.items():
-            if col_key in kanban_tasks:
-                kanban_tasks[col_key].extend(tasks)
+        # 1. （已弃用）task_tracker.json — 历史快照数据，2026-05-16起看板完全由 requirement + pipeline 驱动
+        #    详见 Duci 审计: alpha_design_p2_kanban_sync.md
         
         # 2. 从 requirements.json 加载需求
         requirements = self._get_requirements()
@@ -1331,7 +1328,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 'is_from_requirements': True
             })
         
-        # 3. 从 Pipeline 状态文件读取活跃管道（补全无对应 requirement 的管道）
+        # 3. 从 Pipeline 状态文件读取活跃管道（补全无对应 requirement 的管道，编号保留避免 diff 过大）
         active_pipelines = self._get_active_pipelines()
         for task_id, pl_info in active_pipelines.items():
             # 检查是否已被 requirements 覆盖
