@@ -1164,7 +1164,7 @@ class ZooDevCenter {
         const map = {
             'online': '🟢 在线',
             'executing': '🟢 在线',
-            'idle': '🟡 空闲',
+            'idle': '🟢 空闲',
             'sleeping': '💤 休眠',
             'dead': '🔴 离线',
             'terminated': '🔴 离线',
@@ -1186,9 +1186,19 @@ function loadChat() {
     const div = document.getElementById('chat-messages');
     if (!div) return;
     
+    // 加载中状态
+    div.innerHTML = '<div class="chat-loading"><div class="spinner-small"></div><p>正在加载...</p></div>';
+    
     fetch('/api/chat')
-        .then(r => r.json())
+        .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
         .then(msgs => {
+            if (!msgs || msgs.length === 0) {
+                div.innerHTML = '<div class="chat-empty"><i class="fas fa-comments"></i><p>暂无聊天消息</p></div>';
+                return;
+            }
             div.innerHTML = msgs.map(m => {
                 const hasMention = m.mentioned ? '<span class="mention-badge">📨 已转发</span>' : '';
                 return `<div class="chat-message-item">
@@ -1200,7 +1210,10 @@ function loadChat() {
             }).join('');
             div.scrollTop = div.scrollHeight;
         })
-        .catch(e => console.error('loadChat error:', e));
+        .catch(e => {
+            console.error('loadChat error:', e);
+            div.innerHTML = '<div class="chat-error"><i class="fas fa-exclamation-triangle"></i><p>加载失败</p><button onclick="loadChat()" class="btn-retry">重试</button></div>';
+        });
 }
 
 function sendChat() {

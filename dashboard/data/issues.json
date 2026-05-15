@@ -22,5 +22,65 @@
     "updated_at": "2026-05-15T21:15:00.000000",
     "resolved_at": "2026-05-15T21:15:00.000000",
     "source": "dashboard"
+  },
+  {
+    "id": "a071db45-94a7-4a37-ba28-b5a1471cdcc2",
+    "title": "聊天室界面无数据显示",
+    "description": "",
+    "priority": "P1",
+    "status": "open",
+    "assignee": "alpha",
+    "created_at": "2026-05-15T21:20:48.564963",
+    "updated_at": "2026-05-15T21:20:48.564963",
+    "resolved_at": null,
+    "source": "dashboard"
+  },
+  {
+    "id": "3fa2746d-4213-4400-82ef-49d7671e9e43",
+    "title": "成员管理里空闲状态不应该是黄灯,应该是绿灯",
+    "description": "",
+    "priority": "P3",
+    "status": "open",
+    "assignee": "alpha",
+    "created_at": "2026-05-15T21:21:43.206653",
+    "updated_at": "2026-05-15T21:21:43.206653",
+    "resolved_at": null,
+    "source": "dashboard"
+  },
+  {
+    "id": "1fc642f5-81b5-4b57-8793-bfaceb0e2025",
+    "title": "在问题管理页面提交问题,没有发送到zoomesh去触发harness工作流去完成修复",
+    "description": "",
+    "priority": "P0",
+    "status": "open",
+    "assignee": "alpha",
+    "created_at": "2026-05-15T21:23:05.611342",
+    "updated_at": "2026-05-15T21:23:05.611342",
+    "resolved_at": null,
+    "source": "dashboard"
+  },
+  {
+    "id": "4539cf1c-70cf-4a0b-a0ca-cc8e97d20da8",
+    "title": "成员管理的tab页放最后,让需求管理和问题管理紧挨着",
+    "description": "",
+    "priority": "P3",
+    "status": "open",
+    "assignee": "alpha",
+    "created_at": "2026-05-15T21:24:05.667231",
+    "updated_at": "2026-05-15T21:24:05.667231",
+    "resolved_at": null,
+    "source": "dashboard"
+  },
+  {
+    "id": "4b1f8fb2-9dcf-492b-be51-5ac15c17d8a4",
+    "title": "看板tab页的数据不会随着实际工作流变化",
+    "description": "请重新设计看板页的现实逻辑,需要与工作流、需求管理、问题管理联动起来,注意以下问题:\n1.当前看板也还残留着历史内容没有清理掉\n2.新增的需求和问题没有在看板页上呈现\n3.工作流走到下一步的时候,看板页上的项目不会随之改变状态",
+    "priority": "P2",
+    "status": "open",
+    "assignee": "alpha",
+    "created_at": "2026-05-15T21:27:59.310606",
+    "updated_at": "2026-05-15T21:27:59.310606",
+    "resolved_at": null,
+    "source": "dashboard"
   }
 ]
