@@ -30,14 +30,13 @@ logger = logging.getLogger("zoo_mesh")
 
 
 # ── Pipeline Phase 定义 ──────────────────────────────────────────────────────────
-PHASES = ["request", "validate", "design", "ui_design", "review", "develop", "test", "audit", "final_check", "deliver"]
+PHASES = ["request", "validate", "design", "review", "develop", "test", "audit", "final_check", "deliver"]
 
 # 阶段 → 下一阶段映射
 PHASE_TRANSITION_MAP = {
     "request": "validate",
     "validate": "design",
-    "design": "ui_design",
-    "ui_design": "review",
+    "design": "review",
     "review": "develop",
     "develop": "test",
     "test": "audit",
@@ -51,7 +50,6 @@ PHASE_DEFAULT_AGENT = {
     "request": "panda",
     "validate": "alpha",       # 架构师评估需求边界与可行性
     "design": "alpha",
-    "ui_design": "alpha",
     "review": "duci",
     "develop": "alpha",         # 阿尔法直连 Claude Code 执行开发
     "test": "duci",
@@ -388,24 +386,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         logger.warning(f"找不到 pipeline_id={pipeline_id} 对应的 requirement")
         return
 
-    # ⚠️ 阶段完成 Agent 身份校验：只有当前阶段指定的 Agent 才能推进
     current_status = cur_req.get("status", "request")
-    expected_agent = cur_req.get("assignee") or _pick_phase_agent(current_status)
-    if agent_id != expected_agent:
-        logger.warning(
-            f"⛔ 身份校验失败: agent={agent_id} 尝试完成 {current_status} 阶段，"
-            f"但该阶段只能由 {expected_agent} 完成"
-        )
-        chat.append({
-            "type": "chat_message",
-            "from": "pipeline",
-            "content": (
-                f"⛔ 阶段推进被拒绝: {agent_id} 无法完成 {current_status} 阶段，"
-                f"需要 {expected_agent} 来执行"
-            ),
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        })
-        return
     next_phase = _get_next_phase(current_status)
 
     if not next_phase:
