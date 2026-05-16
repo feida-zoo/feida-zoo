@@ -215,10 +215,10 @@ def _enqueue_pending(pipeline_id: str, phase: str, assignee: str, priority: str,
     _save_pending_queue(queue)
 
 
-def _pop_next_pending(agent_id: str, phase: str) -> dict | None:
-    """从 pending 队列弹出指定 agent+phase 的最优任务（按优先级+时间）。"""
+def _pop_next_pending(agent_id: str) -> dict | None:
+    """从 pending 队列弹出指定 agent 的优先级最高任务（不限 phase）。"""
     queue = _load_pending_queue()
-    candidates = [t for t in queue if t.get("assignee") == agent_id and t.get("phase") == phase]
+    candidates = [t for t in queue if t.get("assignee") == agent_id]
     if not candidates:
         return None
     priority_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3, "": 4}
@@ -230,8 +230,8 @@ def _pop_next_pending(agent_id: str, phase: str) -> dict | None:
 
 
 def _create_review_file(pipeline_id: str, phase: str) -> None:
-    """创建 review/review_test_pl_xxx.json（status: pending）。"""
-    review_file = Path(MESH_DIR) / "pipeline" / f"review_{pipeline_id}.json"
+    """创建 review/review_test_pl_xxx.json（status: pending）。文件名含阶段前缀。"""
+    review_file = Path(MESH_DIR) / "pipeline" / f"{phase}_{pipeline_id}.json"
     if not review_file.exists():
         with open(review_file, "w") as f:
             json.dump({
@@ -244,9 +244,9 @@ def _create_review_file(pipeline_id: str, phase: str) -> None:
                 "reviewed_at": None,
             }, f, indent=2)
 
-def _read_review_result(pipeline_id: str) -> dict | None:
-    """读取审查结果。返回 None 如果文件不存在或未完成。"""
-    review_file = Path(MESH_DIR) / "pipeline" / f"review_{pipeline_id}.json"
+def _read_review_result(pipeline_id: str, phase: str) -> dict | None:
+    """读取审查结果（按阶段区分配置文件）。返回 None 如果文件不存在或未完成。"""
+    review_file = Path(MESH_DIR) / "pipeline" / f"{phase}_{pipeline_id}.json"
     if not review_file.exists():
         return None
     try:
@@ -259,8 +259,8 @@ def _read_review_result(pipeline_id: str) -> dict | None:
         return None
 
 
-def _get_phase_template(phase: str) -> str:
-    """根据阶段返回对应的指令模板。"""
+def _get_phase_template(phase: str, pipeline_id: str = "") -> str:
+    """根据阶段返回对应的指令模板（pipeline_id 为可选插值参数）。"""
     templates = {
         "validate": (
             "【设计产出要求】\n"
@@ -292,7 +292,10 @@ def _get_phase_template(phase: str) -> str:
             "自测所有用例通过后回复 phase_complete:{pipeline_id}\n"
         ),
     }
-    return templates.get(phase, "")
+    t = templates.get(phase, "")
+    if pipeline_id:
+        t = t.replace("{pipeline_id}", pipeline_id)
+    return t
 
 
 def _publish_phase_advancement(title: str, pipeline_id: str, from_phase: str, to_phase: str) -> None:
@@ -409,14 +412,9 @@ def _on_wakeup_callback(agent_id: str):
             if agent_id != "panda":
                 _send_agent_notification(agent_id, body)
             else:
-                # Panda 的其他消息 — 尝试匹配 requirements（避免打断现有逻辑）
-                reqs = _load_requirements()
-                for req in reqs:
-                    pid = req.get("pipeline_id", "")
-                    if pid and (pid in body or pid in msg_from):
-                        _handle_phase_complete(body, agent_id)
-                        _move_to_processed(msg_file)
-                        break
+                # Panda 的未分类消息 — 仅通知（类型 3 已从设计文档彻底移除）
+                logger.info(f"Panda 未分类消息，仅通知: {body[:80]}")
+                _send_agent_notification(agent_id, body)
 
     except Exception as e:
         logger.warning(f"on_wakeup({agent_id}) 处理失败: {e}")
@@ -635,7 +633,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
 
     # Pipeline V2: 检查审查结果（review/review_test/audit 阶段推进时）
     if current_status in ("review", "review_test", "test"):
-        review_data = _read_review_result(pipeline_id)
+        review_data = _read_review_result(pipeline_id, current_status)
         if review_data:
             result = review_data.get("result")
             if result == "reject":
@@ -686,7 +684,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
 
     # 通知下一阶段的 Agent
     next_agent = cur_req.get("assignee") or _pick_phase_agent(next_phase)
-    template = _get_phase_template(next_phase)
+    template = _get_phase_template(next_phase, pipeline_id)
     next_msg = (
         f"[Pipeline] Phase: {next_phase}\n"
         f"task_id: {pipeline_id}\n"
@@ -714,14 +712,14 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
 
     # Pipeline V2: 检查 pending 队列弹出下一任务
     try:
-        pending = _pop_next_pending(next_agent, next_phase)
+        pending = _pop_next_pending(next_agent)
         if pending:
             pid = pending["pipeline_id"]
             logger.info(f"📤 从 pending 队列弹出 {pid} 给 {next_agent} (phase={next_phase})")
             reqs2 = _load_requirements()
             for r in reqs2:
                 if r.get("pipeline_id") == pid and r.get("status") == next_phase:
-                    template2 = _get_phase_template(next_phase)
+                    template2 = _get_phase_template(next_phase, pid)
                     msg = (
                         f"[Pipeline] Phase: {next_phase}\n"
                         f"task_id: {pid}\n"

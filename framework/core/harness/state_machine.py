@@ -32,7 +32,7 @@ class StateMachine:
         "design":      ["ui_design", "cancelled", "timed_out", "escalated"],
         "ui_design":   ["review", "design", "cancelled", "timed_out", "escalated"],
         "review":      ["design", "develop", "develop_wt", "cancelled", "timed_out", "escalated"],
-        "develop":     ["test", "cancelled", "timed_out", "escalated"],
+        "develop":     ["develop_wt", "test", "cancelled", "timed_out", "escalated"],
         "develop_wt":  ["review_test", "cancelled", "timed_out", "escalated"],
         "review_test": ["develop_code", "develop_wt", "cancelled", "timed_out", "escalated"],
         "develop_code":["test", "cancelled", "timed_out", "escalated"],
