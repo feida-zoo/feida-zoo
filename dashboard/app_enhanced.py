@@ -61,34 +61,43 @@ PIPELINE_DIR = PANDA_MESH_DIR / "pipeline"
 # Pipeline 阶段 → 看板列映射
 # 完整 9 阶段 + 终态/异常
 PIPELINE_PHASE_TO_COLUMN = {
-    "request": "request",
-    "validate": "request",
-    "design": "design",
-    "ui_design": "ui_design",
-    "review": "review",
-    "develop": "develop",
-    "test": "test",
-    "audit": "audit_final",
+    "request":     "request",
+    "validate":    "request",
+    "design":      "design",
+    "ui_design":   "ui_design",
+    "review":      "review",
+    "develop_wt":  "develop_wt",
+    "review_test": "review_test",
+    "develop_code":"develop_code",
+    "develop":     "develop",
+    "test":        "test",
+    "audit":       "audit_final",
     "final_check": "audit_final",
-    "deliver": "done",
-    "done": "done",
-    "cancelled": "exception",
-    "timed_out": "exception",
-    "escalated": "exception",
+    "deliver":     "done",
+    "done":        "done",
+    "cancelled":   "exception",
+    "timed_out":   "exception",
+    "escalated":   "exception",
 }
 
 # 看板列定义（8列，映射完整 Pipeline）
 # 说明：4象限展开为8列以覆盖 Pipeline 所有阶段
 KANBAN_STATUS = {
-    "request": "📥 需求池",       # request + validate
-    "design": "🎨 设计中",        # design
-    "ui_design": "🎨 UI设计中",   # ui_design
-    "review": "📋 审核中",        # review
-    "develop": "🔧 开发中",       # develop
-    "test": "🧪 测试中",          # test
-    "audit_final": "🔍 审计中",   # audit + final_check
-    "done": "✅ 已完成",          # deliver + done
-    "exception": "⚠️ 异常"       # cancelled + escalated + timed_out
+    "request":     "📥 需求池",       # request
+    "validate":    "📥 需求池",       # validate
+    "design":      "🎨 设计中",        # design
+    "ui_design":   "🎨 UI设计中",     # ui_design
+    "review":      "📋 审核中",        # review
+    "develop_wt":  "🧪 测试编写中",   # develop_wt
+    "review_test": "📋 测试审核中",   # review_test
+    "develop_code":"🔧 开发中",       # develop_code
+    "develop":     "🔧 开发中",       # develop (旧兼容)
+    "test":        "🧪 测试中",       # test
+    "audit":       "🔍 审计中",       # audit
+    "final_check": "🔍 审计中",       # final_check
+    "deliver":     "✅ 已完成",       # deliver
+    "done":        "✅ 已完成",       # done
+    "exception":   "⚠️ 异常"        # cancelled + escalated + timed_out
 }
 
 # SSE 客户端管理器
@@ -1290,6 +1299,9 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                         'design': 'design',
                         'ui_design': 'ui_design',
                         'review': 'review',
+                        'develop_wt': 'develop_wt',
+                        'review_test': 'review_test',
+                        'develop_code': 'develop_code',
                         'develop': 'develop',
                         'test': 'test',
                         'audit': 'audit_final', 'final_check': 'audit_final',
@@ -1304,6 +1316,9 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                     'design': 'design',
                     'ui_design': 'ui_design',
                     'review': 'review',
+                    'develop_wt': 'develop_wt',
+                    'review_test': 'review_test',
+                    'develop_code': 'develop_code',
                     'develop': 'develop',
                     'test': 'test',
                     'audit': 'audit_final', 'final_check': 'audit_final',
