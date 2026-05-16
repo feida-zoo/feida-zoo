@@ -30,13 +30,14 @@ logger = logging.getLogger("zoo_mesh")
 
 
 # ── Pipeline Phase 定义 ──────────────────────────────────────────────────────────
-PHASES = ["request", "validate", "design", "review", "develop", "test", "audit", "final_check", "deliver"]
+PHASES = ["request", "validate", "design", "ui_design", "review", "develop", "test", "audit", "final_check", "deliver"]
 
 # 阶段 → 下一阶段映射
 PHASE_TRANSITION_MAP = {
     "request": "validate",
     "validate": "design",
-    "design": "review",
+    "design": "ui_design",
+    "ui_design": "review",
     "review": "develop",
     "develop": "test",
     "test": "audit",
@@ -50,6 +51,7 @@ PHASE_DEFAULT_AGENT = {
     "request": "panda",
     "validate": "alpha",       # 架构师评估需求边界与可行性
     "design": "alpha",
+    "ui_design": "alpha",
     "review": "duci",
     "develop": "alpha",         # 阿尔法直连 Claude Code 执行开发
     "test": "duci",
@@ -94,7 +96,7 @@ def _save_requirements(reqs: list) -> None:
 def _publish_phase_advancement(title: str, pipeline_id: str, from_phase: str, to_phase: str) -> None:
     """向 chat 频道发布阶段推进消息（dashboard SSE 可见）。"""
     emoji_map = {
-        "request": "📥", "validate": "🔍", "design": "🎨", "review": "📋",
+        "request": "📥", "validate": "🔍", "design": "🎨", "ui_design": "🎨", "review": "📋",
         "develop": "🔧", "test": "🧪", "audit": "🔐", "final_check": "✅", "deliver": "🚀",
         "done": "🏁", "cancelled": "❌", "escalated": "⚠️",
     }
