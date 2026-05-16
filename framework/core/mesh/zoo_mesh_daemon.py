@@ -111,6 +111,17 @@ def _save_requirements(reqs: list) -> None:
 
 PHASE_COMPLETE_SIGNALS = {"phase_complete:", "PI_DONE:", "pipeline_ack:"}
 
+
+def _is_phase_complete_signal(body: str) -> bool:
+    """检查 body 第一个 token 是否以 phase_complete 信号开头（避免匹配指令文本）。"""
+    first_line = body.split("\n")[0] if "\n" in body else body
+    first_token = first_line.split()[0] if first_line.strip() else ""
+    for sig in PHASE_COMPLETE_SIGNALS:
+        if first_token.startswith(sig):
+            return True
+    return False
+
+
 _NOTIFY_LOG: set = set()
 
 
@@ -402,7 +413,7 @@ def _on_wakeup_callback(agent_id: str):
                 continue
 
             # 类型 2：明确信号的 phase_complete（所有 agent 均可处理）
-            if any(sig in body for sig in PHASE_COMPLETE_SIGNALS):
+            if _is_phase_complete_signal(body):
                 _handle_phase_complete(body, agent_id)
                 _move_to_processed(msg_file)
                 continue
@@ -487,7 +498,10 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
 
     if cur_req:
         current_status = cur_req.get("status", "request")
-        logger.info(f"  需求当前状态: {current_status}")
+        # 补充缺失的 assignee
+        if not cur_req.get("assignee"):
+            cur_req["assignee"] = assignee
+        logger.info(f"  需求当前状态: {current_status}, assignee={cur_req.get('assignee','')}")
     else:
         # 尚未创建对应 requirement（dashboard 创建消息转发至此）
         logger.info("  未找到对应 requirement，创建中")

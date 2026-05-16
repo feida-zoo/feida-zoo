@@ -38,12 +38,6 @@ let crashCount = 0;
 
 const NOTIFY_PORT = parseInt(process.env.ZOO_NOTIFY_PORT || "18794", 10);
 
-const AGENT_SESSION_KEYS: Record<string, string> = {
-  alpha: "agent:alpha:qqbot:direct:639c0438dcc3cca674064f1affbae57d",
-  duci: "agent:duci:qqbot:direct:9bf8d96baab8d6caf91fa0b6118c42cb",
-  panda: "agent:main:qqbot:direct:c0b6f9464e1c6191fde7a35065cea549",
-};
-
 function startNotifyServer(api: OpenClawPluginApi): void {
   const http = require("node:http");
   const server = http.createServer((req: any, res: any) => {
@@ -54,29 +48,23 @@ function startNotifyServer(api: OpenClawPluginApi): void {
         try {
           const data = JSON.parse(body);
           const agent = data.agent as string;
-          const sessionKey = AGENT_SESSION_KEYS[agent];
-          if (sessionKey) {
-            const msg = `📥 ZooMesh 通知: [${data.phase || "?"}] ${data.pipeline_id || ""}\n${(data.message || "").slice(0, 300)}`;
-            api.logger.info(
-              `${LOG_PREFIX} 🔔 转发通知到 ${agent}: ${data.pipeline_id || ""}`,
+          const phase = data.phase || "?";
+          const pid = data.pipeline_id || "";
+          const msg = `📥 ZooMesh 通知: [${phase}] ${pid}\n${(data.message || "").slice(0, 250)}`;
+
+          api.logger.info(
+            `${LOG_PREFIX} 🔔 转发通知到 ${agent}: ${pid}`,
+          );
+
+          const { execSync } = require("node:child_process");
+          const cmd = `/opt/homebrew/bin/openclaw message send --channel qqbot --target ${agent} -m ${JSON.stringify(msg)} 2>/dev/null`;
+          try {
+            execSync(cmd, { timeout: 5000, stdio: "pipe" });
+            api.logger.info(`${LOG_PREFIX} ✅ 通知 ${agent} 发送成功`);
+          } catch (e: any) {
+            api.logger.warn(
+              `${LOG_PREFIX} 通知 ${agent} 发送失败: ${e.stderr?.toString().slice(0, 100) || e.message}`,
             );
-            // 使用 fetch 调用 OpenClaw REST API 发送消息
-            const gatewayUrl =
-              process.env.OPENCLAW_GATEWAY_URL || "http://127.0.0.1:18789";
-            fetch(`${gatewayUrl}/api/message`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                sessionKey,
-                message: msg,
-              }),
-            }).catch((e: any) =>
-              api.logger.warn(
-                `${LOG_PREFIX} 通知 ${agent} 发送失败: ${e.message}`,
-              ),
-            );
-          } else {
-            api.logger.warn(`${LOG_PREFIX} 未知 agent: ${agent}`);
           }
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ status: "ok" }));

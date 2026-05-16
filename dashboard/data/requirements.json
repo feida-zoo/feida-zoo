@@ -1,45 +1,5 @@
 [
   {
-    "id": "d641ef3f-40b9-4218-903b-325fcd9cc55d",
-    "title": "测试需求: 优化登录模块",
-    "description": "需要增加双因子认证",
-    "assignee": "weaver",
-    "status": "done",
-    "phase": "request",
-    "created_at": "2026-05-13T22:39:07.242846",
-    "pipeline_id": "pl_d641ef3f",
-    "source": "dashboard_requirement",
-    "moved_to_inbox": false,
-    "updated_at": "2026-05-13T22:43:02.434221",
-    "completed_at": "2026-05-13T22:43:02.434229"
-  },
-  {
-    "id": "b0d935ec-e429-4ce2-80e4-dbfbef1873a6",
-    "title": "InboxWatcher验证测试",
-    "description": "测试InboxWatcher回调是否正确触发",
-    "assignee": "weaver",
-    "status": "done",
-    "phase": "done",
-    "created_at": "2026-05-13T22:57:19.320317",
-    "pipeline_id": "pl_b0d935ec",
-    "source": "dashboard_requirement",
-    "updated_at": "2026-05-13T22:57:36",
-    "completed_at": "2026-05-13T22:57:36"
-  },
-  {
-    "id": "df5d3da6-1f23-454e-ab45-4941a46772c6",
-    "title": "InboxWatcher路径修复验证",
-    "description": "验证修复后的InboxWatcher能正确触发Pipeline",
-    "assignee": "weaver",
-    "status": "done",
-    "phase": "done",
-    "created_at": "2026-05-13T22:58:53.616312",
-    "pipeline_id": "pl_df5d3da6",
-    "source": "dashboard_requirement",
-    "updated_at": "2026-05-13T22:59:11",
-    "completed_at": "2026-05-13T22:59:11"
-  },
-  {
     "id": "c9c58f0a-ffb5-4576-90d1-65843b232964",
     "title": "成员管理独立Tab页",
     "description": "在仪表盘增加一个独立的「成员管理」Tab，展示所有成员在线状态、角色、专属大脑模型等信息，支持查看各成员实时状态。",
@@ -112,114 +72,6 @@
     "completed_at": "2026-05-14T11:54:27.367841"
   },
   {
-    "id": "80a506f4-28e6-4c90-9dd4-fa31dc878e17",
-    "title": "TDD测试问题",
-    "description": "自动化测试创建的issue",
-    "assignee": "alpha",
-    "status": "validate",
-    "phase": "validate",
-    "pipeline_id": "pl_11de64da",
-    "created_at": "2026-05-15T22:28:06.511074",
-    "source": "pipeline_auto",
-    "updated_at": "2026-05-16T13:12:50"
-  },
-  {
-    "id": "eb7dbea8-1094-40b6-b4b9-f24538881673",
-    "title": "TDD测试问题",
-    "description": "自动化测试创建的issue",
-    "assignee": "alpha",
-    "status": "validate",
-    "phase": "validate",
-    "pipeline_id": "pl_a21e757e",
-    "created_at": "2026-05-15T22:28:14.340538",
-    "source": "pipeline_auto",
-    "updated_at": "2026-05-16T13:12:50"
-  },
-  {
-    "id": "c571195d-8d2a-451a-aea9-6c60a1bf7ebc",
-    "title": "curl测试",
-    "description": "",
-    "assignee": "alpha",
-    "status": "validate",
-    "phase": "validate",
-    "pipeline_id": "pl_c338e089",
-    "created_at": "2026-05-15T22:28:53.026102",
-    "source": "pipeline_auto",
-    "updated_at": "2026-05-16T13:12:50"
-  },
-  {
-    "id": "f6147e42-6c37-4539-9b57-4cc468fe3617",
-    "title": "curltest",
-    "description": "",
-    "assignee": "alpha",
-    "status": "validate",
-    "phase": "validate",
-    "pipeline_id": "pl_9afd02b4",
-    "created_at": "2026-05-15T22:29:16.671295",
-    "source": "pipeline_auto",
-    "updated_at": "2026-05-16T13:12:50"
-  },
-  {
-    "id": "b97cde6b-bd38-43c2-8f7f-ffcd5408f9fe",
-    "title": "requests库测试",
-    "description": "",
-    "assignee": "alpha",
-    "status": "validate",
-    "phase": "validate",
-    "pipeline_id": "pl_0744883c",
-    "created_at": "2026-05-15T22:29:20.135799",
-    "source": "pipeline_auto",
-    "updated_at": "2026-05-16T13:12:50"
-  },
-  {
-    "id": "11a902f7-eec4-40a5-b26b-e1e50f923c5a",
-    "title": "P0Test_AutoPush",
-    "description": "",
-    "assignee": "alpha",
-    "status": "validate",
-    "phase": "validate",
-    "pipeline_id": "pl_d25a6b02",
-    "created_at": "2026-05-15T22:29:36.987937",
-    "source": "pipeline_auto",
-    "updated_at": "2026-05-16T13:12:50"
-  },
-  {
-    "id": "359fc98c-51f8-4428-b450-fb10a2054bb4",
-    "title": "P0Test_AutoPush_v2",
-    "description": "",
-    "assignee": "alpha",
-    "status": "validate",
-    "phase": "validate",
-    "pipeline_id": "pl_6af47fbd",
-    "created_at": "2026-05-15T22:29:36.990944",
-    "source": "pipeline_auto",
-    "updated_at": "2026-05-16T13:12:50"
-  },
-  {
-    "id": "b04d83ea-1332-4b0d-ae1d-3f5bf773896b",
-    "title": "验收:P0联动",
-    "description": "",
-    "assignee": "alpha",
-    "status": "validate",
-    "phase": "validate",
-    "pipeline_id": "pl_36ff3f01",
-    "created_at": "2026-05-15T22:31:51.426054",
-    "source": "pipeline_auto",
-    "updated_at": "2026-05-16T13:12:50"
-  },
-  {
-    "id": "99d7b05d-113d-4226-9f89-09bffd8f4ef7",
-    "title": "验收:P0联动",
-    "description": "",
-    "assignee": "alpha",
-    "status": "validate",
-    "phase": "validate",
-    "pipeline_id": "pl_d4fd9d7c",
-    "created_at": "2026-05-15T22:32:02.270122",
-    "source": "pipeline_auto",
-    "updated_at": "2026-05-16T13:12:50"
-  },
-  {
     "id": "4b17d3cf-8ce1-4a0a-a457-91658a79722a",
     "title": "统计页不需要生态成员",
     "description": "统计页的生态成员栏和成员管理里信息重复了,并且压缩了统计页其他栏目,导致UI变形",
@@ -229,7 +81,20 @@
     "pipeline_id": "pl_bb50c26a",
     "created_at": "2026-05-16T10:43:21.198734",
     "source": "pipeline_auto",
-    "updated_at": "2026-05-16T13:15:21",
-    "completed_at": "2026-05-16T13:15:21"
+    "updated_at": "2026-05-16T10:59:05",
+    "completed_at": "2026-05-16T10:59:05"
+  },
+  {
+    "id": "18083bdc-4815-4bdf-aa71-0bc367078437",
+    "title": "动物园仪表盘自启动",
+    "description": "现状:执行openclaw gateway restart之后,动物园仪表盘需要手动拉起\nTOBE:动物园仪表盘随着zoo pipeline插件一起启动,与openclaw生命周期保持一致",
+    "assignee": "alpha",
+    "status": "review",
+    "phase": "review",
+    "created_at": "2026-05-16T14:11:37.755548",
+    "pipeline_id": "pl_18083bdc",
+    "source": "dashboard_requirement",
+    "updated_at": "2026-05-16T14:19:25",
+    "completed_at": null
   }
 ]

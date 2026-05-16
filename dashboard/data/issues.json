@@ -79,10 +79,10 @@
     "status": "resolved",
     "assignee": "alpha",
     "created_at": "2026-05-16T10:43:21.198734",
-    "updated_at": "2026-05-16T11:00:00",
-    "resolved_at": "2026-05-16T11:00:00",
+    "updated_at": "2026-05-16T10:59:05",
+    "resolved_at": "2026-05-16T10:59:05",
     "source": "dashboard",
     "pipeline_id": "pl_bb50c26a",
-    "pipeline_status": "pushed"
+    "pipeline_status": "done"
   }
 ]
