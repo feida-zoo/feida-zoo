@@ -30,35 +30,39 @@ logger = logging.getLogger("zoo_mesh")
 
 
 # ── Pipeline Phase 定义 ──────────────────────────────────────────────────────────
-PHASES = ["request", "validate", "design", "ui_design", "review", "develop", "test", "audit", "final_check", "deliver"]
+PHASES = ["request", "validate", "design", "ui_design", "review", "develop_wt", "review_test", "develop_code", "test", "audit", "final_check", "deliver"]
 
 # 阶段 → 下一阶段映射
 PHASE_TRANSITION_MAP = {
-    "request": "validate",
-    "validate": "design",
-    "design": "ui_design",
-    "ui_design": "review",
-    "review": "develop",
-    "develop": "test",
-    "test": "audit",
-    "audit": "final_check",
+    "request":     "validate",
+    "validate":    "design",
+    "design":      "ui_design",
+    "ui_design":   "review",
+    "review":      "develop_wt",
+    "develop_wt":  "review_test",
+    "review_test": "develop_code",
+    "develop":     "develop_wt",       # 旧数据兼容
+    "develop_code":"test",
+    "test":        "audit",
+    "audit":       "final_check",
     "final_check": "deliver",
-    "deliver": "done",
+    "deliver":     "done",
 }
 
 # 阶段 → 默认执行 Agent 映射（未指定 assignee 时的 Fallback）
 PHASE_DEFAULT_AGENT = {
-    "request": "panda",
-    "validate": "alpha",       # 架构师评估需求边界与可行性
-    "design": "alpha",
-    "ui_design": "alpha",
-    "review": "duci",
-    "develop": "alpha",         # 阿尔法直连 Claude Code 执行开发
-    "test": "duci",
-    "audit": "duci",
+    "request":     "panda",
+    "validate":    "alpha",
+    "design":      "alpha",
+    "ui_design":   "alpha",
+    "review":      "duci",
+    "develop_wt":  "alpha",
+    "review_test": "duci",
+    "develop_code":"alpha",
+    "test":        "duci",
+    "audit":       "duci",
     "final_check": "panda",
-    "deliver": "panda",
-    "done": "panda",
+    "deliver":     "panda",
 }
 
 
@@ -70,13 +74,23 @@ def _get_next_phase(current: str) -> str | None:
 
 
 def _load_requirements() -> list:
-    """加载 requirements.json。"""
+    """加载 requirements.json 并自动执行旧数据迁移。"""
     reqs_file = Path(FRAMEWORK_DIR).parent / "dashboard" / "data" / "requirements.json"
     if not reqs_file.exists():
         return []
     try:
         with open(reqs_file) as f:
-            return json.load(f)
+            reqs = json.load(f)
+        # 自动迁移旧 develop 数据
+        migrated = False
+        for r in reqs:
+            if r.get("status") == "develop":
+                r["status"] = "develop_wt"
+                r["phase"] = "develop_wt"
+                migrated = True
+        if migrated:
+            _save_requirements(reqs)
+        return reqs
     except (json.JSONDecodeError, Exception) as e:
         logger.warning(f"读取 requirements.json 失败: {e}")
         return []
@@ -93,11 +107,201 @@ def _save_requirements(reqs: list) -> None:
     os.rename(str(temp), str(reqs_file))
 
 
+# ── Pipeline V2: 新增函数 ──────────────────────────────────────────────────
+
+PHASE_COMPLETE_SIGNALS = {"phase_complete:", "PI_DONE:", "pipeline_ack:"}
+
+_NOTIFY_LOG: set = set()
+
+
+
+
+
+def _send_agent_notification(agent_id: str, body: str) -> None:
+    """通过 HTTP 通知 Agent（Pipeline V2 桥接）。"""
+    import hashlib
+    notify_key = f"{agent_id}:{hashlib.md5(body.encode()).hexdigest()}"
+    if notify_key in _NOTIFY_LOG:
+        return
+
+    notify_port = int(os.environ.get("ZOO_NOTIFY_PORT", "18794"))
+    pipeline_id = _extract_pipeline_id(body)
+    phase = _extract_phase_from_body(body)
+    payload = {
+        "agent": agent_id,
+        "pipeline_id": pipeline_id or "",
+        "phase": phase or "",
+        "message": body[:500],
+    }
+    url = f"http://127.0.0.1:{notify_port}/api/zoo-notify"
+
+    for attempt in range(3):
+        try:
+            import requests
+            resp = requests.post(url, json=payload, timeout=3)
+            if resp.status_code == 200:
+                _NOTIFY_LOG.add(notify_key)
+                logger.info(f"通知 {agent_id} 成功 (pipeline={pipeline_id})")
+                return
+        except Exception:
+            time.sleep(2 ** attempt)
+
+    logger.warning(f"通知 {agent_id} 失败 (3次重试)，消息保留 inbox")
+
+
+def _extract_pipeline_id(body: str) -> str | None:
+    """从消息中提取 pipeline_id（pl_xxxxxxxx）。"""
+    for token in body.split():
+        if token.startswith("pl_"):
+            return token
+    m = re.search(r'(pl_[a-f0-9]+)', body)
+    return m.group(1) if m else None
+
+
+def _extract_phase_from_body(body: str) -> str | None:
+    """从 Pipeline 指令中提取阶段名。"""
+    m = re.search(r'Phase:\s*(\w+)', body)
+    return m.group(1) if m else None
+
+
+def _move_to_processed(msg_file) -> None:
+    """处理完毕后将消息文件移入 processed 子目录。"""
+    processed_dir = msg_file.parent / "processed"
+    processed_dir.mkdir(exist_ok=True)
+    msg_file.rename(processed_dir / msg_file.name)
+
+
+def _agent_available(agent_id: str) -> bool:
+    """检查 agent 是否有未完成的活跃任务（不限阶段）。"""
+    reqs = _load_requirements()
+    active = [r for r in reqs
+              if r.get("assignee") == agent_id
+              and r.get("status") not in ("done", "cancelled")]
+    return len(active) == 0
+
+
+def _load_pending_queue() -> list:
+    """加载 pending 队列。"""
+    pending_file = Path(MESH_DIR) / "pipeline" / "pending.json"
+    if not pending_file.exists():
+        return []
+    try:
+        with open(pending_file) as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _save_pending_queue(queue: list) -> None:
+    """写入 pending 队列。"""
+    pending_file = Path(MESH_DIR) / "pipeline" / "pending.json"
+    temp = pending_file.with_suffix(".tmp")
+    with open(temp, "w") as f:
+        json.dump(queue, f, indent=2)
+    os.rename(str(temp), str(pending_file))
+
+
+def _enqueue_pending(pipeline_id: str, phase: str, assignee: str, priority: str, title: str) -> None:
+    """任务入 pending 队列。"""
+    queue = _load_pending_queue()
+    queue.append({
+        "pipeline_id": pipeline_id,
+        "phase": phase,
+        "assignee": assignee,
+        "priority": priority or "P3",
+        "title": title,
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    })
+    _save_pending_queue(queue)
+
+
+def _pop_next_pending(agent_id: str, phase: str) -> dict | None:
+    """从 pending 队列弹出指定 agent+phase 的最优任务（按优先级+时间）。"""
+    queue = _load_pending_queue()
+    candidates = [t for t in queue if t.get("assignee") == agent_id and t.get("phase") == phase]
+    if not candidates:
+        return None
+    priority_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3, "": 4}
+    candidates.sort(key=lambda x: (priority_order.get(x.get("priority", ""), 4), x.get("created_at", "")))
+    best = candidates[0]
+    queue = [t for t in queue if t.get("pipeline_id") != best["pipeline_id"]]
+    _save_pending_queue(queue)
+    return best
+
+
+def _create_review_file(pipeline_id: str, phase: str) -> None:
+    """创建 review/review_test_pl_xxx.json（status: pending）。"""
+    review_file = Path(MESH_DIR) / "pipeline" / f"review_{pipeline_id}.json"
+    if not review_file.exists():
+        with open(review_file, "w") as f:
+            json.dump({
+                "pipeline_id": pipeline_id,
+                "phase": phase,
+                "status": "pending",
+                "result": None,
+                "comments": [],
+                "reviewer": None,
+                "reviewed_at": None,
+            }, f, indent=2)
+
+def _read_review_result(pipeline_id: str) -> dict | None:
+    """读取审查结果。返回 None 如果文件不存在或未完成。"""
+    review_file = Path(MESH_DIR) / "pipeline" / f"review_{pipeline_id}.json"
+    if not review_file.exists():
+        return None
+    try:
+        with open(review_file) as f:
+            data = json.load(f)
+        if data.get("status") != "completed":
+            return None
+        return data
+    except Exception:
+        return None
+
+
+def _get_phase_template(phase: str) -> str:
+    """根据阶段返回对应的指令模板。"""
+    templates = {
+        "validate": (
+            "【设计产出要求】\n"
+            "- What: 具体要做什么改动\n"
+            "- Why: 为什么要这么做（背景、解决的问题）\n"
+            "- Tradeoff: 放弃了什么方案，做了什么权衡\n"
+            "- Open Questions: 有什么不确定的点、遗留问题\n"
+            "- Next Action: 希望审计方重点审查什么\n"
+        ),
+        "design": (
+            "\n【设计产出要求 - 五件套】\n"
+            "- What: 具体要做什么改动\n"
+            "- Why: 为什么要这么做（背景、解决的问题）\n"
+            "- Tradeoff: 放弃了什么方案，做了什么权衡\n"
+            "- Open Questions: 有什么不确定的点、遗留问题\n"
+            "- Next Action: 希望审计方重点审查什么\n"
+        ),
+        "develop_wt": (
+            "\n【TDD - 写测试用例】\n"
+            "请为当前需求编写测试用例（单元测试 + 集成测试）\n"
+            "完成后回复 phase_complete:{pipeline_id}\n"
+            "\n注意：\n"
+            "- 测试用例需覆盖所有验收标准\n"
+            "- 下一步会由毒刺评审测试用例\n"
+        ),
+        "develop_code": (
+            "\n【TDD - 写实现代码】\n"
+            "测试用例已通过毒刺评审，请编写实现代码\n"
+            "自测所有用例通过后回复 phase_complete:{pipeline_id}\n"
+        ),
+    }
+    return templates.get(phase, "")
+
+
 def _publish_phase_advancement(title: str, pipeline_id: str, from_phase: str, to_phase: str) -> None:
     """向 chat 频道发布阶段推进消息（dashboard SSE 可见）。"""
     emoji_map = {
         "request": "📥", "validate": "🔍", "design": "🎨", "ui_design": "🎨", "review": "📋",
-        "develop": "🔧", "test": "🧪", "audit": "🔐", "final_check": "✅", "deliver": "🚀",
+        "develop_wt": "🧪", "review_test": "📋", "develop_code": "🔧",
+        "develop": "🔧",
+        "test": "🧪", "audit": "🔐", "final_check": "✅", "deliver": "🚀",
         "done": "🏁", "cancelled": "❌", "escalated": "⚠️",
     }
     from_emoji = emoji_map.get(from_phase, "📌")
@@ -147,67 +351,72 @@ def _pick_phase_agent(phase: str) -> str:
 # ── 消息解析 & 路由（on_wakeup 主逻辑）───────────────────────────────────────────
 
 def _on_wakeup_callback(agent_id: str):
-    """当 agent inbox 有新消息时触发。
+    """当 agent inbox 有新消息时触发（Pipeline V2）。
 
-    处理两种消息类型：
-    1. pipeline_request — 来自 dashboard 的新需求，启动流水线
-    2. pipeline_ack / phase_complete — 来自 agent 的执行完毕回复，推进到下一阶段
+    处理所有未处理消息文件。
+    - Panda inbox: pipeline_request + phase_complete
+    - Alpha/Duci inbox: 不做自动推进，仅桥接通知
     """
     try:
         queue_dir = Path(MESH_DIR) / "inbound" / agent_id / "queue"
         files = sorted(queue_dir.glob("msg_*.json"), key=lambda p: p.stat().st_mtime)
         if not files:
             return
-        msg_file = files[-1]
-        with open(msg_file) as f:
-            msg = json.load(f)
 
-        body = msg.get("body", "")
-        msg_from = msg.get("from", "?")
-        logger.info(f"📩 on_wakeup({agent_id}): 来自 {msg_from}, 内容: {body[:120]}")
+        for msg_file in files:
+            # 跳过可能存在的 processed 子目录
+            if msg_file.parent.name == "processed":
+                continue
 
-        # ---- 写入 chat 频道（前台聊天室可见） ----
-        chat.append({
-            "type": "chat_message",
-            "from": agent_id,
-            "content": f"📥 收到来自 {msg_from} 的消息: {body[:200]}",
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        })
+            with open(msg_file) as f:
+                msg = json.load(f)
 
-        # ================================================================
-        #  类型 1：pipeline_request — 启动新 Pipeline
-        # ================================================================
-        is_pipeline_request = False
+            body = msg.get("body", "")
+            msg_from = msg.get("from", "?")
+            logger.info(f"📩 on_wakeup({agent_id}): 来自 {msg_from}, 内容: {body[:120]}")
 
-        # 检查是否是来自 dashboard 的 pipeline_request（via @panda 消息格式）
-        if msg_from == "dashboard" and "pipeline_request" in body:
-            is_pipeline_request = True
-        elif msg_from == "dashboard" and "新Pipeline请求" in body:
-            is_pipeline_request = True
-        elif body.startswith("{") and '"type": "pipeline_request"' in body:
-            is_pipeline_request = True
+            # 写入 chat 频道
+            chat.append({
+                "type": "chat_message",
+                "from": agent_id,
+                "content": f"📥 收到来自 {msg_from} 的消息: {body[:200]}",
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            })
 
-        if is_pipeline_request:
-            _handle_pipeline_request(body, agent_id)
-            return
+            # 类型 1：pipeline_request — 启动新 Pipeline（仅 Panda）
+            is_pipeline_request = False
+            if msg_from == "dashboard" and "pipeline_request" in body:
+                is_pipeline_request = True
+            elif msg_from == "dashboard" and "新Pipeline请求" in body:
+                is_pipeline_request = True
+            elif body.startswith("{") and '"type": "pipeline_request"' in body:
+                is_pipeline_request = True
 
-        # ================================================================
-        #  类型 2：pipeline_ack / phase_complete — Agent 完成反馈
-        # ================================================================
-        if "pipeline_ack" in body or "phase_complete" in body or "PI_DONE" in body:
-            _handle_phase_complete(body, agent_id)
-            return
+            if is_pipeline_request:
+                if agent_id == "panda":
+                    _handle_pipeline_request(body, agent_id)
+                _move_to_processed(msg_file)
+                continue
 
-        # ================================================================
-        #  类型 3：其它消息 — 尝试匹配 requirements.json 中的 pipeline_id
-        #  用于 agent 回复包含 pipeline_id 的完成消息
-        # ================================================================
-        reqs = _load_requirements()
-        for req in reqs:
-            pipeline_id = req.get("pipeline_id", "")
-            if pipeline_id and (pipeline_id in body or pipeline_id in msg_from):
+            # 类型 2：明确信号的 phase_complete（所有 agent 均可处理）
+            if any(sig in body for sig in PHASE_COMPLETE_SIGNALS):
                 _handle_phase_complete(body, agent_id)
-                return
+                _move_to_processed(msg_file)
+                continue
+
+            # 类型 3：已删除。所有推进必须有明确信号。
+            # 其他消息 → 仅桥接通知（不自动推进）
+            if agent_id != "panda":
+                _send_agent_notification(agent_id, body)
+            else:
+                # Panda 的其他消息 — 尝试匹配 requirements（避免打断现有逻辑）
+                reqs = _load_requirements()
+                for req in reqs:
+                    pid = req.get("pipeline_id", "")
+                    if pid and (pid in body or pid in msg_from):
+                        _handle_phase_complete(body, agent_id)
+                        _move_to_processed(msg_file)
+                        break
 
     except Exception as e:
         logger.warning(f"on_wakeup({agent_id}) 处理失败: {e}")
@@ -314,21 +523,29 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
     # 5. 发布推进事件
     _publish_phase_advancement(title, task_id, "request", "validate")
 
-    # 6. 写入第一阶段 Agent 的 inbox
+    # 6. Agent 可用性检测（Pipeline V2 排队）
     phase_assignee = cur_req.get("assignee") or _pick_phase_agent("validate")
-    phase_msg = (
-        f"[Pipeline] Phase: validate\n"
-        f"task_id: {task_id}\n"
-        f"requirement_id: {cur_req['id']}\n"
-        f"title: {title}\n"
-        f"description: {cur_req.get('description', '')}\n"
-        f"指令: 请执行 Validate 阶段，完成后回复 phase_complete:{task_id}"
-    )
-    try:
-        mesh.send(phase_assignee, "pipeline", phase_msg)
-        logger.info(f"已通知 {phase_assignee} 执行 validate 阶段")
-    except Exception as e:
-        logger.warning(f"通知 {phase_assignee} 失败: {e}")
+    priority = cur_req.get("priority", payload.get("priority", "P3"))
+
+    if not _agent_available(phase_assignee):
+        # Agent 忙 → 入 pending 队列
+        _enqueue_pending(task_id, "validate", phase_assignee, priority, title)
+        logger.info(f"⏳ {phase_assignee} 忙碌，{task_id} 入 pending 队列等待")
+    else:
+        # Agent 空闲 → 发指令
+        phase_msg = (
+            f"[Pipeline] Phase: validate\n"
+            f"task_id: {task_id}\n"
+            f"requirement_id: {cur_req['id']}\n"
+            f"title: {title}\n"
+            f"description: {cur_req.get('description', '')}\n"
+            f"指令: 请执行 Validate 阶段，完成后回复 phase_complete:{task_id}"
+        )
+        try:
+            mesh.send(phase_assignee, "pipeline", phase_msg)
+            logger.info(f"已通知 {phase_assignee} 执行 validate 阶段")
+        except Exception as e:
+            logger.warning(f"通知 {phase_assignee} 失败: {e}")
 
     # 7. 设置 Pipeline 状态
     pipeline.advance_to("validate")
@@ -416,6 +633,39 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         logger.info(f"🏁 Pipeline {pipeline_id} 已完成！")
         return
 
+    # Pipeline V2: 检查审查结果（review/review_test/audit 阶段推进时）
+    if current_status in ("review", "review_test", "test"):
+        review_data = _read_review_result(pipeline_id)
+        if review_data:
+            result = review_data.get("result")
+            if result == "reject":
+                # 驳回：StateMachine 回退
+                fallback_map = {"review": "design", "review_test": "develop_wt", "test": "develop_code"}
+                fallback = fallback_map.get(current_status)
+                if fallback:
+                    try:
+                        StateMachine.transition(current_status, fallback)
+                        cur_req["status"] = fallback
+                        cur_req["phase"] = fallback
+                        cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                        _save_requirements(reqs)
+                        _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, fallback)
+                        next_agent = cur_req.get("assignee") or _pick_phase_agent(fallback)
+                        next_msg = (
+                            f"[Pipeline] Phase: {fallback}\n"
+                            f"task_id: {pipeline_id}\n"
+                            f"requirement_id: {cur_req['id']}\n"
+                            f"title: {cur_req['title']}\n"
+                            f"指令: 审查驳回，请按 review 意见修改后重新提交，完成后回复 phase_complete:{pipeline_id}"
+                        )
+                        mesh.send(next_agent, "pipeline", next_msg)
+                        mesh.set_pipeline_state(pipeline_id, fallback)
+                        logger.info(f"🔄 Pipeline {pipeline_id}: 审查驳回，{current_status}→{fallback}")
+                        return
+                    except Exception:
+                        pass
+            # pass → 继续推进
+
     # 正常推进到下一阶段
     try:
         StateMachine.transition(current_status, next_phase)
@@ -430,14 +680,20 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
 
     _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, next_phase)
 
+    # Pipeline V2: 为 review/review_test/audit 阶段创建审查文件
+    if next_phase in ("review", "review_test"):
+        _create_review_file(pipeline_id, next_phase)
+
     # 通知下一阶段的 Agent
     next_agent = cur_req.get("assignee") or _pick_phase_agent(next_phase)
+    template = _get_phase_template(next_phase)
     next_msg = (
         f"[Pipeline] Phase: {next_phase}\n"
         f"task_id: {pipeline_id}\n"
         f"requirement_id: {cur_req['id']}\n"
         f"title: {cur_req['title']}\n"
         f"指令: 请执行 {next_phase} 阶段，完成后回复 phase_complete:{pipeline_id}"
+        f"{template}"
     )
 
     try:
@@ -455,6 +711,30 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
 
     mesh.set_pipeline_state(pipeline_id, next_phase)
     logger.info(f"✅ Pipeline {pipeline_id}: {current_status} → {next_phase}")
+
+    # Pipeline V2: 检查 pending 队列弹出下一任务
+    try:
+        pending = _pop_next_pending(next_agent, next_phase)
+        if pending:
+            pid = pending["pipeline_id"]
+            logger.info(f"📤 从 pending 队列弹出 {pid} 给 {next_agent} (phase={next_phase})")
+            reqs2 = _load_requirements()
+            for r in reqs2:
+                if r.get("pipeline_id") == pid and r.get("status") == next_phase:
+                    template2 = _get_phase_template(next_phase)
+                    msg = (
+                        f"[Pipeline] Phase: {next_phase}\n"
+                        f"task_id: {pid}\n"
+                        f"requirement_id: {r['id']}\n"
+                        f"title: {r.get('title', '')}\n"
+                        f"指令: 请执行 {next_phase} 阶段，完成后回复 phase_complete:{pid}"
+                        f"{template2}"
+                    )
+                    mesh.send(next_agent, "pipeline", msg)
+                    logger.info(f"📤 pending 任务 {pid} 已派发")
+                    break
+    except Exception as e:
+        logger.warning(f"Pending 队列弹出失败: {e}")
 
 
 # ── ChatWriter ───────────────────────────────────────────────────────────────────

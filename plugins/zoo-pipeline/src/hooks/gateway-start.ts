@@ -34,10 +34,76 @@ const HEALTH_TIMEOUT_MS = 30000;
 let daemonProcess: ChildProcess | null = null;
 let crashCount = 0;
 
+// ── ZooNotify HTTP 服务器 ─────────────────────────────────────────────────
+
+const NOTIFY_PORT = parseInt(process.env.ZOO_NOTIFY_PORT || "18794", 10);
+
+const AGENT_SESSION_KEYS: Record<string, string> = {
+  alpha: "agent:alpha:qqbot:direct:639c0438dcc3cca674064f1affbae57d",
+  duci: "agent:duci:qqbot:direct:9bf8d96baab8d6caf91fa0b6118c42cb",
+  panda: "agent:main:qqbot:direct:c0b6f9464e1c6191fde7a35065cea549",
+};
+
+function startNotifyServer(api: OpenClawPluginApi): void {
+  const http = require("node:http");
+  const server = http.createServer((req: any, res: any) => {
+    if (req.method === "POST" && req.url === "/api/zoo-notify") {
+      let body = "";
+      req.on("data", (chunk: string) => (body += chunk));
+      req.on("end", () => {
+        try {
+          const data = JSON.parse(body);
+          const agent = data.agent as string;
+          const sessionKey = AGENT_SESSION_KEYS[agent];
+          if (sessionKey) {
+            const msg = `📥 ZooMesh 通知: [${data.phase || "?"}] ${data.pipeline_id || ""}\n${(data.message || "").slice(0, 300)}`;
+            api.logger.info(
+              `${LOG_PREFIX} 🔔 转发通知到 ${agent}: ${data.pipeline_id || ""}`,
+            );
+            // 使用 fetch 调用 OpenClaw REST API 发送消息
+            const gatewayUrl =
+              process.env.OPENCLAW_GATEWAY_URL || "http://127.0.0.1:18789";
+            fetch(`${gatewayUrl}/api/message`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                sessionKey,
+                message: msg,
+              }),
+            }).catch((e: any) =>
+              api.logger.warn(
+                `${LOG_PREFIX} 通知 ${agent} 发送失败: ${e.message}`,
+              ),
+            );
+          } else {
+            api.logger.warn(`${LOG_PREFIX} 未知 agent: ${agent}`);
+          }
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ status: "ok" }));
+        } catch (e: any) {
+          api.logger.warn(`${LOG_PREFIX} 解析通知失败: ${e.message}`);
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: "invalid json" }));
+        }
+      });
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+
+  server.listen(NOTIFY_PORT, "127.0.0.1", () => {
+    api.logger.info(
+      `${LOG_PREFIX} 🎯 ZooNotify HTTP 已启动: http://127.0.0.1:${NOTIFY_PORT}`,
+    );
+  });
+}
+
 export function registerGatewayStart(api: OpenClawPluginApi): void {
   api.on(
     "gateway_start",
     async (): Promise<void> => {
+      startNotifyServer(api);
       startDaemon(api, DEFAULT_CONFIG);
     },
     { priority: 50 },

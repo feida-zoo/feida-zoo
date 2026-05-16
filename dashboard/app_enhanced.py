@@ -419,6 +419,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
     status_manager = MemberStatusManager(REGISTRY_PATH, AGENTS_DIR)
     git_adapter = get_git_adapter()
     git_watcher = get_git_watcher()
+    _issues_write_lock = threading.RLock()
     
     def __init__(self, *args, **kwargs):
         # 初始化 ZooRegistry 注册表（单例，只初始化一次）
@@ -847,10 +848,11 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             return []
 
     def _save_issues(self, issues: List[Dict]):
-        """保存 issues 到文件"""
-        path = self._get_issues_path()
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(issues, f, ensure_ascii=False, indent=2)
+        """保存 issues 到文件（带并发写锁）"""
+        with self.__class__._issues_write_lock:
+            path = self._get_issues_path()
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(issues, f, ensure_ascii=False, indent=2)
 
     def _handle_issues_get(self):
         """GET /api/issues — 返回所有问题（支持过滤）"""

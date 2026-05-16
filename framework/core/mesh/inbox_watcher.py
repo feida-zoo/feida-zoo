@@ -73,22 +73,15 @@ class InboxWatcher:
         self._running = False
 
     def _init_baseline(self, agent_id: str) -> None:
-        """启动时建立 mtime 基线，避免历史消息被误判为新消息。"""
-        queue_dir = self.mesh_dir / agent_id / "queue"
-        if not queue_dir.exists():
-            self._last_check[agent_id] = 0.0
-            return
-        try:
-            files = sorted(queue_dir.glob("msg_*.json"), key=lambda p: p.stat().st_mtime)
-            if files:
-                self._last_check[agent_id] = files[-1].stat().st_mtime
-            else:
-                self._last_check[agent_id] = 0.0
-        except Exception:
-            self._last_check[agent_id] = 0.0
+        """启动时初始化基线，记录已处理的最大文件名 ID。"""
+        self._last_check[agent_id] = 0
 
     def _check_inbox(self, agent_id: str) -> None:
-        """检查单个 agent 的 inbox 是否有新消息"""
+        """检查单个 agent 的 inbox 是否有未处理消息（Pipeline V2）。
+        
+        基于文件存在性检测（不依赖 mtime），
+        处理过的文件由 _on_wakeup_callback 移入 processed/。
+        """
         queue_dir = self.mesh_dir / agent_id / "queue"
         if not queue_dir.exists():
             return
@@ -98,14 +91,9 @@ class InboxWatcher:
             if not files:
                 return
 
-            latest_mtime = files[-1].stat().st_mtime
-            last_checked = self._last_check.get(agent_id, 0)
-
-            if latest_mtime > last_checked:
-                self._last_check[agent_id] = latest_mtime
-                logger.info(f"检测到 {agent_id} inbox 新消息: {files[-1].name}")
-
-                if self.on_wakeup:
-                    self.on_wakeup(agent_id)
+            # 只要 queue/ 下还有 msg_*.json 文件就触发（processed/ 中的已移走）
+            if self.on_wakeup:
+                logger.info(f"检测到 {agent_id} inbox 有待处理消息: {len(files)} 条")
+                self.on_wakeup(agent_id)
         except Exception as e:
             logger.warning(f"检查 {agent_id} inbox 出错: {e}")
