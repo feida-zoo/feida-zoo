@@ -56,8 +56,22 @@ function startNotifyServer(api: OpenClawPluginApi): void {
             `${LOG_PREFIX} 🔔 转发通知到 ${agent}: ${pid}`,
           );
 
+          // Agent QQ openid 映射
+          const QQ_OPENID: Record<string, string> = {
+            alpha: "639C0438DCC3CCA674064F1AFFBAE57D",
+            duci: "9BF8D96BAAB8D6CAF91FA0B6118C42CB",
+            panda: "C0B6F9464E1C6191FDE7A35065CEA549",
+          };
+          const openId = QQ_OPENID[agent];
+          if (!openId) {
+            api.logger.warn(`${LOG_PREFIX} 未知 agent: ${agent}`);
+            res.writeHead(200);
+            res.end(JSON.stringify({ status: "ok" }));
+            return;
+          }
           const { execSync } = require("node:child_process");
-          const cmd = `/opt/homebrew/bin/openclaw message send --channel qqbot --target ${agent} -m ${JSON.stringify(msg)} 2>/dev/null`;
+          const target = `qqbot:c2c:${openId}`;
+          const cmd = `/opt/homebrew/bin/openclaw message send --channel qqbot --target ${target} -m ${JSON.stringify(msg)} 2>/dev/null`;
           try {
             execSync(cmd, { timeout: 5000, stdio: "pipe" });
             api.logger.info(`${LOG_PREFIX} ✅ 通知 ${agent} 发送成功`);
@@ -87,11 +101,86 @@ function startNotifyServer(api: OpenClawPluginApi): void {
   });
 }
 
+// ── Dashboard 进程管理 ─────────────────────────────────────────────────
+
+const DASHBOARD_PATH =
+  process.env.ZOO_DASHBOARD_SCRIPT ||
+  "/Users/zoo/workspace/code/feida_zoo/dashboard/app_enhanced.py";
+const DASHBOARD_PYTHON =
+  process.env.ZOO_DASHBOARD_PYTHON ||
+  "/Users/zoo/workspace/code/feida_zoo/venv/bin/python";
+const DASHBOARD_PORT = parseInt(process.env.ZOO_DASHBOARD_PORT || "18792", 10);
+
+let dashboardProcess: ChildProcess | null = null;
+let dashboardCrashCount = 0;
+const DASHBOARD_MAX_CRASH = 5;
+const DASHBOARD_HEALTH_TIMEOUT = 15000;
+
+function startDashboard(api: OpenClawPluginApi): void {
+  if (dashboardCrashCount >= DASHBOARD_MAX_CRASH) {
+    api.logger.error(
+      `${LOG_PREFIX} 🚨 Dashboard 连续崩溃 ${dashboardCrashCount} 次，停止自动重启`,
+    );
+    return;
+  }
+
+  api.logger.info(
+    `${LOG_PREFIX} 启动 Dashboard: ${DASHBOARD_PATH} (端口 ${DASHBOARD_PORT})`,
+  );
+
+  dashboardProcess = spawn(DASHBOARD_PYTHON, [DASHBOARD_PATH], {
+    env: { ...process.env },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  dashboardProcess.stdout?.on("data", (data: Buffer) => {
+    for (const line of data.toString().split("\n")) {
+      if (line.trim()) {
+        api.logger.info(`${LOG_PREFIX} [Dashboard] ${line.trim()}`);
+      }
+    }
+  });
+
+  dashboardProcess.stderr?.on("data", (data: Buffer) => {
+    for (const line of data.toString().split("\n")) {
+      if (line.trim()) {
+        api.logger.warn(`${LOG_PREFIX} [Dashboard:err] ${line.trim()}`);
+      }
+    }
+  });
+
+  dashboardProcess.on("exit", (code: number | null) => {
+    if (code !== 0 && code !== null) {
+      dashboardCrashCount++;
+      api.logger.warn(
+        `${LOG_PREFIX} ⚠️ Dashboard 异常退出 (code=${code})，${CRASH_RESTART_DELAY_MS}ms 后重启`,
+      );
+      setTimeout(() => startDashboard(api), CRASH_RESTART_DELAY_MS);
+    } else {
+      dashboardCrashCount = 0;
+    }
+  });
+
+  dashboardProcess.on("error", (err: Error) => {
+    dashboardCrashCount++;
+    api.logger.error(
+      `${LOG_PREFIX} 🚨 Dashboard 启动失败: ${err.message}`,
+    );
+    if (dashboardCrashCount < DASHBOARD_MAX_CRASH) {
+      setTimeout(() => startDashboard(api), CRASH_RESTART_DELAY_MS);
+    }
+  });
+
+  const healthUrl = `http://127.0.0.1:${DASHBOARD_PORT}/api/task-stats`;
+  waitForHealth(healthUrl, DASHBOARD_HEALTH_TIMEOUT, api).catch(() => {});
+}
+
 export function registerGatewayStart(api: OpenClawPluginApi): void {
   api.on(
     "gateway_start",
     async (): Promise<void> => {
       startNotifyServer(api);
+      startDashboard(api);
       startDaemon(api, DEFAULT_CONFIG);
     },
     { priority: 50 },
