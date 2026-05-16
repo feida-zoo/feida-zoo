@@ -646,13 +646,13 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         return
 
     # Pipeline V2: 检查审查结果（review/review_test/audit 阶段推进时）
-    if current_status in ("review", "review_test", "test"):
+    if current_status in ("review", "review_test", "test", "audit"):
         review_data = _read_review_result(pipeline_id, current_status)
         if review_data:
             result = review_data.get("result")
             if result == "reject":
                 # 驳回：StateMachine 回退
-                fallback_map = {"review": "design", "review_test": "develop_wt", "test": "develop_code"}
+                fallback_map = {"review": "design", "review_test": "develop_wt", "test": "develop_code", "audit": "develop_code"}
                 fallback = fallback_map.get(current_status)
                 if fallback:
                     try:
@@ -693,7 +693,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
     _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, next_phase)
 
     # Pipeline V2: 为 review/review_test/audit 阶段创建审查文件
-    if next_phase in ("review", "review_test"):
+    if next_phase in ("review", "review_test", "audit"):
         _create_review_file(pipeline_id, next_phase)
 
     # 通知下一阶段的 Agent
