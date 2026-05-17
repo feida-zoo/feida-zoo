@@ -146,63 +146,61 @@ def _send_agent_notification(agent_id: str, body: str) -> None:
         f"{body[:250]}"
     )
 
-    import subprocess
-    oc_bin = "/opt/homebrew/bin/openclaw"
-
-    def _try_parse_agent_reply(output: str) -> None:
-        """解析 Agent 回复中的 phase_complete 信号，写入 inbox。"""
-        if not output:
-            return
-        for line in output.split("\n"):
-            line = line.strip()
-            first_tok = line.split()[0] if line else ""
-            if any(first_tok.startswith(s) for s in {"phase_complete:", "PI_DONE:", "pipeline_ack:"}):
-                import uuid as _uuid, json as _json
-                from pathlib import Path as _Path
-                sig_msg = {
-                    "id": str(_uuid.uuid4()),
-                    "from": agent_id,
-                    "to": agent_id,
-                    "body": line,
-                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-                    "delivery_count": 0,
-                    "ttl": 3600,
-                }
-                qdir = _Path(MESH_DIR) / "inbound" / agent_id / "queue"
-                qdir.mkdir(parents=True, exist_ok=True)
-                with open(qdir / f"msg_{_uuid.uuid4()}.json", "w") as f:
-                    _json.dump(sig_msg, f)
-                logger.info(f"📨 Agent {agent_id} 回复信号已写入 inbox: {line[:60]}")
-
-    for attempt in range(2):
+    # 异步通知：不阻塞 InboxWatcher，确保 pipeline 持续推进
+    def _notify_async():
+        """在后台线程中执行 openclaw agent 通知。"""
+        import subprocess as _sp
+        oc_bin = "/opt/homebrew/bin/openclaw"
         try:
-            result = subprocess.run(
-                [oc_bin, "agent", "--agent", agent_id,
-                 "-m", msg_text],
+            result = _sp.run(
+                [oc_bin, "agent", "--agent", agent_id, "-m", msg_text],
                 capture_output=True, text=True, timeout=30
             )
-            _try_parse_agent_reply(result.stdout)
-            _try_parse_agent_reply(result.stderr)
+            # 解析 Agent 回复中的 phase_complete 信号
+            for out in (result.stdout, result.stderr):
+                if not out:
+                    continue
+                for line in out.split("\n"):
+                    line = line.strip()
+                    first_tok = line.split()[0] if line else ""
+                    if any(first_tok.startswith(s) for s in {"phase_complete:", "PI_DONE:", "pipeline_ack:"}):
+                        import uuid as _uuid, json as _json
+                        from pathlib import Path as _Path
+                        sig = {"id": str(_uuid.uuid4()), "from": agent_id, "to": agent_id,
+                            "body": line, "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                            "delivery_count": 0, "ttl": 3600}
+                        qdir = _Path(MESH_DIR) / "inbound" / agent_id / "queue"
+                        qdir.mkdir(parents=True, exist_ok=True)
+                        with open(qdir / f"msg_{_uuid.uuid4()}.json", "w") as f:
+                            _json.dump(sig, f)
+                        logger.info(f"📨 Agent {agent_id} 回复信号已写入 inbox: {line[:60]}")
             if result.returncode == 0:
-                _NOTIFY_LOG.add(notify_key)
                 logger.info(f"通知 {agent_id} 成功 (pipeline={pipeline_id})")
-                return
             else:
                 logger.warning(f"通知 {agent_id}: rc={result.returncode}")
-        except subprocess.TimeoutExpired as te:
-            # 超时也尝试解析 Agent 的回复（部分内容可能已输出）
+        except _sp.TimeoutExpired as te:
             if te.stdout:
-                _try_parse_agent_reply(te.stdout)
-            if te.stderr:
-                _try_parse_agent_reply(te.stderr)
-            _NOTIFY_LOG.add(notify_key)
+                for line in te.stdout.split("\n"):
+                    line = line.strip()
+                    if line.startswith("phase_complete:") or line.startswith("PI_DONE:") or line.startswith("pipeline_ack:"):
+                        import uuid as _uuid, json as _json
+                        from pathlib import Path as _Path
+                        sig = {"id": str(_uuid.uuid4()), "from": agent_id, "to": agent_id,
+                            "body": line, "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                            "delivery_count": 0, "ttl": 3600}
+                        qdir = _Path(MESH_DIR) / "inbound" / agent_id / "queue"
+                        qdir.mkdir(parents=True, exist_ok=True)
+                        with open(qdir / f"msg_{_uuid.uuid4()}.json", "w") as f:
+                            _json.dump(sig, f)
+                        logger.info(f"📨 Agent {agent_id} 超时回复信号已写入 inbox: {line[:60]}")
             logger.info(f"通知 {agent_id} 已触发 (timeout, pipeline={pipeline_id})")
-            return
         except Exception as e:
-            logger.warning(f"通知 {agent_id}: 第{attempt+1}次失败: {e}")
-            time.sleep(3)
+            logger.warning(f"通知 {agent_id} 异常: {e}")
 
-    logger.warning(f"通知 {agent_id} 失败 (2次重试)")
+    t = threading.Thread(target=_notify_async, daemon=True)
+    t.start()
+    _NOTIFY_LOG.add(notify_key)
+    logger.info(f"通知 {agent_id} 已异步发送 (pipeline={pipeline_id})")
 
 
 def _extract_pipeline_id(body: str) -> str | None:
