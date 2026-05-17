@@ -129,35 +129,49 @@ _NOTIFY_LOG: set = set()
 
 
 def _send_agent_notification(agent_id: str, body: str) -> None:
-    """通过 HTTP 通知 Agent（Pipeline V2 桥接）。"""
+    """通过 openclaw CLI 直接通知 Agent（不依赖 ZooNotify HTTP 服务）。"""
     import hashlib
     notify_key = f"{agent_id}:{hashlib.md5(body.encode()).hexdigest()}"
     if notify_key in _NOTIFY_LOG:
         return
 
-    notify_port = int(os.environ.get("ZOO_NOTIFY_PORT", "18794"))
     pipeline_id = _extract_pipeline_id(body)
     phase = _extract_phase_from_body(body)
-    payload = {
-        "agent": agent_id,
-        "pipeline_id": pipeline_id or "",
-        "phase": phase or "",
-        "message": body[:500],
+
+    # Agent QQ openid 映射
+    QQ_OPENID = {
+        "alpha": "639C0438DCC3CCA674064F1AFFBAE57D",
+        "duci": "9BF8D96BAAB8D6CAF91FA0B6118C42CB",
+        "panda": "C0B6F9464E1C6191FDE7A35065CEA549",
     }
-    url = f"http://127.0.0.1:{notify_port}/api/zoo-notify"
+    open_id = QQ_OPENID.get(agent_id)
+    if not open_id:
+        logger.warning(f"通知 {agent_id}: 无对应 QQ openid")
+        return
+
+    import subprocess
+    oc_bin = "/opt/homebrew/bin/openclaw"
+    target = f"qqbot:c2c:{open_id}"
+    msg_text = f"📥 ZooMesh 通知: [{phase or '?'}] {pipeline_id or ''}\n{body[:200]}"
 
     for attempt in range(3):
         try:
-            import requests
-            resp = requests.post(url, json=payload, timeout=3)
-            if resp.status_code == 200:
+            result = subprocess.run(
+                [oc_bin, "message", "send", "--channel", "qqbot",
+                 "--target", target, "-m", msg_text],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0:
                 _NOTIFY_LOG.add(notify_key)
                 logger.info(f"通知 {agent_id} 成功 (pipeline={pipeline_id})")
                 return
-        except Exception:
+            else:
+                logger.warning(f"通知 {agent_id}: openclaw 退出码 {result.returncode}")
+        except Exception as e:
+            logger.warning(f"通知 {agent_id}: 第{attempt+1}次失败: {e}")
             time.sleep(2 ** attempt)
 
-    logger.warning(f"通知 {agent_id} 失败 (3次重试)，消息保留 inbox")
+    logger.warning(f"通知 {agent_id} 失败 (3次重试)")
 
 
 def _extract_pipeline_id(body: str) -> str | None:

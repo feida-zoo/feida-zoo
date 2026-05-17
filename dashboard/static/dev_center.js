@@ -729,9 +729,10 @@ class ZooDevCenter {
         taskCard.className = `task-card severity-${task.severity?.toLowerCase() || 'p3'}`;
         taskCard.dataset.taskId = task.id;
         
-        // 获取成员 Emoji
-        const assigneeEmoji = this.memberEmojiMap[task.assignee] || '👤';
-        const avatarSrc = task.assignee ? `/static/avatars/${task.assignee === 'stinger' ? 'stinger' : task.assignee}.png` : '';
+        // 获取成员 Emoji — 优先使用 current_executor（当前阶段执行人）
+        const executor = task.current_executor || task.assignee || '';
+        const assigneeEmoji = this.memberEmojiMap[executor] || '👤';
+        const avatarSrc = executor ? `/static/avatars/${executor === 'stinger' ? 'stinger' : executor}.png` : '';
         
         taskCard.innerHTML = `
             <div class="task-header">
@@ -743,7 +744,7 @@ class ZooDevCenter {
                 <div class="task-assignee">
                     ${avatarSrc ? `<img src="${avatarSrc}" class="assignee-avatar-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">` : ''}
                     <div class="assignee-avatar" style="${avatarSrc ? 'display:none;' : ''}">${assigneeEmoji}</div>
-                    <span>${task.assignee || '未分配'}</span>
+                    <span>${this.memberEmojiMap[executor] ? this.memberEmojiMap[executor] + ' ' : ''}${executor || '未分配'}</span>
                 </div>
                 ${task.pipeline_status ? `<div class="task-phase" title="${task.phase_name}">${task.pipeline_status}</div>` : (task.phase_name ? `<div class="task-phase">${task.phase_name}</div>` : '')}
             </div>

@@ -1273,19 +1273,31 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
         
         # 2. 从 requirements.json 加载需求
         requirements = self._get_requirements()
+        # 阶段 → 执行人映射（与子流程daemon PHASE_DEFAULT_AGENT 保持一致）
+        PHASE_EXECUTOR = {
+            "request": "panda", "validate": "alpha",
+            "design": "alpha", "ui_design": "alpha", "review": "duci",
+            "develop_wt": "alpha", "review_test": "duci",
+            "develop_code": "alpha", "test": "duci",
+            "audit": "duci", "final_check": "panda", "deliver": "panda",
+        }
+
         for req in requirements:
             # 确定需求在看板中的列：优先从 Pipeline 状态读取
             pipeline_id = req.get('pipeline_id', '')
             req_status = req.get('status', 'request')
             column_key = "request"  # 默认需求池
+            pipeline_phase = req_status  # 当前管线的内部阶段
+            current_executor = PHASE_EXECUTOR.get(req_status, '')
             
             if pipeline_id:
                 active_pipelines = self._get_active_pipelines()
                 if pipeline_id in active_pipelines:
                     pl_state = active_pipelines[pipeline_id].get("state", "request")
                     column_key = PIPELINE_PHASE_TO_COLUMN.get(pl_state, "request")
+                    pipeline_phase = pl_state
+                    current_executor = PHASE_EXECUTOR.get(pl_state, '')
                 elif req_status != 'request':
-                    # 有 pipeline_id 但无活跃管道时，使用需求自身的 status 字段
                     col_map = {
                         'design': 'design', 'ui_design': 'design',
                         'review': 'design',
@@ -1299,7 +1311,6 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                     }
                     column_key = col_map.get(req_status, column_key)
             elif req_status != 'request':
-                # 没有 pipeline_id 但有状态变更，尝试映射
                 col_map = {
                     'design': 'design', 'ui_design': 'design',
                     'review': 'design',
@@ -1325,7 +1336,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 'pipeline_id': req.get('pipeline_id', ''),
                 'phase': column_key,
                 'phase_name': KANBAN_STATUS.get(column_key, column_key),
-                'pipeline_status': req.get('status', ''),  # 内部 Pipeline 阶段，用于卡片显示
+                'pipeline_status': req.get('status', ''),
+                'current_executor': current_executor,
                 'created_at': req.get('created_at', ''),
                 'completed_at': req.get('completed_at', ''),
                 'is_from_requirements': True
