@@ -65,7 +65,7 @@ PIPELINE_PHASE_TO_COLUMN = {
     "validate":    "request",
     "design":      "design",
     "ui_design":   "design",
-    "review":      "design",
+    "review":      "develop",
     "develop_wt":  "develop",
     "review_test": "develop",
     "develop_code":"develop",
@@ -106,8 +106,8 @@ PHASE_TO_CHINESE = {
 # 异常状态（cancelled/timed_out/escalated）归入对应主列，卡片红色标识
 KANBAN_STATUS = {
     "request":   "📥 需求池",      # request + validate
-    "design":    "🎨 设计阶段",     # design + ui_design + review
-    "develop":   "🔧 开发阶段",     # develop + develop_wt + review_test + develop_code + test
+    "design":    "🎨 设计阶段",     # design + ui_design
+    "develop":   "🔧 开发阶段",     # review + develop + develop_wt + review_test + develop_code + test
     "audit":     "🔍 验收阶段",     # audit + final_check
     "done":      "✅ 已完成",       # deliver + done + cancelled
 }
@@ -1321,31 +1321,11 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                     pipeline_phase = pl_state
                     current_executor = PHASE_EXECUTOR.get(pl_state, '')
                 elif req_status != 'request':
-                    col_map = {
-                        'design': 'design', 'ui_design': 'design',
-                        'review': 'design',
-                        'develop_wt': 'develop', 'review_test': 'develop',
-                        'develop_code': 'develop', 'develop': 'develop',
-                        'test': 'develop',
-                        'audit': 'audit', 'final_check': 'audit',
-                        'deliver': 'done', 'done': 'done',
-                        'cancelled': 'done', 'escalated': 'develop',
-                        'timed_out': 'audit',
-                    }
-                    column_key = col_map.get(req_status, column_key)
+                    # 使用 PIPELINE_PHASE_TO_COLUMN 单源映射（避免双维护漂移）
+                    column_key = PIPELINE_PHASE_TO_COLUMN.get(req_status, column_key)
             elif req_status != 'request':
-                col_map = {
-                    'design': 'design', 'ui_design': 'design',
-                    'review': 'design',
-                    'develop_wt': 'develop', 'review_test': 'develop',
-                    'develop_code': 'develop', 'develop': 'develop',
-                    'test': 'develop',
-                    'audit': 'audit', 'final_check': 'audit',
-                    'deliver': 'done', 'done': 'done',
-                    'cancelled': 'done', 'escalated': 'develop',
-                    'timed_out': 'audit',
-                }
-                column_key = col_map.get(req_status, column_key)
+                    # 使用 PIPELINE_PHASE_TO_COLUMN 单源映射（避免双维护漂移）
+                    column_key = PIPELINE_PHASE_TO_COLUMN.get(req_status, column_key)
             
             if column_key not in kanban_tasks:
                 column_key = "request"

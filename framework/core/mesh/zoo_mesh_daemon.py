@@ -709,6 +709,11 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
 
     # Pipeline V2: 检查审查结果（review/review_test/audit 阶段推进时）
     if current_status in ("review", "review_test", "test", "audit"):
+        # 验证信号发送者：只接受该阶段的默认 Agent
+        expected_agent = _pick_phase_agent(current_status)
+        if agent_id != expected_agent:
+            logger.warning(f"Pipeline {pipeline_id}: {current_status} 阶段拒绝来自 {agent_id} 的信号（期望 {expected_agent}）")
+            return
         # 如果 phase_complete 携带了审查结果，直接写入审查文件
         if review_result:
             review_path = Path(MESH_DIR) / "pipeline" / f"{current_status}_{pipeline_id}.json"

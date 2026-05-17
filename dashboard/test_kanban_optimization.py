@@ -39,7 +39,7 @@ AFTER_PIPELINE_PHASE_TO_COLUMN = {
     "validate":    "request",
     "design":      "design",
     "ui_design":   "design",
-    "review":      "design",
+    "review":      "develop",
     "develop_wt":  "develop",
     "review_test": "develop",
     "develop_code":"develop",
@@ -260,31 +260,11 @@ class TestKanbanDataGeneration(unittest.TestCase):
                     pipeline_phase = pl_state
                     current_executor = PHASE_EXECUTOR.get(pl_state, '')
                 elif req_status != 'request':
-                    col_map = {
-                        'design': 'design', 'ui_design': 'design',
-                        'review': 'design',
-                        'develop_wt': 'develop', 'review_test': 'develop',
-                        'develop_code': 'develop', 'develop': 'develop',
-                        'test': 'develop',
-                        'audit': 'audit', 'final_check': 'audit',
-                        'deliver': 'done', 'done': 'done',
-                        'cancelled': 'done', 'escalated': 'develop',
-                        'timed_out': 'audit',
-                    }
-                    column_key = col_map.get(req_status, column_key)
+                    # 单源映射：使用 AFTER_PIPELINE_PHASE_TO_COLUMN
+                    column_key = mapping.get(req_status, column_key)
             elif req_status != 'request':
-                col_map = {
-                    'design': 'design', 'ui_design': 'design',
-                    'review': 'design',
-                    'develop_wt': 'develop', 'review_test': 'develop',
-                    'develop_code': 'develop', 'develop': 'develop',
-                    'test': 'develop',
-                    'audit': 'audit', 'final_check': 'audit',
-                    'deliver': 'done', 'done': 'done',
-                    'cancelled': 'done', 'escalated': 'develop',
-                    'timed_out': 'audit',
-                }
-                column_key = col_map.get(req_status, column_key)
+                    # 单源映射：使用 AFTER_PIPELINE_PHASE_TO_COLUMN
+                    column_key = mapping.get(req_status, column_key)
 
             if column_key not in kanban_tasks:
                 column_key = "request"
