@@ -747,8 +747,8 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
 
     _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, next_phase)
 
-    # Pipeline V2: 为 review/review_test/audit 阶段创建审查文件
-    if next_phase in ("review", "review_test", "audit"):
+    # Pipeline V2: 为 review/review_test/test/audit 阶段创建审查文件
+    if next_phase in ("review", "review_test", "test", "audit"):
         _create_review_file(pipeline_id, next_phase)
 
     # 通知下一阶段的 Agent
