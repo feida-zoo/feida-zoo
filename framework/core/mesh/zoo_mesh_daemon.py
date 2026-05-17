@@ -129,7 +129,8 @@ _NOTIFY_LOG: set = set()
 
 
 def _send_agent_notification(agent_id: str, body: str) -> None:
-    """通过 openclaw CLI 直接通知 Agent（不依赖 ZooNotify HTTP 服务）。"""
+    """通过 openclaw agent 触发目标 Agent 会话，实现跨 Agent 通知。
+    不走 QQ Bot API，使用会话路由（sessions_send 的 CLI 等价方式）。"""
     import hashlib
     notify_key = f"{agent_id}:{hashlib.md5(body.encode()).hexdigest()}"
     if notify_key in _NOTIFY_LOG:
@@ -138,40 +139,39 @@ def _send_agent_notification(agent_id: str, body: str) -> None:
     pipeline_id = _extract_pipeline_id(body)
     phase = _extract_phase_from_body(body)
 
-    # Agent QQ openid 映射
-    QQ_OPENID = {
-        "alpha": "639C0438DCC3CCA674064F1AFFBAE57D",
-        "duci": "9BF8D96BAAB8D6CAF91FA0B6118C42CB",
-        "panda": "C0B6F9464E1C6191FDE7A35065CEA549",
-    }
-    open_id = QQ_OPENID.get(agent_id)
-    if not open_id:
-        logger.warning(f"通知 {agent_id}: 无对应 QQ openid")
-        return
+    # 精简通知文本
+    msg_text = (
+        f"📥 Pipeline通知: "
+        f"[{phase or '?'}] {pipeline_id or ''}\n"
+        f"{body[:250]}"
+    )
 
     import subprocess
     oc_bin = "/opt/homebrew/bin/openclaw"
-    target = f"qqbot:c2c:{open_id}"
-    msg_text = f"📥 ZooMesh 通知: [{phase or '?'}] {pipeline_id or ''}\n{body[:200]}"
 
-    for attempt in range(3):
+    for attempt in range(2):
         try:
             result = subprocess.run(
-                [oc_bin, "message", "send", "--channel", "qqbot",
-                 "--target", target, "-m", msg_text],
-                capture_output=True, text=True, timeout=10
+                [oc_bin, "agent", "--agent", agent_id,
+                 "-m", msg_text],
+                capture_output=True, text=True, timeout=15
             )
             if result.returncode == 0:
                 _NOTIFY_LOG.add(notify_key)
                 logger.info(f"通知 {agent_id} 成功 (pipeline={pipeline_id})")
                 return
             else:
-                logger.warning(f"通知 {agent_id}: openclaw 退出码 {result.returncode}")
+                logger.warning(f"通知 {agent_id}: rc={result.returncode}")
+        except subprocess.TimeoutExpired:
+            # 超时也可能是成功触发了，不严格报错
+            _NOTIFY_LOG.add(notify_key)
+            logger.info(f"通知 {agent_id} 已触发 (timeout, pipeline={pipeline_id})")
+            return
         except Exception as e:
             logger.warning(f"通知 {agent_id}: 第{attempt+1}次失败: {e}")
-            time.sleep(2 ** attempt)
+            time.sleep(3)
 
-    logger.warning(f"通知 {agent_id} 失败 (3次重试)")
+    logger.warning(f"通知 {agent_id} 失败 (2次重试)")
 
 
 def _extract_pipeline_id(body: str) -> str | None:
@@ -396,8 +396,14 @@ def _on_wakeup_callback(agent_id: str):
             if msg_file.parent.name == "processed":
                 continue
 
-            with open(msg_file) as f:
-                msg = json.load(f)
+            try:
+                with open(msg_file) as f:
+                    msg = json.load(f)
+            except (json.JSONDecodeError, FileNotFoundError, Exception) as e:
+                logger.warning(f"跳过无效消息文件: {msg_file.name} ({e})")
+                # 坏文件也移走避免死循环
+                _move_to_processed(msg_file)
+                continue
 
             body = msg.get("body", "")
             msg_from = msg.get("from", "?")
