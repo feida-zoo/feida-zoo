@@ -572,7 +572,8 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
             f"requirement_id: {cur_req['id']}\n"
             f"title: {title}\n"
             f"description: {cur_req.get('description', '')}\n"
-            f"指令: 请执行 Validate 阶段，完成后回复 phase_complete:{task_id}"
+            f"指令: 请执行 Validate 阶段，完成后回复 phase_complete:{task_id}\n"
+            f"回复方式: 在本对话回复 phase_complete:{task_id}，或 POST 至 http://127.0.0.1:18793/api/chat (from=你的id, content=phase_complete:{task_id})"
         )
         try:
             mesh.send(phase_assignee, "pipeline", phase_msg)
@@ -735,7 +736,8 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         f"task_id: {pipeline_id}\n"
         f"requirement_id: {cur_req['id']}\n"
         f"title: {cur_req['title']}\n"
-        f"指令: 请执行 {next_phase} 阶段，完成后回复 phase_complete:{pipeline_id}"
+        f"指令: 请执行 {next_phase} 阶段，完成后回复 phase_complete:{pipeline_id}\n"
+        f"回复方式: 在本对话回复 phase_complete:{pipeline_id}\n"
         f"{template}"
     )
 
@@ -877,12 +879,35 @@ class Handler(BaseHTTPRequestHandler):
             self._json(413, {"error": "message too long (max 2000 chars)"})
             return
 
-        if agent_id not in ("dashboard", "human"):
+        # phase_complete 信号不需要 X-Zoo-Auth 鉴权（自动推进管线）
+        first_token = content.strip().split()[0] if content.strip() else ""
+        is_signal = any(first_token.startswith(s) for s in {"phase_complete:", "PI_DONE:", "pipeline_ack:"})
+        if not is_signal and agent_id not in ("dashboard", "human"):
             token = self.headers.get("X-Zoo-Auth", "")
             if not verify_token(agent_id, token):
                 self._json(403, {"error": "invalid token"})
                 return
 
+        # 处理 phase_complete 信号：写入发送者自己的 inbox，让 InboxWatcher 自动调度
+        first_token = content.strip().split()[0] if content.strip() else ""
+        if any(first_token.startswith(s) for s in {"phase_complete:", "PI_DONE:", "pipeline_ack:"}):
+            import uuid, json
+            from pathlib import Path
+            sig_msg = {
+                "id": str(uuid.uuid4()),
+                "from": agent_id,
+                "to": agent_id,
+                "body": content,
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "delivery_count": 0,
+                "ttl": 3600,
+            }
+            queue_dir = Path(MESH_DIR) / "inbound" / agent_id / "queue"
+            queue_dir.mkdir(parents=True, exist_ok=True)
+            with open(queue_dir / f"msg_{uuid.uuid4()}.json", "w") as f:
+                json.dump(sig_msg, f)
+            logger.info(f"phase_complete 信号已写入 {agent_id} inbox: {content[:60]}")
+        
         msg = {
             "type": "chat_message",
             "from": agent_id,
