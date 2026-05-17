@@ -1044,13 +1044,66 @@ chat = ChatWriter(MESH_DIR)
 mesh = None
 
 
+def _scan_pending_requirements():
+    """扫描 requirements.json 中未启动的 Pipeline 请求，自动写入 Panda inbox。
+    解决 Dashboard HTTP POST 到 ZooMesh 可能因重启丢失的问题。"""
+    import glob as _glob
+    reqs_path = str(Path(FRAMEWORK_DIR).parent / "dashboard" / "data" / "requirements.json")
+    logger.info(f"📋 扫描未启动的 Pipeline 请求: {reqs_path}")
+    if not os.path.exists(reqs_path):
+        logger.warning("requirements.json 不存在")
+        return
+    try:
+        with open(reqs_path) as f:
+            reqs = json.load(f)
+    except Exception as e:
+        logger.warning(f"读取 requirements.json 失败: {e}")
+        return
+
+    existing = set()
+    for f in _glob.glob(str(Path(MESH_DIR) / "pipeline" / "state_pl_*.json")):
+        pid = Path(f).stem.replace("state_", "")
+        existing.add(pid)
+
+    import uuid as _uuid
+    for req in reqs:
+        pid = req.get("pipeline_id", "")
+        req_status = req.get("status", "request")
+        if pid and pid not in existing and req_status in ("request", ""):
+            req_data = json.dumps({
+                "type": "pipeline_request", "task_id": pid,
+                "requirement_id": req.get("id", ""),
+                "title": req.get("title", ""),
+                "description": req.get("description", ""),
+                "assignee": req.get("assignee", ""),
+                "source": "dashboard",
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            })
+            # 写入 Panda inbox
+            panda_queue = Path(MESH_DIR) / "inbound" / "panda" / "queue"
+            panda_queue.mkdir(parents=True, exist_ok=True)
+            msg = {
+                "id": str(_uuid.uuid4()), "from": "dashboard", "to": "panda",
+                "body": f"@panda 新Pipeline请求: {req_data}",
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "delivery_count": 0, "ttl": 3600,
+            }
+            with open(panda_queue / f"msg_{_uuid.uuid4()}.json", "w") as f:
+                json.dump(msg, f)
+            logger.info(f"📋 自动启动未处理的 Pipeline: {pid} ({req.get('title','')[:30]})")
+
+
 # ── Main ────────────────────────────────────────────────────────────────────────
 def main():
+    global mesh
     global mesh
     logger.info("🚀 ZooMesh 守护进程启动中...")
 
     mesh = ZooMesh()
     mesh.init(MESH_DIR)
+
+    # 启动时扫描未启动的 Pipeline 请求
+    _scan_pending_requirements()
 
     # Daemon threads
     registry_path = str(Path(FRAMEWORK_DIR) / "shared" / "zoo_registry.json")
