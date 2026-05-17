@@ -341,7 +341,7 @@ body {
 
 .kanban-columns {
     display: grid;
-    grid-template-columns: repeat(9, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 10px;
     height: 100%;
 }
@@ -355,7 +355,8 @@ body {
     overflow: hidden;
 }
 
-.kanban-column.backlog {
+.kanban-column.backlog,
+.kanban-column.request {
     background: var(--backlog-color);
 }
 

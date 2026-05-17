@@ -419,13 +419,14 @@ def _on_wakeup_callback(agent_id: str):
                 continue
 
             # 类型 3：已删除。所有推进必须有明确信号。
-            # 其他消息 → 仅桥接通知（不自动推进）
+            # 其他消息 → 仅桥接通知（不自动推进），并移入 processed 避免死循环
             if agent_id != "panda":
                 _send_agent_notification(agent_id, body)
             else:
                 # Panda 的未分类消息 — 仅通知（类型 3 已从设计文档彻底移除）
                 logger.info(f"Panda 未分类消息，仅通知: {body[:80]}")
                 _send_agent_notification(agent_id, body)
+            _move_to_processed(msg_file)
 
     except Exception as e:
         logger.warning(f"on_wakeup({agent_id}) 处理失败: {e}")
@@ -567,14 +568,20 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
 
 def _handle_phase_complete(body: str, agent_id: str) -> None:
     """处理 Agent 的 phase_complete/pipeline_ack 回复，推进到下一阶段。"""
-    # 提取 pipeline_id（格式: pl_xxxxxxxx 或 PI_DONE:pl_xxxxxxxx）
+    # 提取 pipeline_id（格式: pl_xxxxxxxx、phase_complete:pl_xxxxxxxx 或 PI_DONE:pl_xxxxxxxx）
     pipeline_id = None
     for token in body.split():
+        # 直接匹配 pl_ 前缀
         if token.startswith("pl_"):
             pipeline_id = token
             break
+        # phase_complete:pl_xxxxxxxx → 提取 pl_xxxxxxxx
+        m = re.search(r'phase_complete[:\s]+(pl_[a-f0-9]+)', token)
+        if m:
+            pipeline_id = m.group(1)
+            break
+        # PI_DONE:pl_xxxxxxxx → 提取 pl_xxxxxxxx
         if "PI_DONE:" in token:
-            # PI_DONE:pl_xxxxxxxx → 提取 pl_xxxxxxxx
             m = re.search(r'(pl_[a-f0-9]+)', token)
             if m:
                 pipeline_id = m.group(1)

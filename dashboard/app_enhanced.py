@@ -58,21 +58,21 @@ MEMBERS_INFO = {
 PANDA_MESH_DIR = Path(os.environ.get("ZOO_MESH_DIR", str(PANDA_ROOT / "zoo_mesh")))
 PIPELINE_DIR = PANDA_MESH_DIR / "pipeline"
 
-# Pipeline 阶段 → 看板列映射
-# 完整 9 阶段 + 终态/异常
+# Pipeline 阶段 → 看板列映射（5列合并精简版）
+# 内部 Pipeline 状态不变，仅合并对外展示列
 PIPELINE_PHASE_TO_COLUMN = {
     "request":     "request",
     "validate":    "request",
     "design":      "design",
-    "ui_design":   "ui_design",
-    "review":      "review",
-    "develop_wt":  "develop_wt",
-    "review_test": "review_test",
-    "develop_code":"develop_code",
+    "ui_design":   "design",
+    "review":      "develop",
+    "develop_wt":  "develop",
+    "review_test": "develop",
+    "develop_code":"develop",
     "develop":     "develop",
-    "test":        "test",
-    "audit":       "audit_final",
-    "final_check": "audit_final",
+    "test":        "develop",
+    "audit":       "audit",
+    "final_check": "audit",
     "deliver":     "done",
     "done":        "done",
     "cancelled":   "exception",
@@ -80,24 +80,15 @@ PIPELINE_PHASE_TO_COLUMN = {
     "escalated":   "exception",
 }
 
-# 看板列定义（8列，映射完整 Pipeline）
-# 说明：4象限展开为8列以覆盖 Pipeline 所有阶段
+# 看板列定义（精简版：5列 + 异常列）
+# 内部 Pipeline 状态不变，仅在对外展示时合并
 KANBAN_STATUS = {
-    "request":     "📥 需求池",       # request
-    "validate":    "📥 需求池",       # validate
-    "design":      "🎨 设计中",        # design
-    "ui_design":   "🎨 UI设计中",     # ui_design
-    "review":      "📋 审核中",        # review
-    "develop_wt":  "🧪 测试编写中",   # develop_wt
-    "review_test": "📋 测试审核中",   # review_test
-    "develop_code":"🔧 开发中",       # develop_code
-    "develop":     "🔧 开发中",       # develop (旧兼容)
-    "test":        "🧪 测试中",       # test
-    "audit":       "🔍 审计中",       # audit
-    "final_check": "🔍 审计中",       # final_check
-    "deliver":     "✅ 已完成",       # deliver
-    "done":        "✅ 已完成",       # done
-    "exception":   "⚠️ 异常"        # cancelled + escalated + timed_out
+    "request":   "📥 需求池",      # request + validate
+    "design":    "🎨 设计阶段",     # design + ui_design
+    "develop":   "🔧 开发阶段",     # review + develop_wt + review_test + develop_code + test
+    "audit":     "🔍 验收阶段",     # audit + final_check
+    "done":      "✅ 已完成",       # deliver + done
+    "exception": "⚠️ 异常",         # cancelled + escalated + timed_out
 }
 
 # SSE 客户端管理器
@@ -1296,15 +1287,12 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 elif req_status != 'request':
                     # 有 pipeline_id 但无活跃管道时，使用需求自身的 status 字段
                     col_map = {
-                        'design': 'design',
-                        'ui_design': 'ui_design',
-                        'review': 'review',
-                        'develop_wt': 'develop_wt',
-                        'review_test': 'review_test',
-                        'develop_code': 'develop_code',
-                        'develop': 'develop',
-                        'test': 'test',
-                        'audit': 'audit_final', 'final_check': 'audit_final',
+                        'design': 'design', 'ui_design': 'design',
+                        'review': 'develop',
+                        'develop_wt': 'develop', 'review_test': 'develop',
+                        'develop_code': 'develop', 'develop': 'develop',
+                        'test': 'develop',
+                        'audit': 'audit', 'final_check': 'audit',
                         'deliver': 'done', 'done': 'done',
                         'cancelled': 'exception', 'escalated': 'exception',
                         'timed_out': 'exception'
@@ -1313,15 +1301,12 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             elif req_status != 'request':
                 # 没有 pipeline_id 但有状态变更，尝试映射
                 col_map = {
-                    'design': 'design',
-                    'ui_design': 'ui_design',
-                    'review': 'review',
-                    'develop_wt': 'develop_wt',
-                    'review_test': 'review_test',
-                    'develop_code': 'develop_code',
-                    'develop': 'develop',
-                    'test': 'test',
-                    'audit': 'audit_final', 'final_check': 'audit_final',
+                    'design': 'design', 'ui_design': 'design',
+                    'review': 'develop',
+                    'develop_wt': 'develop', 'review_test': 'develop',
+                    'develop_code': 'develop', 'develop': 'develop',
+                    'test': 'develop',
+                    'audit': 'audit', 'final_check': 'audit',
                     'deliver': 'done', 'done': 'done',
                     'cancelled': 'exception', 'escalated': 'exception',
                     'timed_out': 'exception'
@@ -1340,6 +1325,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 'pipeline_id': req.get('pipeline_id', ''),
                 'phase': column_key,
                 'phase_name': KANBAN_STATUS.get(column_key, column_key),
+                'pipeline_status': req.get('status', ''),  # 内部 Pipeline 阶段，用于卡片显示
                 'created_at': req.get('created_at', ''),
                 'completed_at': req.get('completed_at', ''),
                 'is_from_requirements': True

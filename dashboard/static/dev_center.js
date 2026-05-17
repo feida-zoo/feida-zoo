@@ -745,7 +745,7 @@ class ZooDevCenter {
                     <div class="assignee-avatar" style="${avatarSrc ? 'display:none;' : ''}">${assigneeEmoji}</div>
                     <span>${task.assignee || '未分配'}</span>
                 </div>
-                ${task.phase_name ? `<div class="task-phase">${task.phase_name}</div>` : ''}
+                ${task.pipeline_status ? `<div class="task-phase" title="${task.phase_name}">${task.pipeline_status}</div>` : (task.phase_name ? `<div class="task-phase">${task.phase_name}</div>` : '')}
             </div>
         `;
         
@@ -1528,14 +1528,22 @@ function loadRequirementsList() {
             
             const statusLabels = {
                 'request': '📥 需求池',
-                'design': '🎨 设计中',
-                'ui_design': '🎨 UI设计中',
-                'review': '📋 审核中',
-                'develop': '🔧 开发中',
-                'test': '🧪 测试中',
-                'audit_final': '🔍 审计中',
+                'validate': '📥 需求池',
+                'design': '🎨 设计阶段',
+                'ui_design': '🎨 设计阶段',
+                'review': '🔧 开发阶段',
+                'develop_wt': '🔧 开发阶段',
+                'review_test': '🔧 开发阶段',
+                'develop_code': '🔧 开发阶段',
+                'develop': '🔧 开发阶段',
+                'test': '🔧 开发阶段',
+                'audit': '🔍 验收阶段',
+                'final_check': '🔍 验收阶段',
+                'deliver': '✅ 已完成',
                 'done': '✅ 已完成',
-                'exception': '⚠️ 异常'
+                'cancelled': '⚠️ 异常',
+                'timed_out': '⚠️ 异常',
+                'escalated': '⚠️ 异常'
             };
             
             const agentNames = {
