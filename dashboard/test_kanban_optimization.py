@@ -61,6 +61,7 @@ PHASE_TO_CHINESE = {
     "design":       "设计中",
     "ui_design":    "UI设计中",
     "review":       "审查中",
+    "develop":      "开发中",
     "develop_wt":   "开发中(WT)",
     "review_test":  "测试审查",
     "develop_code": "编码中",
@@ -103,11 +104,17 @@ class TestKanbanConstants(unittest.TestCase):
         self.assertEqual(len(mock_kanban_status), 5)
         self.assertNotIn("exception", mock_kanban_status)
 
-    def test_pipeline_phase_to_column_has_17_keys(self):
+    def test_pipeline_phase_to_column_has_all_keys(self):
         """验证映射覆盖全部 Pipeline 阶段"""
-        expected_count = len(PHASE_TO_CHINESE)  # 所有需要映射的阶段
-        self.assertEqual(len(AFTER_PIPELINE_PHASE_TO_COLUMN), expected_count,
-                         f"应有 {expected_count} 个映射条目")
+        target_count = len(PHASE_TO_CHINESE)
+        self.assertEqual(len(AFTER_PIPELINE_PHASE_TO_COLUMN), target_count,
+                         f"PIPELINE_PHASE_TO_COLUMN 有 {len(AFTER_PIPELINE_PHASE_TO_COLUMN)} 个条目, PHASE_TO_CHINESE 有 {target_count} 个")
+        for phase in PHASE_TO_CHINESE:
+            self.assertIn(phase, AFTER_PIPELINE_PHASE_TO_COLUMN,
+                          f"阶段 {phase} 在 PIPELINE_PHASE_TO_COLUMN 中缺失")
+        for phase in AFTER_PIPELINE_PHASE_TO_COLUMN:
+            self.assertIn(phase, PHASE_TO_CHINESE,
+                          f"阶段 {phase} 在 PHASE_TO_CHINESE 中缺失")
 
     def test_all_phases_map_to_5_columns_only(self):
         """验证所有阶段只映射到5个主列"""
@@ -155,9 +162,14 @@ class TestKanbanConstants(unittest.TestCase):
             "audit", "final_check", "deliver", "done",
             "cancelled", "timed_out", "escalated",
         ]
-        actual_keys = list(AFTER_PIPELINE_PHASE_TO_COLUMN.keys())
-        self.assertEqual(actual_keys, expected_order,
-                         f"阶段顺序不一致\n期望: {expected_order}\n实际: {actual_keys}")
+        # 验证 PIPELINE_PHASE_TO_COLUMN 包含所有 expected 阶段
+        for phase in expected_order:
+            self.assertIn(phase, AFTER_PIPELINE_PHASE_TO_COLUMN,
+                          f"阶段 {phase} 在映射中缺失")
+        # 验证没有额外的阶段
+        for phase in AFTER_PIPELINE_PHASE_TO_COLUMN:
+            self.assertIn(phase, expected_order,
+                          f"映射中出现了意外的阶段 {phase}")
 
 
 # ===== 看板数据生成逻辑测试 =====

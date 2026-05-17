@@ -341,7 +341,7 @@ body {
 
 .kanban-columns {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 10px;
     height: 100%;
 }
@@ -389,8 +389,19 @@ body {
     background: var(--done-color);
 }
 
-.kanban-column.exception {
-    background: var(--exception-color);
+/* 异常卡片样式 — 归入主列时红色标识 */
+.task-card.task-exception {
+    border-left-color: #e74c3c !important;
+    background: #fdf2f2;
+}
+.task-card.task-exception:hover {
+    box-shadow: 0 3px 10px rgba(231, 76, 60, 0.3);
+    transform: translateX(5px);
+}
+.task-phase-exception {
+    background: #fce4ec !important;
+    color: #c0392b !important;
+    font-weight: 600;
 }
 
 .column-header {

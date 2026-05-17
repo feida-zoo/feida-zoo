@@ -647,8 +647,10 @@ class ZooDevCenter {
         // 清空现有内容
         columnsEl.innerHTML = '';
         
-        // 渲染四象限列
+        // 渲染四象限列（仅渲染5个已知列，防御未知列名）
+        const knownColumns = ['request', 'design', 'develop', 'audit', 'done'];
         for (const [statusKey, columnData] of Object.entries(kanbanData.columns)) {
+            if (!knownColumns.includes(statusKey)) continue;
             const columnEl = this.createKanbanColumn(statusKey, columnData);
             columnsEl.appendChild(columnEl);
         }
@@ -729,10 +731,25 @@ class ZooDevCenter {
         taskCard.className = `task-card severity-${task.severity?.toLowerCase() || 'p3'}`;
         taskCard.dataset.taskId = task.id;
         
+        // 检测异常状态（cancelled/timed_out/escalated）
+        const isException = task.pipeline_status_raw && ['cancelled', 'timed_out', 'escalated'].includes(task.pipeline_status_raw);
+        if (isException) {
+            taskCard.classList.add('task-exception');
+        }
+        
         // 获取成员 Emoji — 优先使用 current_executor（当前阶段执行人）
         const executor = task.current_executor || task.assignee || '';
         const assigneeEmoji = this.memberEmojiMap[executor] || '👤';
         const avatarSrc = executor ? `/static/avatars/${executor === 'stinger' ? 'stinger' : executor}.png` : '';
+        
+        // 阶段状态 HTML（中文显示，异常状态加红色类）
+        let phaseHtml = '';
+        if (task.pipeline_status) {
+            const phaseClass = isException ? 'task-phase task-phase-exception' : 'task-phase';
+            phaseHtml = `<div class="${phaseClass}" title="${task.phase_name}">${task.pipeline_status}</div>`;
+        } else if (task.phase_name) {
+            phaseHtml = `<div class="task-phase">${task.phase_name}</div>`;
+        }
         
         taskCard.innerHTML = `
             <div class="task-header">
@@ -746,7 +763,7 @@ class ZooDevCenter {
                     <div class="assignee-avatar" style="${avatarSrc ? 'display:none;' : ''}">${assigneeEmoji}</div>
                     <span>${this.memberEmojiMap[executor] ? this.memberEmojiMap[executor] + ' ' : ''}${executor || '未分配'}</span>
                 </div>
-                ${task.pipeline_status ? `<div class="task-phase" title="${task.phase_name}">${task.pipeline_status}</div>` : (task.phase_name ? `<div class="task-phase">${task.phase_name}</div>` : '')}
+                ${phaseHtml}
             </div>
         `;
         

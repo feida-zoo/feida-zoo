@@ -676,35 +676,38 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
     # Pipeline V2: 检查审查结果（review/review_test/audit 阶段推进时）
     if current_status in ("review", "review_test", "test", "audit"):
         review_data = _read_review_result(pipeline_id, current_status)
-        if review_data:
-            result = review_data.get("result")
-            if result == "reject":
-                # 驳回：StateMachine 回退
-                fallback_map = {"review": "design", "review_test": "develop_wt", "test": "develop_code", "audit": "develop_code"}
-                fallback = fallback_map.get(current_status)
-                if fallback:
-                    try:
-                        StateMachine.transition(current_status, fallback)
-                        cur_req["status"] = fallback
-                        cur_req["phase"] = fallback
-                        cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-                        _save_requirements(reqs)
-                        _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, fallback)
-                        next_agent = cur_req.get("assignee") or _pick_phase_agent(fallback)
-                        next_msg = (
-                            f"[Pipeline] Phase: {fallback}\n"
-                            f"task_id: {pipeline_id}\n"
-                            f"requirement_id: {cur_req['id']}\n"
-                            f"title: {cur_req['title']}\n"
-                            f"指令: 审查驳回，请按 review 意见修改后重新提交，完成后回复 phase_complete:{pipeline_id}"
-                        )
-                        mesh.send(next_agent, "pipeline", next_msg)
-                        mesh.set_pipeline_state(pipeline_id, fallback)
-                        logger.info(f"🔄 Pipeline {pipeline_id}: 审查驳回，{current_status}→{fallback}")
-                        return
-                    except Exception:
-                        pass
-            # pass → 继续推进
+        if not review_data:
+            # 审查文件不存在或 status 非 completed → 阻塞推进，不跳过
+            logger.warning(f"Pipeline {pipeline_id}: {current_status} 审查结果未完成，拒绝推进")
+            return
+        result = review_data.get("result")
+        if result == "reject":
+            # 驳回：StateMachine 回退
+            fallback_map = {"review": "design", "review_test": "develop_wt", "test": "develop_code", "audit": "develop_code"}
+            fallback = fallback_map.get(current_status)
+            if fallback:
+                try:
+                    StateMachine.transition(current_status, fallback)
+                    cur_req["status"] = fallback
+                    cur_req["phase"] = fallback
+                    cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                    _save_requirements(reqs)
+                    _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, fallback)
+                    next_agent = cur_req.get("assignee") or _pick_phase_agent(fallback)
+                    next_msg = (
+                        f"[Pipeline] Phase: {fallback}\n"
+                        f"task_id: {pipeline_id}\n"
+                        f"requirement_id: {cur_req['id']}\n"
+                        f"title: {cur_req['title']}\n"
+                        f"指令: 审查驳回，请按 review 意见修改后重新提交，完成后回复 phase_complete:{pipeline_id}"
+                    )
+                    mesh.send(next_agent, "pipeline", next_msg)
+                    mesh.set_pipeline_state(pipeline_id, fallback)
+                    logger.info(f"🔄 Pipeline {pipeline_id}: 审查驳回，{current_status}→{fallback}")
+                    return
+                except Exception:
+                    pass
+        # result="pass" → 继续推进到下一阶段
 
     # 正常推进到下一阶段
     try:

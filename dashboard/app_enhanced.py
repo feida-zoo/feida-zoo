@@ -75,20 +75,41 @@ PIPELINE_PHASE_TO_COLUMN = {
     "final_check": "audit",
     "deliver":     "done",
     "done":        "done",
-    "cancelled":   "exception",
-    "timed_out":   "exception",
-    "escalated":   "exception",
+    "cancelled":   "done",      # 已取消 → 归入已完成列
+    "timed_out":   "audit",      # 超时 → 归入验收阶段列
+    "escalated":   "develop",     # 升级 → 归入开发阶段列
 }
 
-# 看板列定义（精简版：5列 + 异常列）
+# Pipeline 阶段 → 中文显示名（卡片级展示）
+PHASE_TO_CHINESE = {
+    "request":      "待处理",
+    "validate":     "验证中",
+    "design":       "设计中",
+    "ui_design":    "UI设计中",
+    "review":       "审查中",
+    "develop":      "开发中",
+    "develop_wt":   "开发中(WT)",
+    "review_test":  "测试审查",
+    "develop_code": "编码中",
+    "test":         "测试中",
+    "audit":        "验收中",
+    "final_check":  "终检中",
+    "deliver":      "交付中",
+    "done":         "已完成",
+    "cancelled":    "🚫 已取消",
+    "timed_out":    "⏰ 已超时",
+    "escalated":    "🚨 已升级",
+}
+
+# 看板列定义（精简版5列，无异常独立列）
 # 内部 Pipeline 状态不变，仅在对外展示时合并
+# 异常状态（cancelled/timed_out/escalated）归入对应主列，卡片红色标识
 KANBAN_STATUS = {
     "request":   "📥 需求池",      # request + validate
-    "design":    "🎨 设计阶段",     # design + ui_design
-    "develop":   "🔧 开发阶段",     # review + develop_wt + review_test + develop_code + test
+    "design":    "🎨 设计阶段",     # design + ui_design + review
+    "develop":   "🔧 开发阶段",     # develop + develop_wt + review_test + develop_code + test
     "audit":     "🔍 验收阶段",     # audit + final_check
-    "done":      "✅ 已完成",       # deliver + done
-    "exception": "⚠️ 异常",         # cancelled + escalated + timed_out
+    "done":      "✅ 已完成",       # deliver + done + cancelled
 }
 
 # SSE 客户端管理器
@@ -1282,6 +1303,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             "audit": "duci", "final_check": "panda", "deliver": "panda",
         }
 
+        seen_pipeline_ids = set()
+
         for req in requirements:
             # 确定需求在看板中的列：优先从 Pipeline 状态读取
             pipeline_id = req.get('pipeline_id', '')
@@ -1306,8 +1329,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                         'test': 'develop',
                         'audit': 'audit', 'final_check': 'audit',
                         'deliver': 'done', 'done': 'done',
-                        'cancelled': 'exception', 'escalated': 'exception',
-                        'timed_out': 'exception'
+                        'cancelled': 'done', 'escalated': 'develop',
+                        'timed_out': 'audit',
                     }
                     column_key = col_map.get(req_status, column_key)
             elif req_status != 'request':
@@ -1319,13 +1342,20 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                     'test': 'develop',
                     'audit': 'audit', 'final_check': 'audit',
                     'deliver': 'done', 'done': 'done',
-                    'cancelled': 'exception', 'escalated': 'exception',
-                    'timed_out': 'exception'
+                    'cancelled': 'done', 'escalated': 'develop',
+                    'timed_out': 'audit',
                 }
                 column_key = col_map.get(req_status, column_key)
             
             if column_key not in kanban_tasks:
                 column_key = "request"
+            
+            # 记录已处理的 pipeline_id 用于去重
+            if pipeline_id:
+                seen_pipeline_ids.add(pipeline_id)
+            
+            # 获取内部阶段中文显示名
+            pipeline_status_cn = PHASE_TO_CHINESE.get(pipeline_phase, pipeline_phase)
             
             kanban_tasks[column_key].append({
                 'id': req.get('id', ''),
@@ -1333,42 +1363,45 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 'description': req.get('description', ''),
                 'assignee': req.get('assignee', ''),
                 'severity': req.get('severity', 'P3'),
-                'pipeline_id': req.get('pipeline_id', ''),
+                'pipeline_id': pipeline_id,
                 'phase': column_key,
                 'phase_name': KANBAN_STATUS.get(column_key, column_key),
-                'pipeline_status': req.get('status', ''),
+                'pipeline_status': pipeline_status_cn,
+                'pipeline_status_raw': pipeline_phase,
                 'current_executor': current_executor,
                 'created_at': req.get('created_at', ''),
                 'completed_at': req.get('completed_at', ''),
                 'is_from_requirements': True
             })
         
-        # 3. 从 Pipeline 状态文件读取活跃管道（补全无对应 requirement 的管道，编号保留避免 diff 过大）
+        # 3. 从 Pipeline 状态文件读取活跃管道（补全无对应 requirement 的管道）
         active_pipelines = self._get_active_pipelines()
         for task_id, pl_info in active_pipelines.items():
-            # 检查是否已被 requirements 覆盖
-            already_in = any(
-                t.get('pipeline_id') == task_id
-                for col_tasks in kanban_tasks.values()
-                for t in col_tasks
-            )
-            if not already_in:
-                pl_state = pl_info.get("state", "request")
-                column_key = PIPELINE_PHASE_TO_COLUMN.get(pl_state, "request")
-                if column_key not in kanban_tasks:
-                    column_key = "request"
-                kanban_tasks[column_key].append({
-                    'id': task_id,
-                    'name': f'管道任务 {task_id[:8]}',
-                    'description': f'Pipeline 状态: {pl_state}',
-                    'assignee': 'panda',
-                    'severity': 'P0' if pl_state in ('exception', 'escalated') else 'P2',
-                    'pipeline_id': task_id,
-                    'phase': column_key,
-                    'phase_name': KANBAN_STATUS.get(column_key, column_key),
-                    'created_at': pl_info.get('updated_at', ''),
-                    'is_from_pipeline': True
-                })
+            # 使用 seen_pipeline_ids 集合去重（比逐列搜索更高效）
+            if task_id in seen_pipeline_ids:
+                continue
+            
+            pl_state = pl_info.get("state", "request")
+            column_key = PIPELINE_PHASE_TO_COLUMN.get(pl_state, "request")
+            if column_key not in kanban_tasks:
+                column_key = "request"
+            
+            pipeline_status_cn = PHASE_TO_CHINESE.get(pl_state, pl_state)
+            
+            kanban_tasks[column_key].append({
+                'id': task_id,
+                'name': f'管道任务 {task_id[:8]}',
+                'description': f'Pipeline 状态: {pl_state}',
+                'assignee': 'panda',
+                'severity': 'P0' if pl_state in ('cancelled', 'escalated', 'timed_out') else 'P2',
+                'pipeline_id': task_id,
+                'phase': column_key,
+                'phase_name': KANBAN_STATUS.get(column_key, column_key),
+                'pipeline_status': pipeline_status_cn,
+                'pipeline_status_raw': pl_state,
+                'created_at': pl_info.get('updated_at', ''),
+                'is_from_pipeline': True
+            })
         
         # 排序
         severity_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
