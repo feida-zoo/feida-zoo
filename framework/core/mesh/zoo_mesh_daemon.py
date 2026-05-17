@@ -573,7 +573,8 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
             f"title: {title}\n"
             f"description: {cur_req.get('description', '')}\n"
             f"指令: 请执行 Validate 阶段，完成后回复 phase_complete:{task_id}\n"
-            f"回复方式: 在本对话回复 phase_complete:{task_id}，或 POST 至 http://127.0.0.1:18793/api/chat (from=你的id, content=phase_complete:{task_id})"
+            f"回复方式: 在本对话回复 phase_complete:{task_id}:pass/reject，\n"
+            f"或 POST 至 http://127.0.0.1:18793/api/chat (from=你的id, content=phase_complete:{task_id}:pass)"
         )
         try:
             mesh.send(phase_assignee, "pipeline", phase_msg)
@@ -631,6 +632,13 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         if phase_match:
             completed_phase = phase_match.group(1)
 
+    # 从 phase_complete 中提取审查结果（格式: phase_complete:pl_xxx:pass/reject）
+    review_result = None
+    result_match = re.search(r'phase_complete[:\s]+pl_[-a-zA-Z0-9]+[:\s]+(pass|reject)', body)
+    if result_match:
+        review_result = result_match.group(1)
+        logger.info(f"📝 phase_complete 携带审查结果: {review_result}")
+
     logger.info(f"🎯 阶段完成: agent={agent_id}, phase={completed_phase}, pipeline_id={pipeline_id}")
 
     # 载入 requirements
@@ -675,6 +683,22 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
 
     # Pipeline V2: 检查审查结果（review/review_test/audit 阶段推进时）
     if current_status in ("review", "review_test", "test", "audit"):
+        # 如果 phase_complete 携带了审查结果，直接写入审查文件
+        if review_result:
+            review_path = Path(MESH_DIR) / "pipeline" / f"{current_status}_{pipeline_id}.json"
+            if review_path.exists():
+                try:
+                    with open(review_path) as f:
+                        rdata = json.load(f)
+                    rdata["status"] = "completed"
+                    rdata["result"] = review_result
+                    rdata["reviewer"] = agent_id
+                    rdata["reviewed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                    with open(review_path, "w") as f:
+                        json.dump(rdata, f, indent=2)
+                    logger.info(f"📝 phase_complete 内联审查结果已写入: {current_status}={review_result}")
+                except Exception as e:
+                    logger.warning(f"写入内联审查结果失败: {e}")
         review_data = _read_review_result(pipeline_id, current_status)
         if not review_data:
             # 审查文件不存在或 status 非 completed → 阻塞推进，不跳过
@@ -740,7 +764,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         f"requirement_id: {cur_req['id']}\n"
         f"title: {cur_req['title']}\n"
         f"指令: 请执行 {next_phase} 阶段，完成后回复 phase_complete:{pipeline_id}\n"
-        f"回复方式: 在本对话回复 phase_complete:{pipeline_id}\n"
+        f"回复方式: 在本对话回复 phase_complete:{pipeline_id}:pass/reject\n"
         f"{template}"
     )
 
