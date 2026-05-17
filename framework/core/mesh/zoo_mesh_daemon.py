@@ -139,19 +139,10 @@ def _send_agent_notification(agent_id: str, body: str) -> None:
     pipeline_id = _extract_pipeline_id(body)
     phase = _extract_phase_from_body(body)
 
-    # Alpha 的通知走 QQ Bot API（我的 QQ 会话活跃，能直接收到）
-    if agent_id == "alpha":
-        try:
-            import subprocess as _sp
-            msg_text = f"🐢 Pipeline: [{phase or '?'}] {pipeline_id or ''}\n{body[:300]}"
-            _sp.run(["/opt/homebrew/bin/openclaw", "message", "send",
-                "--channel", "qqbot", "--target", "qqbot:c2c:639C0438DCC3CCA674064F1AFFBAE57D",
-                "-m", msg_text], capture_output=True, timeout=10)
-            _NOTIFY_LOG.add(notify_key)
-            logger.info(f"通知 alpha 成功 (QQ, pipeline={pipeline_id})")
-        except Exception as e:
-            logger.warning(f"通知 alpha 失败: {e}")
-        return
+    # 异步通知所有 Agent（不阻塞 InboxWatcher）
+    # 通过 openclaw agent 唤醒 Agent 会话，Agent 回复中的 phase_complete
+    # 信号会被 _try_parse_agent_reply 捕获并写入 inbox。
+    # 没有独立的超时限制——等 Agent 处理完自然会返回。
 
     # 精简通知文本
     msg_text = (
@@ -162,22 +153,24 @@ def _send_agent_notification(agent_id: str, body: str) -> None:
 
     # 异步通知其他 Agent（不阻塞 InboxWatcher）
     def _notify_async():
-        """在后台线程中执行 openclaw agent 通知。"""
+        """后台线程通知 Agent。openclaw agent 唤醒会话，Agent 回复中的
+        phase_complete 信号被自动解析写入 inbox，完成全自动推进。"""
         import subprocess as _sp
         oc_bin = "/opt/homebrew/bin/openclaw"
         try:
             result = _sp.run(
                 [oc_bin, "agent", "--agent", agent_id, "-m", msg_text],
-                capture_output=True, text=True, timeout=30
+                capture_output=True, text=True
             )
-            # 解析 Agent 回复中的 phase_complete 信号
             for out in (result.stdout, result.stderr):
                 if not out:
                     continue
                 for line in out.split("\n"):
                     line = line.strip()
-                    first_tok = line.split()[0] if line else ""
-                    if any(first_tok.startswith(s) for s in {"phase_complete:", "PI_DONE:", "pipeline_ack:"}):
+                    if not line:
+                        continue
+                    tok = line.split()[0]
+                    if any(tok.startswith(s) for s in {"phase_complete:", "PI_DONE:", "pipeline_ack:"}):
                         import uuid as _uuid, json as _json
                         from pathlib import Path as _Path
                         sig = {"id": str(_uuid.uuid4()), "from": agent_id, "to": agent_id,
@@ -187,27 +180,8 @@ def _send_agent_notification(agent_id: str, body: str) -> None:
                         qdir.mkdir(parents=True, exist_ok=True)
                         with open(qdir / f"msg_{_uuid.uuid4()}.json", "w") as f:
                             _json.dump(sig, f)
-                        logger.info(f"📨 Agent {agent_id} 回复信号已写入 inbox: {line[:60]}")
-            if result.returncode == 0:
-                logger.info(f"通知 {agent_id} 成功 (pipeline={pipeline_id})")
-            else:
-                logger.warning(f"通知 {agent_id}: rc={result.returncode}")
-        except _sp.TimeoutExpired as te:
-            if te.stdout:
-                for line in te.stdout.split("\n"):
-                    line = line.strip()
-                    if line.startswith("phase_complete:") or line.startswith("PI_DONE:") or line.startswith("pipeline_ack:"):
-                        import uuid as _uuid, json as _json
-                        from pathlib import Path as _Path
-                        sig = {"id": str(_uuid.uuid4()), "from": agent_id, "to": agent_id,
-                            "body": line, "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-                            "delivery_count": 0, "ttl": 3600}
-                        qdir = _Path(MESH_DIR) / "inbound" / agent_id / "queue"
-                        qdir.mkdir(parents=True, exist_ok=True)
-                        with open(qdir / f"msg_{_uuid.uuid4()}.json", "w") as f:
-                            _json.dump(sig, f)
-                        logger.info(f"📨 Agent {agent_id} 超时回复信号已写入 inbox: {line[:60]}")
-            logger.info(f"通知 {agent_id} 通知完成 (timeout, pipeline={pipeline_id})")
+                        logger.info(f"📨 Agent {agent_id} 已自动推进: {line[:60]}")
+            logger.info(f"通知 {agent_id} 完成 (pipeline={pipeline_id})")
         except Exception as e:
             logger.warning(f"通知 {agent_id} 异常: {e}")
 
