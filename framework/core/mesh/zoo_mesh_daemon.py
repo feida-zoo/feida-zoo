@@ -537,7 +537,7 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
     _publish_phase_advancement(title, task_id, "request", "validate")
 
     # 6. Agent 可用性检测（Pipeline V2 排队）
-    phase_assignee = cur_req.get("assignee") or _pick_phase_agent("validate")
+    phase_assignee = _pick_phase_agent("validate")
     priority = cur_req.get("priority", payload.get("priority", "P3"))
 
     if not _agent_available(phase_assignee):
@@ -704,7 +704,11 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         _create_review_file(pipeline_id, next_phase)
 
     # 通知下一阶段的 Agent
-    next_agent = cur_req.get("assignee") or _pick_phase_agent(next_phase)
+    # review/review_test/test/audit 强制使用阶段默认 Agent（毒刺），不受需求 assignee 覆盖
+    if next_phase in ("review", "review_test", "test", "audit"):
+        next_agent = _pick_phase_agent(next_phase)
+    else:
+        next_agent = cur_req.get("assignee") or _pick_phase_agent(next_phase)
     template = _get_phase_template(next_phase, pipeline_id)
     next_msg = (
         f"[Pipeline] Phase: {next_phase}\n"

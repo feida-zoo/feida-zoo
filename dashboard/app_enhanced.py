@@ -65,7 +65,7 @@ PIPELINE_PHASE_TO_COLUMN = {
     "validate":    "request",
     "design":      "design",
     "ui_design":   "design",
-    "review":      "develop",
+    "review":      "design",
     "develop_wt":  "develop",
     "review_test": "develop",
     "develop_code":"develop",
@@ -1288,7 +1288,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                     # 有 pipeline_id 但无活跃管道时，使用需求自身的 status 字段
                     col_map = {
                         'design': 'design', 'ui_design': 'design',
-                        'review': 'develop',
+                        'review': 'design',
                         'develop_wt': 'develop', 'review_test': 'develop',
                         'develop_code': 'develop', 'develop': 'develop',
                         'test': 'develop',
@@ -1302,7 +1302,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 # 没有 pipeline_id 但有状态变更，尝试映射
                 col_map = {
                     'design': 'design', 'ui_design': 'design',
-                    'review': 'develop',
+                    'review': 'design',
                     'develop_wt': 'develop', 'review_test': 'develop',
                     'develop_code': 'develop', 'develop': 'develop',
                     'test': 'develop',
