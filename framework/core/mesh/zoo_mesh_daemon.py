@@ -193,14 +193,14 @@ def _send_agent_notification(agent_id: str, body: str) -> None:
                         with open(qdir / f"msg_{_uuid.uuid4()}.json", "w") as f:
                             _json.dump(sig, f)
                         logger.info(f"📨 Agent {agent_id} 超时回复信号已写入 inbox: {line[:60]}")
-            logger.info(f"通知 {agent_id} 已触发 (timeout, pipeline={pipeline_id})")
+            logger.info(f"通知 {agent_id} 通知完成 (timeout, pipeline={pipeline_id})")
         except Exception as e:
             logger.warning(f"通知 {agent_id} 异常: {e}")
 
     t = threading.Thread(target=_notify_async, daemon=True)
     t.start()
     _NOTIFY_LOG.add(notify_key)
-    logger.info(f"通知 {agent_id} 已异步发送 (pipeline={pipeline_id})")
+    logger.info(f"通知 {agent_id} 已通知（异步） (pipeline={pipeline_id})")
 
 
 def _extract_pipeline_id(body: str) -> str | None:

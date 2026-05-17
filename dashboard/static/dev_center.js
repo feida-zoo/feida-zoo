@@ -742,11 +742,24 @@ class ZooDevCenter {
         const assigneeEmoji = this.memberEmojiMap[executor] || '👤';
         const avatarSrc = executor ? `/static/avatars/${executor === 'stinger' ? 'stinger' : executor}.png` : '';
         
+        // 阶段状态中文映射
+        const STATUS_CN = {
+            'request': '需求池', 'validate': '验证中',
+            'design': '设计中', 'ui_design': 'UI设计中',
+            'review': '审核中',
+            'develop_wt': '测试编写中', 'review_test': '测试审核中',
+            'develop_code': '开发中', 'develop': '开发中',
+            'test': '测试中',
+            'audit': '审计中', 'final_check': '终审中',
+            'deliver': '交付中', 'done': '已完成',
+            'cancelled': '已取消', 'timed_out': '超时', 'escalated': '升级处理',
+        };
+        const statusCN = STATUS_CN[task.pipeline_status] || task.pipeline_status || '';
         // 阶段状态 HTML（中文显示，异常状态加红色类）
         let phaseHtml = '';
         if (task.pipeline_status) {
             const phaseClass = isException ? 'task-phase task-phase-exception' : 'task-phase';
-            phaseHtml = `<div class="${phaseClass}" title="${task.phase_name}">${task.pipeline_status}</div>`;
+            phaseHtml = `<div class="${phaseClass}" title="${task.phase_name}">${statusCN}</div>`;
         } else if (task.phase_name) {
             phaseHtml = `<div class="task-phase">${task.phase_name}</div>`;
         }
