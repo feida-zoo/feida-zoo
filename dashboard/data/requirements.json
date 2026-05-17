@@ -128,11 +128,11 @@
     "title": "需求卡片优化2",
     "description": "看板栏里的需求卡片修改为按照从新到旧排序",
     "assignee": "alpha",
-    "status": "validate",
-    "phase": "validate",
+    "status": "review",
+    "phase": "review",
     "created_at": "2026-05-17T21:08:06.136567",
     "pipeline_id": "pl_985c3146",
     "source": "dashboard_requirement",
-    "updated_at": "2026-05-17T21:11:52"
+    "updated_at": "2026-05-17T21:52:35"
   }
 ]

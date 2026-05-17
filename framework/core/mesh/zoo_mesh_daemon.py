@@ -139,6 +139,20 @@ def _send_agent_notification(agent_id: str, body: str) -> None:
     pipeline_id = _extract_pipeline_id(body)
     phase = _extract_phase_from_body(body)
 
+    # Alpha 的通知走 QQ Bot API（我的 QQ 会话活跃，能直接收到）
+    if agent_id == "alpha":
+        try:
+            import subprocess as _sp
+            msg_text = f"🐢 Pipeline: [{phase or '?'}] {pipeline_id or ''}\n{body[:300]}"
+            _sp.run(["/opt/homebrew/bin/openclaw", "message", "send",
+                "--channel", "qqbot", "--target", "qqbot:c2c:639C0438DCC3CCA674064F1AFFBAE57D",
+                "-m", msg_text], capture_output=True, timeout=10)
+            _NOTIFY_LOG.add(notify_key)
+            logger.info(f"通知 alpha 成功 (QQ, pipeline={pipeline_id})")
+        except Exception as e:
+            logger.warning(f"通知 alpha 失败: {e}")
+        return
+
     # 精简通知文本
     msg_text = (
         f"📥 Pipeline通知: "
@@ -146,7 +160,7 @@ def _send_agent_notification(agent_id: str, body: str) -> None:
         f"{body[:250]}"
     )
 
-    # 异步通知：不阻塞 InboxWatcher，确保 pipeline 持续推进
+    # 异步通知其他 Agent（不阻塞 InboxWatcher）
     def _notify_async():
         """在后台线程中执行 openclaw agent 通知。"""
         import subprocess as _sp

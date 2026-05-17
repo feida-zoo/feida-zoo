@@ -1383,15 +1383,11 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 'is_from_pipeline': True
             })
         
-        # 排序
-        severity_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+        # 排序：按创建时间从新到旧，同时间按优先级
         for col_key in kanban_tasks:
-            kanban_tasks[col_key] = sorted(
-                kanban_tasks[col_key],
-                key=lambda x: (
-                    severity_order.get(x.get('severity', 'P3'), 3),
-                    x.get('created_at', '')
-                )
+            kanban_tasks[col_key].sort(
+                key=lambda x: (x.get('created_at', '') or ''),
+                reverse=True
             )
         
         return {
