@@ -1545,23 +1545,23 @@ function loadRequirementsList() {
             }
             
             const statusLabels = {
-                'request': '📥 需求池',
-                'validate': '📥 需求池',
-                'design': '🎨 设计阶段',
-                'ui_design': '🎨 设计阶段',
-                'review': '🔧 开发阶段',
-                'develop_wt': '🔧 开发阶段',
-                'review_test': '🔧 开发阶段',
-                'develop_code': '🔧 开发阶段',
-                'develop': '🔧 开发阶段',
-                'test': '🔧 开发阶段',
-                'audit': '🔍 验收阶段',
-                'final_check': '🔍 验收阶段',
-                'deliver': '✅ 已完成',
-                'done': '✅ 已完成',
-                'cancelled': '⚠️ 异常',
-                'timed_out': '⚠️ 异常',
-                'escalated': '⚠️ 异常'
+                'request': '待处理',
+                'validate': '验证中',
+                'design': '设计中',
+                'ui_design': 'UI设计中',
+                'review': '审查中',
+                'develop_wt': '开发中(WT)',
+                'review_test': '测试审查',
+                'develop_code': '编码中',
+                'develop': '开发中',
+                'test': '测试中',
+                'audit': '验收中',
+                'final_check': '终检中',
+                'deliver': '交付中',
+                'done': '已完成',
+                'cancelled': '🚫 已取消',
+                'timed_out': '⏰ 已超时',
+                'escalated': '🚨 已升级'
             };
             
             const agentNames = {

@@ -109,5 +109,18 @@
     "source": "dashboard_requirement",
     "updated_at": "2026-05-17T20:41:53",
     "completed_at": "2026-05-17T20:41:53"
+  },
+  {
+    "id": "6d0752fe-ff05-4db3-9cbe-34564d080c3b",
+    "title": "需求卡片优化",
+    "description": "需求卡片里的状态修改为中文显示",
+    "assignee": "alpha",
+    "status": "done",
+    "phase": "done",
+    "created_at": "2026-05-17T20:44:54.548976",
+    "pipeline_id": "pl_6d0752fe",
+    "source": "dashboard_requirement",
+    "updated_at": "2026-05-17T20:59:16",
+    "completed_at": "2026-05-17T20:59:16"
   }
 ]

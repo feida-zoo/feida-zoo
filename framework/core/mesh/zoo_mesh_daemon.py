@@ -189,7 +189,12 @@ def _send_agent_notification(agent_id: str, body: str) -> None:
                 return
             else:
                 logger.warning(f"通知 {agent_id}: rc={result.returncode}")
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as te:
+            # 超时也尝试解析 Agent 的回复（部分内容可能已输出）
+            if te.stdout:
+                _try_parse_agent_reply(te.stdout)
+            if te.stderr:
+                _try_parse_agent_reply(te.stderr)
             _NOTIFY_LOG.add(notify_key)
             logger.info(f"通知 {agent_id} 已触发 (timeout, pipeline={pipeline_id})")
             return

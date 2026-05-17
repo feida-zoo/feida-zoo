@@ -1612,6 +1612,17 @@ body {
 .req-status-badge.audit_final { background: #fff3e0; color: #f57c00; border: 1px solid #ffe0b2; }
 .req-status-badge.done { background: #e8f5e9; color: #388e3c; border: 1px solid #c8e6c9; }
 .req-status-badge.exception { background: #fce4ec; color: #d32f2f; border: 1px solid #f8bbd0; }
+.req-status-badge.validate { background: #f8f9fa; color: #636e72; border: 1px solid #dfe6e9; }
+.req-status-badge.ui_design { background: #fce4ec; color: #ad1457; border: 1px solid #f8bbd0; }
+.req-status-badge.develop_wt { background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; }
+.req-status-badge.review_test { background: #f3e5f5; color: #7b1fa2; border: 1px solid #e1bee7; }
+.req-status-badge.develop_code { background: #e8eaf6; color: #283593; border: 1px solid #c5cae9; }
+.req-status-badge.audit { background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; }
+.req-status-badge.final_check { background: #fff8e1; color: #f9a825; border: 1px solid #ffecb3; }
+.req-status-badge.deliver { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
+.req-status-badge.cancelled { background: #fce4ec; color: #c62828; border: 1px solid #f8bbd0; }
+.req-status-badge.timed_out { background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; }
+.req-status-badge.escalated { background: #fce4ec; color: #b71c1c; border: 1px solid #ffcdd2; }
 
 .success-toast {
     position: fixed;
