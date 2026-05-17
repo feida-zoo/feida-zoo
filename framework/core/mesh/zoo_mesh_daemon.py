@@ -149,13 +149,40 @@ def _send_agent_notification(agent_id: str, body: str) -> None:
     import subprocess
     oc_bin = "/opt/homebrew/bin/openclaw"
 
+    def _try_parse_agent_reply(output: str) -> None:
+        """解析 Agent 回复中的 phase_complete 信号，写入 inbox。"""
+        if not output:
+            return
+        for line in output.split("\n"):
+            line = line.strip()
+            first_tok = line.split()[0] if line else ""
+            if any(first_tok.startswith(s) for s in {"phase_complete:", "PI_DONE:", "pipeline_ack:"}):
+                import uuid as _uuid, json as _json
+                from pathlib import Path as _Path
+                sig_msg = {
+                    "id": str(_uuid.uuid4()),
+                    "from": agent_id,
+                    "to": agent_id,
+                    "body": line,
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                    "delivery_count": 0,
+                    "ttl": 3600,
+                }
+                qdir = _Path(MESH_DIR) / "inbound" / agent_id / "queue"
+                qdir.mkdir(parents=True, exist_ok=True)
+                with open(qdir / f"msg_{_uuid.uuid4()}.json", "w") as f:
+                    _json.dump(sig_msg, f)
+                logger.info(f"📨 Agent {agent_id} 回复信号已写入 inbox: {line[:60]}")
+
     for attempt in range(2):
         try:
             result = subprocess.run(
                 [oc_bin, "agent", "--agent", agent_id,
                  "-m", msg_text],
-                capture_output=True, text=True, timeout=15
+                capture_output=True, text=True, timeout=30
             )
+            _try_parse_agent_reply(result.stdout)
+            _try_parse_agent_reply(result.stderr)
             if result.returncode == 0:
                 _NOTIFY_LOG.add(notify_key)
                 logger.info(f"通知 {agent_id} 成功 (pipeline={pipeline_id})")
@@ -163,7 +190,6 @@ def _send_agent_notification(agent_id: str, body: str) -> None:
             else:
                 logger.warning(f"通知 {agent_id}: rc={result.returncode}")
         except subprocess.TimeoutExpired:
-            # 超时也可能是成功触发了，不严格报错
             _NOTIFY_LOG.add(notify_key)
             logger.info(f"通知 {agent_id} 已触发 (timeout, pipeline={pipeline_id})")
             return
