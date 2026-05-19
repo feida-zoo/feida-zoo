@@ -1189,6 +1189,8 @@ def main():
     try:
         while True:
             time.sleep(60)
+            _scan_pending_requirements()
+            _dispatch_pending_agents()
     except KeyboardInterrupt:
         logger.info("🛑 收到停止信号")
 
