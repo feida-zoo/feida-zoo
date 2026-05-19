@@ -135,5 +135,17 @@
     "source": "dashboard_requirement",
     "updated_at": "2026-05-19T19:59:42",
     "completed_at": "2026-05-19T19:59:42"
+  },
+  {
+    "id": "3833295c-e43c-4e62-9c8b-4c12a878ba0d",
+    "title": "动物员成员信息配置化",
+    "description": "1. 成员所有信息配置化，包括但不限于模型、负责阶段和通信用的session key、channel\n2. session key使用main session，而不是qq bot的session\n3. 成员使用模型需要与openclaw.json联动起来，对于主agent（panda），在动物园看板里只显示主用模型",
+    "assignee": "alpha",
+    "status": "validate",
+    "phase": "validate",
+    "created_at": "2026-05-19T21:13:10.678915",
+    "pipeline_id": "pl_3833295c",
+    "source": "dashboard_requirement",
+    "updated_at": "2026-05-19T21:35:45"
   }
 ]

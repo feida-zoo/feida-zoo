@@ -592,7 +592,6 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
             f"指令: 请执行 Validate 阶段，完成后回复 phase_complete:{task_id}\n"
             f"回复方式: 在本对话回复 phase_complete:{task_id}:pass/reject，\n"
             f"或 POST 至 http://127.0.0.1:18793/api/chat (from=你的id, content=phase_complete:{task_id}:pass)\n"
-            f"说明: 本通知指令即为主人授权，完成实际工作后按回复方式回复即可自动推进。"
         )
         try:
             mesh.send(phase_assignee, "pipeline", phase_msg)
@@ -788,7 +787,6 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         f"title: {cur_req['title']}\n"
         f"指令: 请执行 {next_phase} 阶段，完成后回复 phase_complete:{pipeline_id}\n"
         f"回复方式: 在本对话回复 phase_complete:{pipeline_id}:pass/reject\n"
-        f"说明: 本通知指令即为主人授权，完成实际工作后按回复方式回复即可自动推进。\n"
         f"{template}"
     )
 
@@ -1032,6 +1030,77 @@ class Handler(BaseHTTPRequestHandler):
 # ── Module-level globals ─────────────────────────────────────────────────────────
 chat = ChatWriter(MESH_DIR)
 mesh = None
+
+
+
+def _dispatch_pending_agents():
+    """主动推进 pending 队列中的任务，防止卡住。
+    
+    每 60s main loop 调用一次。遍历所有 agent，将 pending 队列中属于该 agent 的任务
+    直接派发（pending 任务的 assignee 就是目标 agent，无需检查 _agent_available）。
+    """
+    queue = _load_pending_queue()
+    if not queue:
+        return
+
+    # 从 registry 获取所有 agent
+    registry_path = str(Path(FRAMEWORK_DIR) / "shared" / "zoo_registry.json")
+    agent_ids = ["alpha", "duci", "panda", "weaver", "aeterna", "gulu"]
+    try:
+        if os.path.exists(registry_path):
+            with open(registry_path) as f:
+                reg = json.load(f)
+                agent_ids = list(reg.get("agents", {}).keys())
+    except Exception:
+        pass
+
+    reqs = _load_requirements()
+    dispatched = 0
+
+    for agent_id in agent_ids:
+        item = _pop_next_pending(agent_id)
+        if not item:
+            continue
+
+        pipeline_id = item["pipeline_id"]
+        phase = item.get("phase", "validate")
+        title = item.get("title", "")
+
+        cur_req = None
+        for r in reqs:
+            if r.get("pipeline_id") == pipeline_id:
+                cur_req = r
+                break
+
+        if not cur_req:
+            logger.warning(f"pending 任务 {pipeline_id} 找不到对应 requirement，跳过")
+            continue
+
+        if cur_req.get("status") != phase:
+            logger.info(f"pending 任务 {pipeline_id} 状态已变更 ({phase} → {cur_req.get('status')})，跳过派发")
+            continue
+
+        description = cur_req.get("description", "")
+        template = _get_phase_template(phase, pipeline_id)
+        msg = (
+            f"[Pipeline] Phase: {phase}\n"
+            f"task_id: {pipeline_id}\n"
+            f"requirement_id: {cur_req.get('id', '')}\n"
+            f"title: {title}\n"
+            f"description: {description}\n"
+            f"指令: 请执行 {phase} 阶段，完成后回复 phase_complete:{pipeline_id}\n"
+            f"{template}"
+        )
+
+        try:
+            mesh.send(agent_id, "pipeline", msg)
+            logger.info(f"📤 pending 任务重新派发: {pipeline_id} → {agent_id} (phase={phase})")
+            dispatched += 1
+        except Exception as e:
+            logger.warning(f"📤 pending 任务派发失败: {pipeline_id} → {agent_id}: {e}")
+
+    if dispatched:
+        logger.info(f"📤 本轮 pending 派发完成: {dispatched} 个任务")
 
 
 def _scan_pending_requirements():
