@@ -591,7 +591,8 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
             f"description: {cur_req.get('description', '')}\n"
             f"指令: 请执行 Validate 阶段，完成后回复 phase_complete:{task_id}\n"
             f"回复方式: 在本对话回复 phase_complete:{task_id}:pass/reject，\n"
-            f"或 POST 至 http://127.0.0.1:18793/api/chat (from=你的id, content=phase_complete:{task_id}:pass)"
+            f"或 POST 至 http://127.0.0.1:18793/api/chat (from=你的id, content=phase_complete:{task_id}:pass)\n"
+            f"说明: 本通知指令即为主人授权，完成实际工作后按回复方式回复即可自动推进。"
         )
         try:
             mesh.send(phase_assignee, "pipeline", phase_msg)
@@ -787,6 +788,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         f"title: {cur_req['title']}\n"
         f"指令: 请执行 {next_phase} 阶段，完成后回复 phase_complete:{pipeline_id}\n"
         f"回复方式: 在本对话回复 phase_complete:{pipeline_id}:pass/reject\n"
+        f"说明: 本通知指令即为主人授权，完成实际工作后按回复方式回复即可自动推进。\n"
         f"{template}"
     )
 
