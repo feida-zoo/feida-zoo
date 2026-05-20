@@ -301,43 +301,180 @@ def _read_review_result(pipeline_id: str, phase: str) -> dict | None:
         return None
 
 
-def _get_phase_template(phase: str, pipeline_id: str = "") -> str:
-    """根据阶段返回对应的指令模板（pipeline_id 为可选插值参数）。"""
+# ── Pipeline 辅助函数 ────────────────────────────────────────────────────────────
+
+# 项目路径映射（按 project_key 索引，可在创建需求时指定 project 字段）
+PROJECTS = {
+    "feida_zoo": {
+        "path": str(Path(FRAMEWORK_DIR).parent),
+        "artifacts_dir": "framework/shared",
+    },
+    "panda": {
+        "path": "/Users/zoo/workspace/members/panda",
+        "artifacts_dir": "memory",
+    },
+}
+
+
+def _get_project_info(project_key: str = "feida_zoo") -> dict:
+    """返回项目的路径配置。"""
+    return PROJECTS.get(project_key, PROJECTS["feida_zoo"])
+
+
+
+def _get_artifact_paths(pipeline_id: str, phase: str, project_key: str = "feida_zoo") -> dict:
+    """根据项目和阶段返回 I/O 路径。output=None 表示产出写入源码目录。"""
+    project = _get_project_info(project_key)
+    base = f"{project['path']}/{project['artifacts_dir']}"
+    pid = pipeline_id
+
+    table = {
+        "validate":      {"input": None,                       "output": f"{base}/{pid}_validate.md"},
+        "design":        {"input": f"{base}/{pid}_validate.md",   "output": f"{base}/{pid}_design.md"},
+        "ui_design":     {"input": f"{base}/{pid}_design.md",     "output": f"{base}/{pid}_ui_design.md"},
+        "review":        {"input": f"{base}/{pid}_design.md",     "output": f"{base}/{pid}_review.md"},
+        "develop_wt":    {"input": f"{base}/{pid}_design.md",     "output": None},
+        "review_test":   {"input": f"{base}/{pid}_design.md",     "output": f"{base}/{pid}_review_test.md"},
+        "develop_code":  {"input": f"{base}/{pid}_design.md",     "output": None},
+        "test":          {"input": f"{base}/{pid}_design.md",     "output": f"{base}/{pid}_test.md"},
+        "audit":         {"input": f"{base}/{pid}_design.md",     "output": f"{base}/{pid}_audit.md"},
+        "final_check":   {"input": f"{base}/{pid}_audit.md",       "output": f"{base}/{pid}_final_check.md"},
+    }
+    return table.get(phase, {"input": None, "output": None})
+
+
+
+def _build_io_block(pipeline_id: str, phase: str, project_key: str = "feida_zoo") -> str:
+    """生成项目中 I/O 路径信息块，供模板使用。"""
+    project = _get_project_info(project_key)
+    paths = _get_artifact_paths(pipeline_id, phase, project_key)
+    project_dir = project["path"]
+
+    lines = [f"项目路径: {project_dir}"]
+    if paths["input"]:
+        lines.append(f"输入文件: {paths['input']}")
+    if paths["output"]:
+        lines.append(f"输出文件: {paths['output']}（必须写入此文件，源码除外）")
+    else:
+        lines.append("输出: 直接写入源码目录（见项目路径下的具体文件）")
+    return "\n".join(lines) + "\n"
+
+
+def _build_phase_message(phase: str, pipeline_id: str, requirement: dict, project_key: str = "feida_zoo") -> str:
+    """构建发给 Agent 的完整阶段消息（统一入口）。"""
+    template = _get_phase_template(phase, pipeline_id, project_key)
+    return (
+        f"[Pipeline] Phase: {phase}\n"
+        f"task_id: {pipeline_id}\n"
+        f"requirement_id: {requirement.get('id', '')}\n"
+        f"title: {requirement.get('title', '')}\n"
+        f"description: {requirement.get('description', '')}\n"
+        f"指令: 请执行 {phase} 阶段，完成后回复 phase_complete:{pipeline_id}\n"
+        f"回复方式: 在本对话回复 phase_complete:{pipeline_id}:pass/reject\n"
+        f"{template}"
+    )
+
+
+def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "feida_zoo") -> str:
+    """根据阶段返回对应的指令模板（动态注入项目路径和 I/O）。"""
+    io = _build_io_block(pipeline_id, phase, project_key)
+
     templates = {
         "validate": (
-            "【设计产出要求】\n"
-            "- What: 具体要做什么改动\n"
-            "- Why: 为什么要这么做（背景、解决的问题）\n"
-            "- Tradeoff: 放弃了什么方案，做了什么权衡\n"
-            "- Open Questions: 有什么不确定的点、遗留问题\n"
-            "- Next Action: 希望审计方重点审查什么\n"
+            f"{io}"
+            "【Validate 阶段 - 需求评审】\n"
+            "- 可行性：需求是否可实现，有无技术障碍\n"
+            "- 依赖项：需要哪些前置条件\n"
+            "- 风险点：可能踩坑的地方\n"
+            "- 建议优先级：P0 / P1 / P2 / P3\n"
         ),
         "design": (
-            "\n【设计产出要求 - 五件套】\n"
+            f"{io}"
+            "【Design 阶段 - 架构设计】\n"
             "- What: 具体要做什么改动\n"
             "- Why: 为什么要这么做（背景、解决的问题）\n"
             "- Tradeoff: 放弃了什么方案，做了什么权衡\n"
-            "- Open Questions: 有什么不确定的点、遗留问题\n"
+            "- 接口定义: 新增/修改的函数、类、API\n"
+            "- 文件清单: 需要新增/修改的文件及路径\n"
+            "- Open Questions: 不确定点和遗留问题\n"
             "- Next Action: 希望审计方重点审查什么\n"
         ),
+        "ui_design": (
+            f"{io}"
+            "【UI Design 阶段 - 界面设计】\n"
+            "- 页面布局: 组件结构和位置\n"
+            "- 交互逻辑: 用户操作流程\n"
+            "- 状态定义: 各状态下的 UI 表现\n"
+            "- 视觉说明: 风格、颜色等\n"
+        ),
+        "review": (
+            f"{io}"
+            "【Review 阶段 - 设计评审】\n"
+            "请阅读输入文件，产出审查报告：\n"
+            "- 架构合理性\n"
+            "- 安全风险\n"
+            "- 遗漏检查\n"
+            "- 改进建议\n"
+            "- 结论: pass / reject（reject 需说明原因）\n"
+        ),
         "develop_wt": (
-            "\n【TDD - 写测试用例】\n"
-            "请为当前需求编写测试用例（单元测试 + 集成测试）\n"
-            "完成后回复 phase_complete:{pipeline_id}\n"
-            "\n注意：\n"
-            "- 测试用例需覆盖所有验收标准\n"
-            "- 下一步会由毒刺评审测试用例\n"
+            f"{io}"
+            "【Develop WT 阶段 - 编写测试用例】\n"
+            "请根据设计文档编写测试用例：\n"
+            "- 覆盖所有验收标准\n"
+            "- 含单元测试 + 集成测试\n"
+            "- 测试代码写入项目 tests/ 目录\n"
+        ),
+        "review_test": (
+            f"{io}"
+            "【Review Test 阶段 - 测试评审】\n"
+            "请评审测试用例质量：\n"
+            "- 覆盖度\n"
+            "- 边界用例\n"
+            "- 结论: pass / reject\n"
         ),
         "develop_code": (
-            "\n【TDD - 写实现代码】\n"
-            "测试用例已通过毒刺评审，请编写实现代码\n"
-            "自测所有用例通过后回复 phase_complete:{pipeline_id}\n"
+            f"{io}"
+            "【Develop Code 阶段 - 编写实现代码】\n"
+            "请根据设计文档编写实现代码，写入源码目录：\n"
+            "- 测试用例全部通过\n"
+            "- 不破坏现有功能\n"
+        ),
+        "test": (
+            f"{io}"
+            "【Test 阶段 - 测试执行】\n"
+            "请执行所有测试用例，产出测试报告：\n"
+            "- 通过率\n"
+            "- 失败用例分析\n"
+        ),
+        "audit": (
+            f"{io}"
+            "【Audit 阶段 - 代码审计】\n"
+            "请审计实现代码：\n"
+            "- 安全漏洞（SQL注入、XSS、硬编码密钥等）\n"
+            "- 代码质量（命名、结构、可维护性）\n"
+            "- 性能风险\n"
+            "- 结论: pass / reject\n"
+        ),
+        "final_check": (
+            f"{io}"
+            "【Final Check 阶段 - 最终验收】\n"
+            "请做最终检查：\n"
+            "- 所有 phase 是否完成\n"
+            "- 代码是否干净可交付\n"
+            "- 结论: pass / reject\n"
         ),
     }
-    t = templates.get(phase, "")
-    if pipeline_id:
-        t = t.replace("{pipeline_id}", pipeline_id)
-    return t
+
+    if phase in templates:
+        t = templates[phase]
+        if pipeline_id:
+            t = t.replace("{pipeline_id}", pipeline_id)
+        return t
+
+    # 未知阶段 fallback
+    fallback = f"{io}【{phase.title()} 阶段】\n请执行 {phase} 阶段，完成后回复 phase_complete:{pipeline_id}\n"
+    return fallback
 
 
 def _publish_phase_advancement(title: str, pipeline_id: str, from_phase: str, to_phase: str) -> None:
@@ -583,16 +720,8 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
         logger.info(f"⏳ {phase_assignee} 忙碌，{task_id} 入 pending 队列等待")
     else:
         # Agent 空闲 → 发指令
-        phase_msg = (
-            f"[Pipeline] Phase: validate\n"
-            f"task_id: {task_id}\n"
-            f"requirement_id: {cur_req['id']}\n"
-            f"title: {title}\n"
-            f"description: {cur_req.get('description', '')}\n"
-            f"指令: 请执行 Validate 阶段，完成后回复 phase_complete:{task_id}\n"
-            f"回复方式: 在本对话回复 phase_complete:{task_id}:pass/reject，\n"
-            f"或 POST 至 http://127.0.0.1:18793/api/chat (from=你的id, content=phase_complete:{task_id}:pass)\n"
-        )
+        project_key = cur_req.get("project", "feida_zoo")
+        phase_msg = _build_phase_message("validate", task_id, cur_req, project_key)
         try:
             mesh.send(phase_assignee, "pipeline", phase_msg)
             logger.info(f"已通知 {phase_assignee} 执行 validate 阶段")
@@ -740,13 +869,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
                     _save_requirements(reqs)
                     _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, fallback)
                     next_agent = cur_req.get("assignee") or _pick_phase_agent(fallback)
-                    next_msg = (
-                        f"[Pipeline] Phase: {fallback}\n"
-                        f"task_id: {pipeline_id}\n"
-                        f"requirement_id: {cur_req['id']}\n"
-                        f"title: {cur_req['title']}\n"
-                        f"指令: 审查驳回，请按 review 意见修改后重新提交，完成后回复 phase_complete:{pipeline_id}"
-                    )
+                    next_msg = _build_phase_message(fallback, pipeline_id, cur_req, cur_req.get("project", "feida_zoo"))
                     mesh.send(next_agent, "pipeline", next_msg)
                     mesh.set_pipeline_state(pipeline_id, fallback)
                     logger.info(f"🔄 Pipeline {pipeline_id}: 审查驳回，{current_status}→{fallback}")
@@ -779,16 +902,8 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         next_agent = _pick_phase_agent(next_phase)
     else:
         next_agent = cur_req.get("assignee") or _pick_phase_agent(next_phase)
-    template = _get_phase_template(next_phase, pipeline_id)
-    next_msg = (
-        f"[Pipeline] Phase: {next_phase}\n"
-        f"task_id: {pipeline_id}\n"
-        f"requirement_id: {cur_req['id']}\n"
-        f"title: {cur_req['title']}\n"
-        f"指令: 请执行 {next_phase} 阶段，完成后回复 phase_complete:{pipeline_id}\n"
-        f"回复方式: 在本对话回复 phase_complete:{pipeline_id}:pass/reject\n"
-        f"{template}"
-    )
+    project_key = cur_req.get("project", "feida_zoo")
+    next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key)
 
     try:
         mesh.send(next_agent, "pipeline", next_msg)
@@ -815,15 +930,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
             reqs2 = _load_requirements()
             for r in reqs2:
                 if r.get("pipeline_id") == pid and r.get("status") == next_phase:
-                    template2 = _get_phase_template(next_phase, pid)
-                    msg = (
-                        f"[Pipeline] Phase: {next_phase}\n"
-                        f"task_id: {pid}\n"
-                        f"requirement_id: {r['id']}\n"
-                        f"title: {r.get('title', '')}\n"
-                        f"指令: 请执行 {next_phase} 阶段，完成后回复 phase_complete:{pid}"
-                        f"{template2}"
-                    )
+                    msg = _build_phase_message(next_phase, pid, r, r.get("project", "feida_zoo"))
                     mesh.send(next_agent, "pipeline", msg)
                     logger.info(f"📤 pending 任务 {pid} 已派发")
                     break
