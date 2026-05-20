@@ -128,49 +128,62 @@ _NOTIFY_LOG: set = set()
 
 
 
-def _send_agent_notification(agent_id: str, body: str) -> None:
-    """通过 openclaw agent 触发目标 Agent 会话，实现跨 Agent 通知。
-    内部通过 openclaw agent -m 发送，Agent 回复通过 QQ Bot 路由，
-    由 daemon 的 _is_phase_complete_signal 在 on_wakeup / _handle_chat_message 中捕获。"""
-    import hashlib
-    notify_key = f"{agent_id}:{hashlib.md5(body.encode()).hexdigest()}"
-    if notify_key in _NOTIFY_LOG:
-        return
+def _panda_relay_post(next_agent: str, pipeline_id: str, phase: str,
+                           next_phase: str, cur_req: dict) -> None:
+    """通知 Panda 通过 sessions_send 联系下一阶段 Agent（完全绕开 QQ Bot）。
+    
+    Daemon 状态推进完成后，通过 HTTP POST 到 Panda 的 /relay 端点，
+    由 Panda 使用 sessions_send 联系 Alpha/Duci 的 main session。
+    """
+    import urllib.request, urllib.error
 
-    pipeline_id = _extract_pipeline_id(body)
-    phase = _extract_phase_from_body(body)
+    project_key = cur_req.get("project", "feida_zoo")
+    title = cur_req.get("title", pipeline_id)
+    
+    # 构建阶段消息
+    io_block = ""
+    try:
+        proj = _get_project_info(project_key)
+        art = _get_artifact_paths(next_phase, pipeline_id, proj)
+        io_block = (
+            f"【输入文件】\n{art.get('input', 'N/A')}\n"
+            f"【输出文件】\n{art.get('output', 'N/A')}\n"
+        )
+    except Exception:
+        pass
 
-    # 异步通知所有 Agent（不阻塞 InboxWatcher）
-    # 通过 openclaw agent 唤醒 Agent 会话，Agent 回复通过 QQ Bot 路由，
-    # 由 on_wakeup / _handle_chat_message 中的 _is_phase_complete_signal 捕获。
-    # 没有独立的超时限制——等 Agent 处理完自然会返回。
+    template = _get_phase_template(next_phase, pipeline_id)
 
-    # 精简通知文本
-    msg_text = (
-        f"📥 Pipeline通知: "
-        f"[{phase or '?'}] {pipeline_id or ''}\n"
-        f"{body[:250]}"
+    next_msg = (
+        f"📥 Pipeline 通知: [{next_phase}] {pipeline_id}\n"
+        f"【当前状态】{phase} → {next_phase}\n"
+        f"{io_block}"
+        f"【任务标题】{title}\n"
+        f"【项目】{project_key}\n"
+        f"指令: 请执行 {next_phase} 阶段，完成后通过 main session 回复 phase_complete:{pipeline_id}:pass/reject\n"
+        f"回复方式: 在本对话直接回复 phase_complete:{pipeline_id}:pass/reject\n"
+        f"{template}"
     )
 
-    # 异步通知其他 Agent（不阻塞 InboxWatcher）
-    def _notify_async():
-        """后台线程通知 Agent。Agent 收到消息后通过 QQ Bot 自然回复，
-        回复中的 phase_complete 由 daemon 在 on_wakeup / _handle_chat_message 中捕获。"""
-        import subprocess as _sp
-        oc_bin = "/opt/homebrew/bin/openclaw"
-        try:
-            _sp.run(
-                [oc_bin, "agent", "--agent", agent_id, "-m", msg_text],
-                capture_output=True, text=True
-            )
-            logger.info(f"通知 {agent_id} 完成 (pipeline={pipeline_id})")
-        except Exception as e:
-            logger.warning(f"通知 {agent_id} 异常: {e}")
+    payload = json.dumps({
+        "to": next_agent,
+        "pipeline_id": pipeline_id,
+        "phase": next_phase,
+        "message": next_msg,
+    }).encode()
 
-    t = threading.Thread(target=_notify_async, daemon=True)
-    t.start()
-    _NOTIFY_LOG.add(notify_key)
-    logger.info(f"通知 {agent_id} 已通知（异步） (pipeline={pipeline_id})")
+    req = urllib.request.Request(
+        "http://127.0.0.1:18792/relay",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5):
+            logger.info(f"✅ 已通知 Panda relay → {next_agent} (phase={next_phase})")
+    except Exception as e:
+        logger.warning(f"⚠️ Panda relay POST 失败: {e}")
+
 
 
 def _extract_pipeline_id(body: str) -> str | None:
@@ -577,11 +590,12 @@ def _on_wakeup_callback(agent_id: str):
             # 类型 3：已删除。所有推进必须有明确信号。
             # 其他消息 → 仅桥接通知（不自动推进），并移入 processed 避免死循环
             if agent_id != "panda":
-                _send_agent_notification(agent_id, body)
+                # _send_agent_notification 已移除，改由 Panda relay 处理
+                pass
             else:
                 # Panda 的未分类消息 — 仅通知（类型 3 已从设计文档彻底移除）
                 logger.info(f"Panda 未分类消息，仅通知: {body[:80]}")
-                _send_agent_notification(agent_id, body)
+                pass
             _move_to_processed(msg_file)
 
     except Exception as e:
@@ -705,7 +719,7 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
         project_key = cur_req.get("project", "feida_zoo")
         phase_msg = _build_phase_message("validate", task_id, cur_req, project_key)
         try:
-            mesh.send(phase_assignee, "pipeline", phase_msg)
+            _panda_relay_post(phase_assignee, task_id, "request", "validate", cur_req)
             logger.info(f"已通知 {phase_assignee} 执行 validate 阶段")
         except Exception as e:
             logger.warning(f"通知 {phase_assignee} 失败: {e}")
@@ -852,7 +866,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
                     _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, fallback)
                     next_agent = cur_req.get("assignee") or _pick_phase_agent(fallback)
                     next_msg = _build_phase_message(fallback, pipeline_id, cur_req, cur_req.get("project", "feida_zoo"))
-                    mesh.send(next_agent, "pipeline", next_msg)
+                    _panda_relay_post(next_agent, pipeline_id, current_status, fallback, cur_req)
                     mesh.set_pipeline_state(pipeline_id, fallback)
                     logger.info(f"🔄 Pipeline {pipeline_id}: 审查驳回，{current_status}→{fallback}")
                     return
@@ -888,7 +902,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
     next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key)
 
     try:
-        mesh.send(next_agent, "pipeline", next_msg)
+        _panda_relay_post(next_agent, pipeline_id, current_status, next_phase, cur_req)
         logger.info(f"已通知 {next_agent} 执行 {next_phase} 阶段")
     except Exception as e:
         logger.warning(f"通知 {next_agent} 失败: {e}")
@@ -913,7 +927,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
             for r in reqs2:
                 if r.get("pipeline_id") == pid and r.get("status") == next_phase:
                     msg = _build_phase_message(next_phase, pid, r, r.get("project", "feida_zoo"))
-                    mesh.send(next_agent, "pipeline", msg)
+                    _panda_relay_post(next_agent, pid, next_phase, next_phase, r)
                     logger.info(f"📤 pending 任务 {pid} 已派发")
                     break
     except Exception as e:
@@ -994,6 +1008,53 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
+
+        # /relay: Panda relay 端点，由 daemon 调用，触发 Panda sessions_send
+        if parsed.path == "/relay":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len)
+            try:
+                data = json.loads(body)
+            except Exception:
+                self._json(400, {"error": "invalid json"})
+                return
+
+            to_agent = data.get("to", "")
+            pipeline_id = data.get("pipeline_id", "")
+            phase = data.get("phase", "")
+            msg = data.get("message", "")
+
+            if not to_agent or not msg:
+                self._json(400, {"error": "missing to or message"})
+                return
+
+            # 调用 Panda 的 sessions_send 触发下一阶段 Agent
+            import urllib.request as _ur
+            panda_port = os.environ.get("ZOO_PANDA_HTTP_PORT", "18792")
+            relay_payload = json.dumps({
+                "action": "relay_to_agent",
+                "agent": to_agent,
+                "pipeline_id": pipeline_id,
+                "phase": phase,
+                "message": msg,
+            }).encode()
+
+            panda_req = _ur.Request(
+                f"http://127.0.0.1:{panda_port}/api/agent/relay",
+                data=relay_payload,
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            try:
+                with _ur.urlopen(panda_req, timeout=10) as resp:
+                    resp_data = json.loads(resp.read())
+                    self._json(200, {"status": "ok", "result": resp_data})
+            except _ur.error.HTTPError as e:
+                self._json(e.code, {"error": f"relay failed: {e.reason}"})
+            except Exception as e:
+                self._json(500, {"error": str(e)})
+            return
+
         if parsed.path != "/api/chat":
             self._json(404, {"error": "not found"})
             return
@@ -1182,7 +1243,7 @@ def _dispatch_pending_agents():
         )
 
         try:
-            mesh.send(agent_id, "pipeline", msg)
+            _panda_relay_post(agent_id, pipeline_id, phase, phase, cur_req)
             logger.info(f"📤 pending 任务重新派发: {pipeline_id} → {agent_id} (phase={phase})")
             dispatched += 1
         except Exception as e:
