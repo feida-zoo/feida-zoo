@@ -173,7 +173,7 @@ def _panda_relay_post(next_agent: str, pipeline_id: str, phase: str,
     }).encode()
 
     req = urllib.request.Request(
-        "http://127.0.0.1:18792/relay",
+        "http://127.0.0.1:18793/relay",
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST"
@@ -1015,8 +1015,9 @@ class Handler(BaseHTTPRequestHandler):
             body = self.rfile.read(content_len)
             try:
                 data = json.loads(body)
-            except Exception:
-                self._json(400, {"error": "invalid json"})
+            except Exception as e:
+                logger.warning(f"/relay JSON parse error: {e}, body={body!r}")
+                self._json(400, {"error": "invalid json", "detail": str(e)})
                 return
 
             to_agent = data.get("to", "")
@@ -1038,19 +1039,32 @@ class Handler(BaseHTTPRequestHandler):
                     capture_output=True, text=True, timeout=30
                 )
                 logger.info(f"✅ relay → {to_agent} (phase={phase}): stdout={len(result.stdout)}chars")
-                self._json(200, {
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                resp_data = json.dumps({
                     "status": "ok",
                     "agent": to_agent,
                     "pipeline_id": pipeline_id,
                     "phase": phase,
                     "stdout": result.stdout[:500] if result.stdout else "",
-                })
+                }, ensure_ascii=False).encode()
+                self.wfile.write(resp_data)
             except _sp.TimeoutExpired:
                 logger.warning(f"⚠️ relay → {to_agent} 超时")
-                self._json(200, {"status": "timeout", "agent": to_agent})
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "timeout", "agent": to_agent}).encode())
             except Exception as e:
                 logger.warning(f"⚠️ relay → {to_agent} 失败: {e}")
-                self._json(500, {"error": str(e)})
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
             return
 
         if parsed.path != "/api/chat":
@@ -1088,7 +1102,6 @@ class Handler(BaseHTTPRequestHandler):
         # 处理 phase_complete 信号：写入发送者自己的 inbox，让 InboxWatcher 自动调度
         first_token = content.strip().split()[0] if content.strip() else ""
         if any(first_token.startswith(s) for s in {"phase_complete:", "PI_DONE:", "pipeline_ack:"}):
-            import uuid, json
             from pathlib import Path
             sig_msg = {
                 "id": str(uuid.uuid4()),
