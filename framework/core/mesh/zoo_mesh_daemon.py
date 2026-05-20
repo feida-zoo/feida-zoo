@@ -130,7 +130,8 @@ _NOTIFY_LOG: set = set()
 
 def _send_agent_notification(agent_id: str, body: str) -> None:
     """通过 openclaw agent 触发目标 Agent 会话，实现跨 Agent 通知。
-    不走 QQ Bot API，使用会话路由（sessions_send 的 CLI 等价方式）。"""
+    内部通过 openclaw agent -m 发送，Agent 回复通过 QQ Bot 路由，
+    由 daemon 的 _is_phase_complete_signal 在 on_wakeup / _handle_chat_message 中捕获。"""
     import hashlib
     notify_key = f"{agent_id}:{hashlib.md5(body.encode()).hexdigest()}"
     if notify_key in _NOTIFY_LOG:
@@ -140,8 +141,8 @@ def _send_agent_notification(agent_id: str, body: str) -> None:
     phase = _extract_phase_from_body(body)
 
     # 异步通知所有 Agent（不阻塞 InboxWatcher）
-    # 通过 openclaw agent 唤醒 Agent 会话，Agent 回复中的 phase_complete
-    # 信号会被 _try_parse_agent_reply 捕获并写入 inbox。
+    # 通过 openclaw agent 唤醒 Agent 会话，Agent 回复通过 QQ Bot 路由，
+    # 由 on_wakeup / _handle_chat_message 中的 _is_phase_complete_signal 捕获。
     # 没有独立的超时限制——等 Agent 处理完自然会返回。
 
     # 精简通知文本
@@ -153,34 +154,15 @@ def _send_agent_notification(agent_id: str, body: str) -> None:
 
     # 异步通知其他 Agent（不阻塞 InboxWatcher）
     def _notify_async():
-        """后台线程通知 Agent。openclaw agent 唤醒会话，Agent 回复中的
-        phase_complete 信号被自动解析写入 inbox，完成全自动推进。"""
+        """后台线程通知 Agent。Agent 收到消息后通过 QQ Bot 自然回复，
+        回复中的 phase_complete 由 daemon 在 on_wakeup / _handle_chat_message 中捕获。"""
         import subprocess as _sp
         oc_bin = "/opt/homebrew/bin/openclaw"
         try:
-            result = _sp.run(
+            _sp.run(
                 [oc_bin, "agent", "--agent", agent_id, "-m", msg_text],
                 capture_output=True, text=True
             )
-            for out in (result.stdout, result.stderr):
-                if not out:
-                    continue
-                for line in out.split("\n"):
-                    line = line.strip()
-                    if not line:
-                        continue
-                    tok = line.split()[0]
-                    if any(tok.startswith(s) for s in {"phase_complete:", "PI_DONE:", "pipeline_ack:"}):
-                        import uuid as _uuid, json as _json
-                        from pathlib import Path as _Path
-                        sig = {"id": str(_uuid.uuid4()), "from": agent_id, "to": agent_id,
-                            "body": line, "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-                            "delivery_count": 0, "ttl": 3600}
-                        qdir = _Path(MESH_DIR) / "inbound" / agent_id / "queue"
-                        qdir.mkdir(parents=True, exist_ok=True)
-                        with open(qdir / f"msg_{_uuid.uuid4()}.json", "w") as f:
-                            _json.dump(sig, f)
-                        logger.info(f"📨 Agent {agent_id} 已自动推进: {line[:60]}")
             logger.info(f"通知 {agent_id} 完成 (pipeline={pipeline_id})")
         except Exception as e:
             logger.warning(f"通知 {agent_id} 异常: {e}")
