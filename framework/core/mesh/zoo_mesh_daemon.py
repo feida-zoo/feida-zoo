@@ -1009,7 +1009,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
 
-        # /relay: Panda relay 端点，由 daemon 调用，触发 Panda sessions_send
+        # /relay: ZooMesh daemon relay 端点，通过 sessions_send CLI 直接联系 Alpha/Duci 的 main session
         if parsed.path == "/relay":
             content_len = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_len)
@@ -1028,30 +1028,28 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(400, {"error": "missing to or message"})
                 return
 
-            # 调用 Panda 的 sessions_send 触发下一阶段 Agent
-            import urllib.request as _ur
-            panda_port = os.environ.get("ZOO_PANDA_HTTP_PORT", "18792")
-            relay_payload = json.dumps({
-                "action": "relay_to_agent",
-                "agent": to_agent,
-                "pipeline_id": pipeline_id,
-                "phase": phase,
-                "message": msg,
-            }).encode()
-
-            panda_req = _ur.Request(
-                f"http://127.0.0.1:{panda_port}/api/agent/relay",
-                data=relay_payload,
-                headers={"Content-Type": "application/json"},
-                method="POST"
-            )
+            # 通过 openclaw agent 直接联系 to_agent 的 main session
+            # Alpha/Duci 后续工作走 main session，绕开 QQ Bot
+            import subprocess as _sp
+            oc_bin = "/opt/homebrew/bin/openclaw"
             try:
-                with _ur.urlopen(panda_req, timeout=10) as resp:
-                    resp_data = json.loads(resp.read())
-                    self._json(200, {"status": "ok", "result": resp_data})
-            except _ur.error.HTTPError as e:
-                self._json(e.code, {"error": f"relay failed: {e.reason}"})
+                result = _sp.run(
+                    [oc_bin, "agent", "--agent", to_agent, "-m", msg],
+                    capture_output=True, text=True, timeout=30
+                )
+                logger.info(f"✅ relay → {to_agent} (phase={phase}): stdout={len(result.stdout)}chars")
+                self._json(200, {
+                    "status": "ok",
+                    "agent": to_agent,
+                    "pipeline_id": pipeline_id,
+                    "phase": phase,
+                    "stdout": result.stdout[:500] if result.stdout else "",
+                })
+            except _sp.TimeoutExpired:
+                logger.warning(f"⚠️ relay → {to_agent} 超时")
+                self._json(200, {"status": "timeout", "agent": to_agent})
             except Exception as e:
+                logger.warning(f"⚠️ relay → {to_agent} 失败: {e}")
                 self._json(500, {"error": str(e)})
             return
 
