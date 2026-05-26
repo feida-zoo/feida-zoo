@@ -855,6 +855,12 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         logger.warning(f"找不到 pipeline_id={pipeline_id} 对应的 requirement")
         return
 
+    # ── 并发安全：二次检查 state 文件，防止竞态覆盖 ──
+    state_now = mesh.get_pipeline_state(pipeline_id)
+    if state_now == "done":
+        logger.info(f"Pipeline {pipeline_id} state 文件已 done，跳过重复处理")
+        return
+
     current_status = cur_req.get("status", "request")
     # ── 幂等校验：已 done 的 pipeline 拒绝重复上报 ──
     if current_status == "done":
