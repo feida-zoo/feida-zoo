@@ -1,0 +1,172 @@
+# 飝龘动物园成员统一配置
+# 单文件权威来源 — 修改此处即可影响 ZooRegistry / Dashboard / Pipeline
+#
+# 模型 ID 必须与 ~/.openclaw/openclaw.json 中 agents.defaults.models 的 key 匹配
+# session.key 使用 OpenClaw main session 格式: agent:<id>:main
+
+_version: "1.0.0"
+_updated: "2026-05-20"
+
+members:
+  panda:
+    id: panda
+    name: 达达
+    code_name: Panda
+    role: admin
+    display_name: 中枢调度大管家
+    emoji: 🐼
+    species: 熊猫
+    model: minimax/MiniMax-M2.7
+    session:
+      key: agent:main:main
+      channel: internal
+    responsible_phases:
+      - request
+      - final_check
+      - deliver
+    capabilities:
+      - orchestration
+      - coordination
+      - system_management
+      - task_scheduling
+    metadata:
+      language: zh-CN
+      is_main_agent: true
+      status: active
+
+  alpha:
+    id: alpha
+    name: 阿尔法
+    code_name: Alpha
+    role: architect
+    display_name: 首席架构师
+    emoji: 🐢
+    species: 玄龟
+    model: deepseek/deepseek-v4-flash
+    session:
+      key: agent:alpha:main
+      channel: internal
+    responsible_phases:
+      - validate
+      - design
+      - ui_design
+      - develop_wt
+      - develop_code
+    capabilities:
+      - architecture_design
+      - system_analysis
+      - complex_reasoning
+      - technical_planning
+    metadata:
+      language: zh-CN
+      is_main_agent: false
+      status: active
+
+  duci:
+    id: duci
+    name: 毒刺
+    code_name: Duci
+    role: auditor
+    display_name: 无情审计师
+    emoji: 🦂
+    species: 蝎子
+    model: minimax/MiniMax-M2.7
+    session:
+      key: agent:duci:main
+      channel: internal
+    responsible_phases:
+      - review
+      - review_test
+      - test
+      - audit
+    capabilities:
+      - security_audit
+      - quality_assurance
+      - code_review
+      - risk_assessment
+    metadata:
+      language: zh-CN
+      is_main_agent: false
+      status: active
+
+  weaver:
+    id: weaver
+    name: 织巢
+    code_name: Weaver
+    role: engineer
+    display_name: 疯狂工程师
+    emoji: 🐜
+    species: 蚂蚁
+    model: minimax/MiniMax-M2.7
+    session:
+      key: agent:weaver:main
+      channel: internal
+    responsible_phases: []
+    capabilities:
+      - code_implementation
+      - feature_development
+      - bug_fixing
+    metadata:
+      language: zh-CN
+      is_main_agent: false
+      status: inactive   # 已退出活跃成员
+
+  aeterna:
+    id: aeterna
+    name: 埃特娜
+    code_name: Aeterna
+    role: scribe
+    display_name: 永恒史官
+    emoji: 🪨
+    species: 黑曜石
+    model: minimax/MiniMax-M2.7
+    session:
+      key: agent:aeterna:main
+      channel: internal
+    responsible_phases: []
+    capabilities:
+      - documentation
+      - knowledge_base
+      - archive
+    metadata:
+      language: zh-CN
+      is_main_agent: false
+      status: inactive   # 已退出活跃成员
+
+  gulu:
+    id: gulu
+    name: 咕噜
+    code_name: Gulu
+    role: designer
+    display_name: 美术设计师
+    emoji: 🟢
+    species: 史莱姆
+    model: minimax/MiniMax-M2.7
+    session:
+      key: agent:gulu:main
+      channel: internal
+    responsible_phases: []
+    capabilities:
+      - ui_design
+      - illustration
+      - visual_output
+    metadata:
+      language: zh-CN
+      is_main_agent: false
+      status: inactive   # 已退出活跃成员
+
+groups:
+  core_team:
+    name: 核心团队
+    description: 活跃成员
+    members:
+      - panda
+      - alpha
+      - duci
+  inactive:
+    name: 非活跃成员
+    description: 已退出活跃状态
+    members:
+      - weaver
+      - aeterna
+      - gulu

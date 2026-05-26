@@ -49,21 +49,8 @@ PHASE_TRANSITION_MAP = {
     "deliver":     "done",
 }
 
-# 阶段 → 默认执行 Agent 映射（未指定 assignee 时的 Fallback）
-PHASE_DEFAULT_AGENT = {
-    "request":     "panda",
-    "validate":    "alpha",
-    "design":      "alpha",
-    "ui_design":   "alpha",
-    "review":      "duci",
-    "develop_wt":  "alpha",
-    "review_test": "duci",
-    "develop_code":"alpha",
-    "test":        "duci",
-    "audit":       "duci",
-    "final_check": "panda",
-    "deliver":     "panda",
-}
+# 阶段 → 默认执行 Agent（从 zoo_members.yaml 的 responsible_phases 推导）
+# 参见 ZooRegistry.get_phase_agent()
 
 
 # ── Pipeline 辅助函数 ────────────────────────────────────────────────────────────
@@ -113,12 +100,17 @@ PHASE_COMPLETE_SIGNALS = {"phase_complete:", "PI_DONE:", "pipeline_ack:"}
 
 
 def _is_phase_complete_signal(body: str) -> bool:
-    """检查 body 第一个 token 是否以 phase_complete 信号开头（避免匹配指令文本）。"""
-    first_line = body.split("\n")[0] if "\n" in body else body
-    first_token = first_line.split()[0] if first_line.strip() else ""
+    """检查 body 是否包含 phase_complete 信号（兼容 markdown bold / plain 等格式）。"""
+    if not body:
+        return False
+    # 去掉 markdown bold/italic 标记再检查
+    body_clean = body.strip().strip("*_").split()[0] if body.strip() else ""
     for sig in PHASE_COMPLETE_SIGNALS:
-        if first_token.startswith(sig):
+        if body_clean.startswith(sig):
             return True
+    # 备选：只要包含 phase_complete:pl_ 就通过（信号本身格式正确）
+    if "phase_complete:" in body and "pl_" in body:
+        return True
     return False
 
 
@@ -128,61 +120,38 @@ _NOTIFY_LOG: set = set()
 
 
 
+# 派发记录：pipeline_id → (next_phase, last_dispatched_ts)，用于卡死检测
+_DISPATCH_LOG: dict = {}
+
+
 def _panda_relay_post(next_agent: str, pipeline_id: str, phase: str,
                            next_phase: str, cur_req: dict) -> None:
-    """通知 Panda 通过 sessions_send 联系下一阶段 Agent（完全绕开 QQ Bot）。
-    
-    Daemon 状态推进完成后，通过 HTTP POST 到 Panda 的 /relay 端点，
-    由 Panda 使用 sessions_send 联系 Alpha/Duci 的 main session。
+    """通知下一阶段 Agent 的 main session。
+
+    Agent 完成任务后必须用 HTTP POST 回 daemon /phase_complete 端点，
+    不再依赖 CLI stdout 抓取（fire-and-forget 拿不到异步回复）。
     """
-    import urllib.request, urllib.error
+    import subprocess as _sp
 
     project_key = cur_req.get("project", "feida_zoo")
-    title = cur_req.get("title", pipeline_id)
-    
-    # 构建阶段消息
-    io_block = ""
+
+    # 使用统一的 _build_phase_message 生成完整 prompt（含项目路径/I/O 约定 + curl 示例）
+    next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key)
+
+    oc_bin = "/opt/homebrew/bin/openclaw"
     try:
-        proj = _get_project_info(project_key)
-        art = _get_artifact_paths(next_phase, pipeline_id, proj)
-        io_block = (
-            f"【输入文件】\n{art.get('input', 'N/A')}\n"
-            f"【输出文件】\n{art.get('output', 'N/A')}\n"
+        result = _sp.run(
+            [oc_bin, "agent", "--agent", next_agent, "-m", next_msg],
+            capture_output=True, text=True, timeout=30
         )
-    except Exception:
-        pass
-
-    template = _get_phase_template(next_phase, pipeline_id)
-
-    next_msg = (
-        f"📥 Pipeline 通知: [{next_phase}] {pipeline_id}\n"
-        f"【当前状态】{phase} → {next_phase}\n"
-        f"{io_block}"
-        f"【任务标题】{title}\n"
-        f"【项目】{project_key}\n"
-        f"指令: 请执行 {next_phase} 阶段，完成后通过 main session 回复 phase_complete:{pipeline_id}:pass/reject\n"
-        f"回复方式: 在本对话直接回复 phase_complete:{pipeline_id}:pass/reject\n"
-        f"{template}"
-    )
-
-    payload = json.dumps({
-        "to": next_agent,
-        "pipeline_id": pipeline_id,
-        "phase": next_phase,
-        "message": next_msg,
-    }).encode()
-
-    req = urllib.request.Request(
-        "http://127.0.0.1:18793/relay",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST"
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=5):
-            logger.info(f"✅ 已通知 Panda relay → {next_agent} (phase={next_phase})")
+        logger.info(f"✅ relay → {next_agent} (phase={next_phase}): dispatched")
+        # 记录派发时间，供 _check_stuck_pipelines 判断是否需要重发
+        _DISPATCH_LOG[pipeline_id] = (next_phase, time.time())
+    except _sp.TimeoutExpired:
+        logger.warning(f"⚠️ relay → {next_agent} CLI 超时（任务可能已下发，依赖 Agent POST 回信号）")
+        _DISPATCH_LOG[pipeline_id] = (next_phase, time.time())
     except Exception as e:
-        logger.warning(f"⚠️ Panda relay POST 失败: {e}")
+        logger.warning(f"⚠️ relay → {next_agent} 失败: {e}")
 
 
 
@@ -193,6 +162,15 @@ def _extract_pipeline_id(body: str) -> str | None:
             return token
     m = re.search(r'(pl_[a-f0-9]+)', body)
     return m.group(1) if m else None
+
+
+def _capture_phase_complete_from_output(stdout: str, agent_id: str) -> None:
+    """已废弃（保留函数名避免外部调用报错）。
+
+    原意是从 relay CLI stdout 里拓 phase_complete，但 fire-and-forget 调用拿不到异步回复。
+    改为依赖 Agent 主动 POST /phase_complete。
+    """
+    pass
 
 
 def _extract_phase_from_body(body: str) -> str | None:
@@ -317,32 +295,70 @@ def _get_project_info(project_key: str = "feida_zoo") -> dict:
 
 
 
-def _get_artifact_paths(pipeline_id: str, phase: str, project_key: str = "feida_zoo") -> dict:
-    """根据项目和阶段返回 I/O 路径。output=None 表示产出写入源码目录。"""
+def _get_artifact_paths(pipeline_id: str, phase: str, project_key: str = "feida_zoo", prev_phase: str = "") -> dict:
+    """根据阶段和执行轮次返回 I/O 路径。
+    
+    prev_phase: 驳回场景下传入被驳回的审查阶段，用于确定正确的输入文件。
+    执行轮次通过实际存在的文件动态计算（v2/v3/...）。
+    """
     project = _get_project_info(project_key)
     base = f"{project['path']}/{project['artifacts_dir']}"
     pid = pipeline_id
 
+    # 动态计算执行轮次（检查已存在的 artifact 文件）
+    def _version_suffix(phase_name: str) -> str:
+        base_name = f"{base}/{pid}_{phase_name}"
+        if os.path.exists(f"{base_name}.md"):
+            return ""  # 第一版无后缀
+        for v in range(2, 20):
+            if os.path.exists(f"{base_name}_v{v}.md"):
+                return f"_v{v}"
+        return ""
+
+    # 确定输入文件：驳回场景用 prev_phase 的输出，正常流程用 phase 自身的 version
+    if prev_phase:
+        in_suffix = _version_suffix(prev_phase)
+        in_file = f"{base}/{pid}_{prev_phase}{in_suffix}.md"
+    else:
+        in_suffix = _version_suffix(phase)
+        # 正常流程：输入是上一道工序的输出（根据标准链路）
+        normal_input_map = {
+            "design":        f"{base}/{pid}_validate{in_suffix}.md",
+            "ui_design":     f"{base}/{pid}_design{in_suffix}.md",
+            "review":        f"{base}/{pid}_design{in_suffix}.md",
+            "develop_wt":    f"{base}/{pid}_design{in_suffix}.md",
+            "review_test":   f"{base}/{pid}_design{in_suffix}.md",
+            "develop_code":  f"{base}/{pid}_design{in_suffix}.md",
+            "test":          f"{base}/{pid}_develop_code{in_suffix}.md",
+            "audit":         f"{base}/{pid}_develop_code{in_suffix}.md",
+            "final_check":   f"{base}/{pid}_audit{in_suffix}.md",
+        }
+        in_file = normal_input_map.get(phase, None)
+
+    # 输出文件
+    out_suffix = _version_suffix(phase)
+    output_none_phases = {"develop_wt", "review_test", "develop_code"}
+
     table = {
-        "validate":      {"input": None,                       "output": f"{base}/{pid}_validate.md"},
-        "design":        {"input": f"{base}/{pid}_validate.md",   "output": f"{base}/{pid}_design.md"},
-        "ui_design":     {"input": f"{base}/{pid}_design.md",     "output": f"{base}/{pid}_ui_design.md"},
-        "review":        {"input": f"{base}/{pid}_design.md",     "output": f"{base}/{pid}_review.md"},
-        "develop_wt":    {"input": f"{base}/{pid}_design.md",     "output": None},
-        "review_test":   {"input": f"{base}/{pid}_design.md",     "output": f"{base}/{pid}_review_test.md"},
-        "develop_code":  {"input": f"{base}/{pid}_design.md",     "output": None},
-        "test":          {"input": f"{base}/{pid}_design.md",     "output": f"{base}/{pid}_test.md"},
-        "audit":         {"input": f"{base}/{pid}_design.md",     "output": f"{base}/{pid}_audit.md"},
-        "final_check":   {"input": f"{base}/{pid}_audit.md",       "output": f"{base}/{pid}_final_check.md"},
+        "validate":      {"input": None,                              "output": f"{base}/{pid}_validate{_version_suffix('validate')}.md"},
+        "design":        {"input": in_file,                           "output": f"{base}/{pid}_design{out_suffix}.md"},
+        "ui_design":     {"input": in_file,                           "output": f"{base}/{pid}_ui_design{out_suffix}.md"},
+        "review":        {"input": in_file,                           "output": f"{base}/{pid}_review{out_suffix}.md"},
+        "develop_wt":    {"input": in_file,                           "output": None},
+        "review_test":   {"input": in_file,                           "output": None},
+        "develop_code":  {"input": in_file,                           "output": None},
+        "test":          {"input": in_file,                           "output": f"{base}/{pid}_test{out_suffix}.md"},
+        "audit":         {"input": in_file,                           "output": f"{base}/{pid}_audit{out_suffix}.md"},
+        "final_check":   {"input": in_file,                           "output": f"{base}/{pid}_final_check{out_suffix}.md"},
     }
     return table.get(phase, {"input": None, "output": None})
 
 
 
-def _build_io_block(pipeline_id: str, phase: str, project_key: str = "feida_zoo") -> str:
+def _build_io_block(pipeline_id: str, phase: str, project_key: str = "feida_zoo", prev_phase: str = "") -> str:
     """生成项目中 I/O 路径信息块，供模板使用。"""
     project = _get_project_info(project_key)
-    paths = _get_artifact_paths(pipeline_id, phase, project_key)
+    paths = _get_artifact_paths(pipeline_id, phase, project_key, prev_phase=prev_phase)
     project_dir = project["path"]
 
     lines = [f"项目路径: {project_dir}"]
@@ -355,24 +371,31 @@ def _build_io_block(pipeline_id: str, phase: str, project_key: str = "feida_zoo"
     return "\n".join(lines) + "\n"
 
 
-def _build_phase_message(phase: str, pipeline_id: str, requirement: dict, project_key: str = "feida_zoo") -> str:
+def _build_phase_message(phase: str, pipeline_id: str, requirement: dict, project_key: str = "feida_zoo", extra_context: str = "", prev_phase: str = "") -> str:
     """构建发给 Agent 的完整阶段消息（统一入口）。"""
-    template = _get_phase_template(phase, pipeline_id, project_key)
+    template = _get_phase_template(phase, pipeline_id, project_key, prev_phase=prev_phase)
+    curl_example = (
+        f"curl -X POST http://127.0.0.1:{HTTP_PORT}/phase_complete "
+        f"-H 'Content-Type: application/json' "
+        f"-d '{{\"pipeline_id\":\"{pipeline_id}\",\"result\":\"pass\",\"agent_id\":\"<your_agent_id>\"}}'"
+    )
     return (
         f"[Pipeline] Phase: {phase}\n"
         f"task_id: {pipeline_id}\n"
         f"requirement_id: {requirement.get('id', '')}\n"
         f"title: {requirement.get('title', '')}\n"
         f"description: {requirement.get('description', '')}\n"
-        f"指令: 请执行 {phase} 阶段，完成后回复 phase_complete:{pipeline_id}\n"
-        f"回复方式: 在本对话回复 phase_complete:{pipeline_id}:pass/reject\n"
+        f"指令: 请执行 {phase} 阶段，完成后必须用 curl POST 上报 daemon（禁止用对话回复）\n"
+            f"上报命令（复制后把 result 改为 pass 或 reject，agent_id 填你的短名如 alpha/duci/panda/weaver/aeterna/gulu，不是 session key）：\n"
+        f"  {curl_example}\n"
         f"{template}"
+        f"{extra_context}"
     )
 
 
-def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "feida_zoo") -> str:
+def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "feida_zoo", prev_phase: str = "") -> str:
     """根据阶段返回对应的指令模板（动态注入项目路径和 I/O）。"""
-    io = _build_io_block(pipeline_id, phase, project_key)
+    io = _build_io_block(pipeline_id, phase, project_key, prev_phase=prev_phase)
 
     templates = {
         "validate": (
@@ -517,12 +540,18 @@ def _phase_assignee(phase: str, requirement: dict) -> str:
     assignee = requirement.get("assignee", "").strip()
     if assignee:
         return assignee
-    return PHASE_DEFAULT_AGENT.get(phase, "panda")
+    from framework.core.mesh.zoo_registry import ZooRegistry
+    return ZooRegistry().get_phase_agent(phase)
 
 
 def _pick_phase_agent(phase: str) -> str:
-    """当不涉及特定 requirement 时，根据阶段选择默认 Agent。"""
-    return PHASE_DEFAULT_AGENT.get(phase, "panda")
+    """当不涉及特定 requirement 时，根据阶段选择默认 Agent。
+    
+    从 zoo_members.yaml 的 responsible_phases 反向推导。
+    未匹配阶段 → 返回 'panda'（全局 fallback）。
+    """
+    from framework.core.mesh.zoo_registry import ZooRegistry
+    return ZooRegistry().get_phase_agent(phase)
 
 
 # ── 消息解析 & 路由（on_wakeup 主逻辑）───────────────────────────────────────────
@@ -826,10 +855,19 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
     # Pipeline V2: 检查审查结果（review/review_test/audit 阶段推进时）
     if current_status in ("review", "review_test", "test", "audit"):
         # 验证信号发送者：只接受该阶段的默认 Agent
+        # 宽松匹配：session key 格式如 'agent:duci:main' 自动剥离为 'duci'
         expected_agent = _pick_phase_agent(current_status)
-        if agent_id != expected_agent:
+        normalized_agent = agent_id
+        if ":" in agent_id:
+            # 提取 agent:<name>:... 中间部分
+            parts = agent_id.split(":")
+            if len(parts) >= 2 and parts[0] == "agent":
+                normalized_agent = parts[1]
+        if normalized_agent != expected_agent:
             logger.warning(f"Pipeline {pipeline_id}: {current_status} 阶段拒绝来自 {agent_id} 的信号（期望 {expected_agent}）")
             return
+        # 后续逻辑统一使用 normalized_agent
+        agent_id = normalized_agent
         # 如果 phase_complete 携带了审查结果，直接写入审查文件
         if review_result:
             review_path = Path(MESH_DIR) / "pipeline" / f"{current_status}_{pipeline_id}.json"
@@ -852,9 +890,22 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
             logger.warning(f"Pipeline {pipeline_id}: {current_status} 审查结果未完成，拒绝推进")
             return
         result = review_data.get("result")
+        rejection_context = ""
         if result == "reject":
-            # 驳回：StateMachine 回退
-            fallback_map = {"review": "design", "review_test": "develop_wt", "test": "develop_code", "audit": "develop_code"}
+            # 驳回：注入审查反馈，让下一阶段知道为什么被驳回
+            rejection_context = (
+                f"\n\n⚠️ 【审查驳回原因】（请在下一阶段重点关注）\n"
+                f"审查阶段：{current_status}\n"
+                f"审查结论：reject\n"
+                f"{review_data.get('comments', []) if isinstance(review_data.get('comments'), str) else ''}\n"
+                f"完整审查报告见：{MESH_DIR}/pipeline/{current_status}_{pipeline_id}.json\n"
+            )
+            fallback_map = {
+                "review": "design",
+                "review_test": "develop_wt",
+                "test": "develop_code",
+                "audit": "develop_code",
+            }
             fallback = fallback_map.get(current_status)
             if fallback:
                 try:
@@ -865,7 +916,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
                     _save_requirements(reqs)
                     _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, fallback)
                     next_agent = cur_req.get("assignee") or _pick_phase_agent(fallback)
-                    next_msg = _build_phase_message(fallback, pipeline_id, cur_req, cur_req.get("project", "feida_zoo"))
+                    next_msg = _build_phase_message(fallback, pipeline_id, cur_req, cur_req.get("project", "feida_zoo"), extra_context=rejection_context, prev_phase=current_status)
                     _panda_relay_post(next_agent, pipeline_id, current_status, fallback, cur_req)
                     mesh.set_pipeline_state(pipeline_id, fallback)
                     logger.info(f"🔄 Pipeline {pipeline_id}: 审查驳回，{current_status}→{fallback}")
@@ -899,7 +950,13 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
     else:
         next_agent = cur_req.get("assignee") or _pick_phase_agent(next_phase)
     project_key = cur_req.get("project", "feida_zoo")
-    next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key)
+    next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key, prev_phase=current_status if current_status in ("review", "review_test", "test", "audit") else "")
+
+    try:
+        _panda_relay_post(next_agent, pipeline_id, current_status, next_phase, cur_req)
+        logger.info(f"已通知 {next_agent} 执行 {next_phase} 阶段")
+    except Exception as e:
+        logger.warning(f"通知 {next_agent} 失败: {e}")
 
     try:
         _panda_relay_post(next_agent, pipeline_id, current_status, next_phase, cur_req)
@@ -1039,6 +1096,11 @@ class Handler(BaseHTTPRequestHandler):
                     capture_output=True, text=True, timeout=30
                 )
                 logger.info(f"✅ relay → {to_agent} (phase={phase}): stdout={len(result.stdout)}chars")
+
+                # 从 stdout 中捕获 phase_complete 信号并触发推进
+                if result.stdout:
+                    _capture_phase_complete_from_output(result.stdout, to_agent)
+
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -1065,6 +1127,36 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": str(e)}).encode())
+            return
+
+        # /phase_complete: Agent 任务完成后直接通知 daemon 推进 pipeline
+        if parsed.path == "/phase_complete":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len)
+            try:
+                data = json.loads(body)
+            except Exception as e:
+                logger.warning(f"/phase_complete JSON parse error: {e}")
+                self._json(400, {"error": "invalid json"})
+                return
+
+            pipeline_id = data.get("pipeline_id", "")
+            result = data.get("result", "pass")  # pass or reject
+            agent_id = data.get("agent_id", "unknown")
+
+            if not pipeline_id:
+                self._json(400, {"error": "missing pipeline_id"})
+                return
+
+            # Agent 主动通知 daemon 推进，直接构造信号触发 _handle_phase_complete
+            signal_body = f"phase_complete:{pipeline_id}:{result}"
+            logger.info(f"📡 Agent {agent_id} 直接通知 phase_complete: {signal_body}")
+            try:
+                _handle_phase_complete(signal_body, agent_id)
+                self._json(200, {"status": "ok", "pipeline_id": pipeline_id, "result": result})
+            except Exception as e:
+                logger.warning(f"/phase_complete 处理失败: {e}")
+                self._json(500, {"error": str(e)})
             return
 
         if parsed.path != "/api/chat":
@@ -1205,13 +1297,9 @@ def _dispatch_pending_agents():
         return
 
     # 从 registry 获取所有 agent
-    registry_path = str(Path(FRAMEWORK_DIR) / "shared" / "zoo_registry.json")
-    agent_ids = ["alpha", "duci", "panda", "weaver", "aeterna", "gulu"]
+    from framework.core.mesh.zoo_registry import ZooRegistry
     try:
-        if os.path.exists(registry_path):
-            with open(registry_path) as f:
-                reg = json.load(f)
-                agent_ids = list(reg.get("agents", {}).keys())
+        agent_ids = ZooRegistry().list_agents()
     except Exception:
         pass
 
@@ -1314,6 +1402,85 @@ def _scan_pending_requirements():
 
 
 # ── Main ────────────────────────────────────────────────────────────────────────
+def _check_stuck_pipelines() -> None:
+    """检测卡住的 pipeline，重新派发。
+
+    判定为卡住的条件：
+    1. requirement.status 非 done/cancelled
+    2. 超过 30 分钟未更新 (updated_at)
+    3. 负责人不在 pending 队列里（避免打扰正在排队的任务）
+    4. 本轮 _DISPATCH_LOG 里记录的上次派发超过 30 分钟前
+
+    命中后调用 _panda_relay_post 重新发送当前阶段指令。
+    """
+    from datetime import datetime
+    STUCK_THRESHOLD_SEC = 30 * 60  # 30 分钟
+
+    reqs = _load_requirements()
+    if not reqs:
+        return
+
+    pending_assignees = {item.get("assignee") for item in _load_pending_queue() if item.get("assignee")}
+    now = time.time()
+    stuck_count = 0
+
+    for req in reqs:
+        status = req.get("status", "")
+        if status in ("done", "cancelled", "request", ""):
+            continue
+        pipeline_id = req.get("pipeline_id", "")
+        if not pipeline_id:
+            continue
+        # 当前阶段的负责人（不是需求原始 assignee）
+        # 例如：review/audit/test 阶段负责人是 duci，而不是需求的 owner
+        phase_agent = _pick_phase_agent(status)
+        assignee = phase_agent or req.get("assignee", "")
+        if not assignee:
+            continue
+        # 负责人有其他 pending 任务 → 在忙，跳过
+        if assignee in pending_assignees:
+            logger.info(f"⏭️ stuck 检测：{pipeline_id} 负责人 {assignee} 在忙，跳过")
+            continue
+
+        # 检查 updated_at
+        updated_at = req.get("updated_at", "")
+        try:
+            # 兼容 "2026-05-20T20:04:33" / "2026-05-20T20:04:33+0000" 等格式
+            updated_str = updated_at.split("+")[0].split("Z")[0]
+            updated_ts = datetime.fromisoformat(updated_str).timestamp()
+        except Exception:
+            updated_ts = 0
+
+        age_sec = now - updated_ts
+        if age_sec < STUCK_THRESHOLD_SEC:
+            continue
+
+        # 检查本进程 _DISPATCH_LOG 是否最近派过
+        last_dispatch = _DISPATCH_LOG.get(pipeline_id)
+        if last_dispatch:
+            last_phase, last_ts = last_dispatch
+            if last_phase == status and (now - last_ts) < STUCK_THRESHOLD_SEC:
+                continue
+
+        # 命中卡死 → 重新派发
+        logger.warning(
+            f"🚨 stuck pipeline：{pipeline_id} status={status} assignee={assignee} "
+            f"age={int(age_sec/60)}min，重新派发"
+        )
+        try:
+            _panda_relay_post(assignee, pipeline_id, status, status, req)
+            stuck_count += 1
+        except Exception as e:
+            logger.warning(f"stuck 重发失败 {pipeline_id}: {e}")
+
+    if stuck_count > 0:
+        logger.info(f"🔄 本轮 stuck 检测重发 {stuck_count} 个任务")
+
+
+# 上次 stuck 扫描时间
+_LAST_STUCK_CHECK_TS = 0.0
+
+
 def main():
     global mesh
     global mesh
@@ -1326,12 +1493,10 @@ def main():
     _scan_pending_requirements()
 
     # Daemon threads
-    registry_path = str(Path(FRAMEWORK_DIR) / "shared" / "zoo_registry.json")
-
     # ── InboxWatcher (含 Pipeline 全自动驱动回调) ──
     # InboxWatcher 内部拼接 <mesh_dir>/<agent_id>/queue
     # 传入 MESH_DIR/inbound 确保路径正确
-    iw = InboxWatcher(str(Path(MESH_DIR) / "inbound"), registry_path, on_wakeup=_on_wakeup_callback)
+    iw = InboxWatcher(str(Path(MESH_DIR) / "inbound"), on_wakeup=_on_wakeup_callback)
     threading.Thread(target=iw.start, daemon=True).start()
     logger.info("✅ InboxWatcher (含 Pipeline 驱动) 已启动")
 
@@ -1347,11 +1512,26 @@ def main():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     logger.info(f"✅ HTTP API 已启动: http://127.0.0.1:{HTTP_PORT}")
 
+    # 启动时立即检测一次卡死 pipeline（0min）
+    global _LAST_STUCK_CHECK_TS
+    try:
+        _check_stuck_pipelines()
+    except Exception as e:
+        logger.warning(f"启动时 _check_stuck_pipelines 失败: {e}")
+    _LAST_STUCK_CHECK_TS = time.time()
+
     try:
         while True:
             time.sleep(60)
             _scan_pending_requirements()
             _dispatch_pending_agents()
+            # 每 30 分钟检测一次卡死 pipeline（30min, 60min, ...）
+            if time.time() - _LAST_STUCK_CHECK_TS >= 30 * 60:
+                try:
+                    _check_stuck_pipelines()
+                except Exception as e:
+                    logger.warning(f"_check_stuck_pipelines 失败: {e}")
+                _LAST_STUCK_CHECK_TS = time.time()
     except KeyboardInterrupt:
         logger.info("🛑 收到停止信号")
 
