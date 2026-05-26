@@ -9,3 +9,10 @@ dist/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# 归档目录
+framework/shared/archive/
+
+# 临时产物
+artifacts/
+*.log

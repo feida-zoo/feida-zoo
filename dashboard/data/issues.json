@@ -84,5 +84,19 @@
     "source": "dashboard",
     "pipeline_id": "pl_bb50c26a",
     "pipeline_status": "done"
+  },
+  {
+    "id": "6587c35b-17d0-4361-bae4-5e04ecea31fa",
+    "title": "成员管理界面人数不对",
+    "description": "",
+    "priority": "P0",
+    "status": "open",
+    "assignee": "",
+    "created_at": "2026-05-26T10:31:39.756622",
+    "updated_at": "2026-05-26T10:31:39.756622",
+    "resolved_at": null,
+    "source": "dashboard",
+    "pipeline_id": "pl_2070b427",
+    "pipeline_status": "pushed"
   }
 ]
