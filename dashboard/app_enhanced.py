@@ -35,7 +35,9 @@ if _project_root not in sys.path:
 
 # 导入 ZooRegistry
 from framework.core.mesh.zoo_registry import ZooRegistry
+
 PANDA_ROOT = Path("/Users/zoo/workspace/members/panda")
+PROJECT_AGENTS_DIR = PROJECT_ROOT / "agents"
 REGISTRY_PATH = PROJECT_ROOT / "framework" / "data" / "registry.json"
 TASK_TRACKER_PATH = PROJECT_ROOT / "framework" / "shared" / "task_tracker.json"
 AGENTS_DIR = PANDA_ROOT / "agents"
@@ -1113,8 +1115,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
         """服务成员头像"""
         from urllib.parse import urlparse
         member_id = urlparse(self.path).path.split('/')[-1]
-        # 优先从 AGENTS_DIR 查找（panda/agents/<member_id>/avatar.png）
-        avatar_path = AGENTS_DIR / member_id / "avatar.png"
+        # 优先从项目 agents/ 目录查找（权威来源）
+        avatar_path = PROJECT_AGENTS_DIR / member_id / "avatar.png"
         if avatar_path.exists():
             self._serve_file(avatar_path, 'image/png')
             return

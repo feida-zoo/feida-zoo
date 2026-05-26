@@ -740,7 +740,7 @@ class ZooDevCenter {
         // 获取成员 Emoji — 优先使用 current_executor（当前阶段执行人）
         const executor = task.current_executor || task.assignee || '';
         const assigneeEmoji = this.memberEmojiMap[executor] || '👤';
-        const avatarSrc = executor ? `/static/avatars/${executor === 'stinger' ? 'stinger' : executor}.png` : '';
+        const avatarSrc = executor ? `/static/avatars/${executor}.png` : '';
         
         // 阶段状态中文映射
         const STATUS_CN = {
