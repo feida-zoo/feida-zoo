@@ -501,6 +501,8 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "- git commit 是否包含所有产出（包括审查文档）\n"
             "- 修改的服务/进程是否需要重启才能生效？如果是，必须重启并验证\n"
             "- 端到端验证：curl 或其他方式确认修复确实生效\n"
+            "- 如果修改了 daemon 代码，必须按技能文件正确重载：\n"
+            "  `skills/zoo-daemon-reload.md`（网关重启不够，必须 kill 旧 daemon 进程）\n"
             "- 结论: pass / reject\n"
         ),
         "deliver": (
@@ -509,7 +511,9 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "交付前必须完成以下检查，缺一不可：\n"
             "1. git commit：确保所有产出已提交（代码+测试+所有 pipeline 文档，包括审查方写的 audit/test/review 文件）\n"
             "2. 重启服务：如果修改了运行中的服务代码（如 dashboard、daemon），必须重启该进程使修改生效\n"
-            "3. 端到端验证：重启后用 curl 或实际操作确认修复生效（如 `curl http://127.0.0.1:18792/api/members | python3 -m json.tool`）\n"
+            "   ⚠️ 特别注意：修改 daemon 代码时，网关重启不够，必须 kill 旧 daemon 进程让 plugin 重新拉起。\n"
+            "   详见技能文件：`skills/zoo-daemon-reload.md`\n"
+            "3. 端到端验证：重启后用 curl 或实际操作确认修复生效\n"
             "4. 在输出文件中记录：commit hash、重启的进程、端到端验证结果\n"
             "完成后上报 phase_complete\n"
         ),
