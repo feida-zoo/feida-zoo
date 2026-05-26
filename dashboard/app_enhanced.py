@@ -46,13 +46,10 @@ DATA_DIR = PROJECT_ROOT / "dashboard" / "data"
 # 确保数据目录存在
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# ===== 成员详细信息补充 =====
-# ZooRegistry 提供核心信息，MEMBERS_INFO 补充角色描述、Emoji、种族等展示数据
-MEMBERS_INFO = {
-    "alpha":   {"name": "阿尔法 Alpha", "role": "首席架构师", "emoji": "🐢", "species": "玄龟"},
-    "duci":    {"name": "毒刺 Duci",   "role": "无情审计师", "emoji": "🦂", "species": "蝎子"},
-    "panda":   {"name": "达达 Panda",  "role": "中枢调度大管家", "emoji": "🐼", "species": "熊猫"},
-}
+# ===== 成员信息（已迁移至 zoo_members.yaml） =====
+# MEMBERS_INFO 已删除，数据来源为 ZooRegistry.get_full_info()
+# 保留空 dict 作为极端情况下的 fallback
+MEMBERS_INFO = {}
 
 # ZooMesh 管道状态文件路径（与 Harness Pipeline 对接）
 PANDA_MESH_DIR = Path(os.environ.get("ZOO_MESH_DIR", str(PANDA_ROOT / "zoo_mesh")))
@@ -220,14 +217,18 @@ class MemberStatusManager:
             time.sleep(10)
 
     def _update_status(self) -> Dict[str, str]:
-        """更新状态逻辑"""
+        """更新状态逻辑
+        
+        使用 ZooRegistry.list_agents() 遍历成员，而非 registry.json。
+        """
         try:
             print("正在更新成员状态...") # 添加日志
-            with open(self.registry_path, 'r', encoding='utf-8') as f:
-                registry = json.load(f)
+            from framework.core.mesh.zoo_registry import ZooRegistry
+            reg = ZooRegistry()
+            agent_ids = reg.list_agents()
             
             new_status = {}
-            for member_id in registry.get("members", {}):
+            for member_id in agent_ids:
                 print(f"检测成员 {member_id} 状态...") # 添加日志
                 new_status[member_id] = self._detect_member_active_status(member_id)
             
@@ -444,10 +445,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
     
     def __init__(self, *args, **kwargs):
         # 初始化 ZooRegistry 注册表（单例，只初始化一次）
-        if not hasattr(self.__class__, '_zoo_registry_initialized'):
-            registry = ZooRegistry()
-            registry.register_defaults()
-            self.__class__._zoo_registry_initialized = True
+        # ZooRegistry 构造时自动加载 YAML，不再需要 register_defaults()
+        ZooRegistry()
         
         # 启动 Git 时间线监视器
         if not hasattr(self.__class__, '_git_watcher_started'):
@@ -1170,63 +1169,84 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
     def _get_member_data(self):
         """获取成员数据
         
-        优先从 ZooRegistry 读取核心注册信息 + MEMBERS_INFO 补充展示数据。
-        ZooRegistry 提供：agent_id, model, status
-        MEMBERS_INFO 提供：展示名称、角色、Emoji、种族
-        状态从 ZooRegistry 单例获取。
+        从 ZooRegistry.get_full_info() 读取全部成员展示信息。
+        ZooRegistry 数据源：zoo_members.yaml（单一权威源）。
         """
         try:
             registry = ZooRegistry()
             agent_ids = registry.list_agents()
             
-            # 如果没有 ZooRegistry 数据，fallback 到已有 MEMBERS_INFO
-            if not agent_ids:
-                agent_ids = list(MEMBERS_INFO.keys())
-            
             members = []
             for member_id in agent_ids:
-                zoo_info = registry.get_info(member_id) or {}
-                info = MEMBERS_INFO.get(member_id, {})
+                full = registry.get_full_info(member_id) or {}
+                
                 # 状态优先级：进程监控 > ZooRegistry > 默认离线
                 live_status = self.status_manager.status_cache.get(member_id)
                 zoo_status = registry.get_status(member_id) or "unknown"
                 status = live_status if live_status else zoo_status
                 
-                # 模型优先从 ZooRegistry 获取，其次从 MEMBERS_INFO（无 model 字段）
-                model = zoo_info.get("model", "")
+                # 模型展示（主 Agent 显示主用模型）
+                model_display = registry.get_model_display(member_id) or "未知"
+                
+                meta = full.get("metadata", {}) or {}
+                is_main = meta.get("is_main_agent", False) if isinstance(meta, dict) else False
+                
+                # 跳过非活跃成员（已退出/retired）
+                member_status = meta.get("status", "active") if isinstance(meta, dict) else "active"
+                if member_status != "active":
+                    continue
+                
                 avatar_exists = (STATIC_DIR / "avatars" / f"{member_id}.png").exists()
+                
+                display_name = full.get("display_name", "")
+                species_name = full.get("species", "未知")
                 
                 members.append({
                     "id": member_id,
-                    "name": info.get("name", member_id),
-                    "code_name": member_id.capitalize(),
-                    "role_display": info.get("role", "未知"),
-                    "species": info.get("species", "未知"),
+                    "name": f"{full.get('name', member_id)} {full.get('code_name', '')}".strip(),
+                    "code_name": full.get("code_name", member_id.capitalize()),
+                    "role_display": display_name,
+                    "species": species_name,
                     "avatar": f"/static/avatars/{member_id}.png" if avatar_exists else None,
-                    "avatar_emoji": info.get("emoji", "🐾"),
+                    "avatar_emoji": full.get("emoji", "🐾"),
                     "status": status,
-                    "model": model or "未知",
-                    "description": f"{info.get('role', '')} · {info.get('species', '')}"
+                    "model": model_display,
+                    "description": f"{display_name} · {species_name}",
+                    "is_main_agent": is_main,
                 })
             return members
         except Exception as e:
             print(f"获取成员数据失败 (ZooRegistry): {e}")
-            # Fallback: 使用 MEMBERS_INFO 作为数据源
+            # Fallback: 直接从 zoo_members.yaml 读取
             try:
+                import yaml as _yaml
+                yaml_path = PROJECT_ROOT / "framework" / "data" / "zoo_members.yaml"
+                with open(yaml_path, "r", encoding="utf-8") as f:
+                    yaml_data = _yaml.safe_load(f)
+                members_data = yaml_data.get("members", {})
                 fallback_members = []
-                for member_id, info in MEMBERS_INFO.items():
+                for member_id, info in members_data.items():
+                    meta = info.get("metadata", {}) or {}
+                    is_main = meta.get("is_main_agent", False) if isinstance(meta, dict) else False
+                    # fallback 路径同样过滤非活跃成员
+                    member_status = meta.get("status", "active") if isinstance(meta, dict) else "active"
+                    if member_status != "active":
+                        continue
                     avatar_exists = (STATIC_DIR / "avatars" / f"{member_id}.png").exists()
+                    display_name = info.get("display_name", "")
+                    species_name = info.get("species", "未知")
                     fallback_members.append({
                         "id": member_id,
-                        "name": info.get("name", member_id),
-                        "code_name": member_id.capitalize(),
-                        "role_display": info.get("role", "未知"),
-                        "species": info.get("species", "未知"),
+                        "name": f"{info.get('name', member_id)} {info.get('code_name', '')}".strip(),
+                        "code_name": info.get("code_name", member_id.capitalize()),
+                        "role_display": display_name,
+                        "species": species_name,
                         "avatar": f"/static/avatars/{member_id}.png" if avatar_exists else None,
                         "avatar_emoji": info.get("emoji", "🐾"),
                         "status": "unknown",
-                        "model": "未知",
-                        "description": f"{info.get('role', '')} · {info.get('species', '')}"
+                        "model": info.get("model", "未知"),
+                        "description": f"{display_name} · {species_name}",
+                        "is_main_agent": is_main,
                     })
                 return fallback_members
             except Exception as e2:
@@ -1234,22 +1254,18 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 return []
     
     def _get_member_species(self, member_id):
-        """获取成员种族信息"""
-        if member_id == 'panda':
-            return {"species": "熊猫 🐼"}
-            
-        identity_path = AGENTS_DIR / member_id / "IDENTITY.md"
-        if not identity_path.exists():
-            return {"species": "未知"}
+        """获取成员种族信息（从 zoo_members.yaml 读取）"""
         try:
-            with open(identity_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if "- **生物:**" in line or "- **种族:**" in line:
-                        species = line.split(':', 1)[1].strip().replace('**', '').strip()
-                        return {"species": species}
-            return {"species": "未知"}
+            import yaml as _yaml
+            yaml_path = PROJECT_ROOT / "framework" / "data" / "zoo_members.yaml"
+            with open(yaml_path, "r", encoding="utf-8") as f:
+                data = _yaml.safe_load(f)
+            members = data.get("members", {})
+            info = members.get(member_id, {})
+            species = info.get("species", "未知")
+            return {"species": species}
         except Exception as e:
-            print(f"读取成员身份文件失败: {e}")
+            print(f"读取成员种族信息失败: {e}")
             return {"species": "未知"}
     
     def _get_requirements(self):
