@@ -885,6 +885,28 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
         _save_requirements(reqs)
 
+        # 同步更新 issues.json：pipeline 完成 → 关联 issue 标记 resolved
+        try:
+            issues_path = Path("/Users/zoo/workspace/code/feida_zoo/dashboard/data/issues.json")
+            if issues_path.exists():
+                with open(issues_path, 'r', encoding='utf-8') as f:
+                    issues = json.load(f)
+                now_iso = time.strftime("%Y-%m-%dT%H:%M:%S")
+                updated = False
+                for issue in issues:
+                    if issue.get("pipeline_id") == pipeline_id:
+                        issue["status"] = "resolved"
+                        issue["resolved_at"] = now_iso
+                        issue["updated_at"] = now_iso
+                        updated = True
+                        logger.info(f"📝 Pipeline {pipeline_id} 完成，关联 issue {issue.get('id', '?')} 标记为 resolved")
+                        break
+                if updated:
+                    with open(issues_path, 'w', encoding='utf-8') as f:
+                        json.dump(issues, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.warning(f"⚠️ Pipeline {pipeline_id} 完成后同步 issue 状态失败（降级）: {e}")
+
         # 通过 StateMachine 完成
         try:
             pipeline = ZooPipeline(task_id=pipeline_id, agent_id=agent_id, zoo_mesh=mesh)

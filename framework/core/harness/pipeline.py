@@ -40,7 +40,8 @@ class ZooPipeline:
     # 阶段执行顺序（不含终态）
     PHASES = [
         "request", "validate", "design", "ui_design", "review",
-        "develop", "test", "audit", "final_check", "deliver"
+        "develop", "develop_wt", "review_test", "develop_code",
+        "test", "audit", "final_check", "deliver"
     ]
 
     # 各阶段最大回退次数（来自 §2.7）
