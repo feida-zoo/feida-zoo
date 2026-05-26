@@ -244,6 +244,18 @@ def _pop_next_pending(agent_id: str) -> dict | None:
     return best
 
 
+def _clear_pending_for_pipeline(pipeline_id: str) -> int:
+    """清理 pending 队列中指定 pipeline_id 的所有条目。返回清理数量。"""
+    queue = _load_pending_queue()
+    before = len(queue)
+    queue = [t for t in queue if t.get("pipeline_id") != pipeline_id]
+    removed = before - len(queue)
+    if removed > 0:
+        _save_pending_queue(queue)
+        logger.info(f"🧹 已清理 pending 队列中 {pipeline_id} 的 {removed} 条残留")
+    return removed
+
+
 def _create_review_file(pipeline_id: str, phase: str) -> None:
     """创建 review/review_test_pl_xxx.json（status: pending）。文件名含阶段前缀。"""
     review_file = Path(MESH_DIR) / "pipeline" / f"{phase}_{pipeline_id}.json"
@@ -379,6 +391,11 @@ def _build_phase_message(phase: str, pipeline_id: str, requirement: dict, projec
         f"-H 'Content-Type: application/json' "
         f"-d '{{\"pipeline_id\":\"{pipeline_id}\",\"result\":\"pass\",\"agent_id\":\"<your_agent_id>\"}}'"
     )
+    # 全局幂等约束：防止 Agent 看到输出文件已存在就跳过内容核对
+    idempotency_warning = (
+        "⚠️ 幂等约束：即使输出文件已存在，也必须读取并确认内容符合当前阶段要求。"
+        "如果内容匹配则可复用，否则必须覆盖重写。禁止仅凭文件存在就跳过工作直接上报。\n"
+    )
     return (
         f"[Pipeline] Phase: {phase}\n"
         f"task_id: {pipeline_id}\n"
@@ -388,6 +405,7 @@ def _build_phase_message(phase: str, pipeline_id: str, requirement: dict, projec
         f"指令: 请执行 {phase} 阶段，完成后必须用 curl POST 上报 daemon（禁止用对话回复）\n"
             f"上报命令（复制后把 result 改为 pass 或 reject，agent_id 填你的短名如 alpha/duci/panda/weaver/aeterna/gulu，不是 session key）：\n"
         f"  {curl_example}\n"
+        f"{idempotency_warning}"
         f"{template}"
         f"{extra_context}"
     )
@@ -480,7 +498,20 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "请做最终检查：\n"
             "- 所有 phase 是否完成\n"
             "- 代码是否干净可交付\n"
+            "- git commit 是否包含所有产出（包括审查文档）\n"
+            "- 修改的服务/进程是否需要重启才能生效？如果是，必须重启并验证\n"
+            "- 端到端验证：curl 或其他方式确认修复确实生效\n"
             "- 结论: pass / reject\n"
+        ),
+        "deliver": (
+            f"{io}"
+            "【Deliver 阶段 - 交付】\n"
+            "交付前必须完成以下检查，缺一不可：\n"
+            "1. git commit：确保所有产出已提交（代码+测试+所有 pipeline 文档，包括审查方写的 audit/test/review 文件）\n"
+            "2. 重启服务：如果修改了运行中的服务代码（如 dashboard、daemon），必须重启该进程使修改生效\n"
+            "3. 端到端验证：重启后用 curl 或实际操作确认修复生效（如 `curl http://127.0.0.1:18792/api/members | python3 -m json.tool`）\n"
+            "4. 在输出文件中记录：commit hash、重启的进程、端到端验证结果\n"
+            "完成后上报 phase_complete\n"
         ),
     }
 
@@ -825,6 +856,11 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         return
 
     current_status = cur_req.get("status", "request")
+    # ── 幂等校验：已 done 的 pipeline 拒绝重复上报 ──
+    if current_status == "done":
+        logger.info(f"Pipeline {pipeline_id} 已终态 done，忽略来自 {agent_id} 的重复 phase_complete")
+        return  # 调用方（HTTP handler）单独处理响应
+
     next_phase = _get_next_phase(current_status)
 
     if not next_phase:
@@ -849,6 +885,10 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
 
         _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, "done")
         mesh.set_pipeline_state(pipeline_id, "done")
+
+        # 清理 pending 队列中该 pipeline 的所有残留条目
+        _clear_pending_for_pipeline(pipeline_id)
+
         logger.info(f"🏁 Pipeline {pipeline_id} 已完成！")
         return
 
@@ -1151,6 +1191,18 @@ class Handler(BaseHTTPRequestHandler):
             # Agent 主动通知 daemon 推进，直接构造信号触发 _handle_phase_complete
             signal_body = f"phase_complete:{pipeline_id}:{result}"
             logger.info(f"📡 Agent {agent_id} 直接通知 phase_complete: {signal_body}")
+
+            # 幂等校验：已 done 的 pipeline 不接受重复上报
+            reqs_check = _load_requirements()
+            already_done = False
+            for r in reqs_check:
+                if r.get("pipeline_id") == pipeline_id and r.get("status") == "done":
+                    already_done = True
+                    break
+            if already_done:
+                self._json(200, {"status": "already_done", "pipeline_id": pipeline_id, "hint": "pipeline 已终态，phase_complete 被忽略"})
+                return
+
             try:
                 _handle_phase_complete(signal_body, agent_id)
                 self._json(200, {"status": "ok", "pipeline_id": pipeline_id, "result": result})
