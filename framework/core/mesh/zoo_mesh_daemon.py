@@ -463,9 +463,11 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "【Deliver 阶段 - 最终验收 + 交付】\n"
             "1. 检查所有 phase 是否完成，代码是否干净可交付\n"
             "2. git commit：确保所有产出已提交（含审查方文档）\n"
-            "3. 重启服务（如修改了运行中代码），端到端验证生效\n"
-            "   如果修改了 daemon 代码，按 skills/zoo-daemon-reload.md 重载\n"
-            "4. 结论: pass / reject\n"
+            "3. ⚠️ 重启服务：如修改了运行中代码，必须重启使之生效\n"
+            "   daemon: kill $(lsof -t -i :18793) && ./venv/bin/python framework/core/mesh/zoo_mesh_daemon.py &\n"
+            "   dashboard: kill $(lsof -t -i :18792) && ./venv/bin/python dashboard/app_enhanced.py &\n"
+            "4. 端到端验证：curl 确认修复生效\n"
+            "5. 结论: pass / reject\n"
             "- 完成后立即 git commit + zoo-phase-complete 上报\n"
         ),
     }
