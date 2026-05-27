@@ -5,10 +5,17 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
+import { readdirSync } from "node:fs";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 
 const _r = createRequire(import.meta.url);
-const { n: callGatewayFromCli } = _r("/opt/homebrew/lib/node_modules/openclaw/dist/gateway-rpc-COT1oBPJ.js");
+const _gwDistDir = "/opt/homebrew/lib/node_modules/openclaw/dist";
+const _rpcFile = readdirSync(_gwDistDir).find(
+  (f: string) => f.startsWith("gateway-rpc-") && f.endsWith(".js")
+);
+const { n: callGatewayFromCli } = _rpcFile
+  ? _r(`${_gwDistDir}/${_rpcFile}`)
+  : ({} as any);
 
 const LOG_PREFIX = "[ZooPipeline]";
 

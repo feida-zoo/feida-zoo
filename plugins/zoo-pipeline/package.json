@@ -21,6 +21,7 @@
     "typescript": "^5.4.0"
   },
   "dependencies": {
+    "js-yaml": "^4.1.1",
     "openclaw": "file:/opt/homebrew/lib/node_modules/openclaw"
   }
 }
