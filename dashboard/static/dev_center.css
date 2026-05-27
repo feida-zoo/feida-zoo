@@ -957,7 +957,7 @@ body {
     flex-direction: column;
     gap: 2px;
     font-size: 0.7rem;
-    color: var(--gray-color);
+    color: var(--dark-color);
     max-width: 120px;
 }
 
@@ -969,7 +969,7 @@ body {
 
 .member-model {
     font-size: 0.65rem;
-    color: var(--gray-color);
+    color: var(--dark-color);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

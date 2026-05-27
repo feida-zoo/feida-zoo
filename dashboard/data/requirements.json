@@ -278,5 +278,19 @@
     "updated_at": "2026-05-28T00:18:19",
     "last_commit": "5077dfd3dacba2862125b556cc84b31ae1203872",
     "completed_at": "2026-05-28T00:18:19"
+  },
+  {
+    "id": "e7d4d68f-cd57-41ba-be3d-27c746596296",
+    "title": "成员管理界面优化",
+    "description": "1. openclaw.json配置里agent的模型已修改，没有同步到zoo仪表盘上\n2. 当前成员管理界面的模型配置，配色导致根本看不清",
+    "assignee": "alpha",
+    "status": "done",
+    "phase": "done",
+    "pipeline_id": "pl_2f64c188",
+    "created_at": "2026-05-28T01:00:24.831298",
+    "source": "pipeline_auto",
+    "updated_at": "2026-05-28T01:27:25",
+    "last_commit": "e6b657a",
+    "completed_at": "2026-05-28T01:27:25"
   }
 ]
