@@ -1466,17 +1466,17 @@ document.addEventListener('keydown', function(e) {
 // ===== 分组排序函数 =====
 
 // 需求终端状态（已解决/已关闭）
-const TERMINAL_REQ_STATUSES = ['done', 'cancelled', 'timed_out', 'escalated'];
+var TERMINAL_REQ_STATUSES = ['done', 'cancelled', 'timed_out', 'escalated'];
 
 // 问题终端状态（已解决/已关闭）
-const CLOSED_ISSUE_STATUSES = ['resolved', 'closed'];
+var CLOSED_ISSUE_STATUSES = ['resolved', 'closed'];
 
 // 优先级排序权重
-const PRIORITY_ORDER = { 'P0': 0, 'P1': 1, 'P2': 2, 'P3': 3 };
+var PRIORITY_ORDER = { 'P0': 0, 'P1': 1, 'P2': 2, 'P3': 3 };
 
 // 优先级显示名和 CSS 类
-const PRIORITY_LABELS = { 'P0': 'P0 紧急', 'P1': 'P1 高', 'P2': 'P2 中', 'P3': 'P3 低' };
-const PRIORITY_CLASSES = { 'P0': 'p0', 'P1': 'p1', 'P2': 'p2', 'P3': 'p3' };
+var PRIORITY_LABELS = { 'P0': 'P0 紧急', 'P1': 'P1 高', 'P2': 'P2 中', 'P3': 'P3 低' };
+var PRIORITY_CLASSES = { 'P0': 'p0', 'P1': 'p1', 'P2': 'p2', 'P3': 'p3' };
 
 function sortRequirementsForDisplay(reqs) {
     var openReqs = reqs.filter(function(r) {
@@ -1500,11 +1500,12 @@ function sortRequirementsForDisplay(reqs) {
 
 function sortIssuesForDisplay(issues) {
     var openIssues = issues.filter(function(i) {
-        return CLOSED_ISSUE_STATUSES.indexOf(i.status) === -1;
+        return CLOSED_ISSUE_STATUSES.indexOf(String(i.status || '').trim()) === -1;
     });
     var closedIssues = issues.filter(function(i) {
-        return CLOSED_ISSUE_STATUSES.indexOf(i.status) !== -1;
+        return CLOSED_ISSUE_STATUSES.indexOf(String(i.status || '').trim()) !== -1;
     });
+    console.log('sortIssuesForDisplay: total=' + issues.length + ' open=' + openIssues.length + ' closed=' + closedIssues.length);
 
     openIssues.sort(function(a, b) {
         return (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99);

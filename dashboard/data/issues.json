@@ -126,5 +126,47 @@
     "source": "dashboard",
     "pipeline_id": "pl_b5e6038b",
     "pipeline_status": "pushed"
+  },
+  {
+    "id": "3ce6c7d3-424e-4b0d-8897-f521e499a57b",
+    "title": "需求管理和问题管理页已解决或者已关闭的项目按时间顺序由新到旧排序，开启中的项目按优先级由高到低排序",
+    "description": "",
+    "priority": "P3",
+    "status": "resolved",
+    "assignee": "",
+    "created_at": "2026-05-27T15:19:35.934086",
+    "updated_at": "2026-05-27T16:59:12",
+    "resolved_at": "2026-05-27T16:59:12",
+    "source": "dashboard",
+    "pipeline_id": "pl_3edd4a81",
+    "pipeline_status": "pushed"
+  },
+  {
+    "id": "107e1ce4-50fc-4906-b929-eddd4709b6cb",
+    "title": "E2E测试问题",
+    "description": "",
+    "priority": "P3",
+    "status": "cancelled",
+    "assignee": "",
+    "created_at": "2026-05-27T16:21:34.543697",
+    "updated_at": "2026-05-27T16:51:45",
+    "resolved_at": null,
+    "source": "dashboard",
+    "pipeline_id": "pl_11a0be2f",
+    "pipeline_status": "cancelled"
+  },
+  {
+    "id": "c3c20b21-dc79-45c9-8880-647b2a614324",
+    "title": "XSS test",
+    "description": "",
+    "priority": "P3",
+    "status": "cancelled",
+    "assignee": "",
+    "created_at": "2026-05-27T16:58:55.876036",
+    "updated_at": "2026-05-27T17:07:49",
+    "resolved_at": null,
+    "source": "dashboard",
+    "pipeline_id": "pl_81999268",
+    "pipeline_status": "cancelled"
   }
 ]
