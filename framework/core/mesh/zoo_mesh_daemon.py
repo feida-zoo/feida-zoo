@@ -935,24 +935,45 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         result = review_data.get("result")
         rejection_context = ""
         if result == "reject":
-            # 驳回：pipeline 进入 rejected 终态，不再回退循环
-            rejection_context = (
-                f"\n\n⚠️ 【审查驳回】\n"
-                f"审查阶段：{current_status}\n"
-                f"审查结论：reject\n"
-                f"{review_data.get('comments', []) if isinstance(review_data.get('comments'), str) else ''}\n"
-                f"完整审查报告见：{MESH_DIR}/pipeline/{current_status}_{pipeline_id}.json\n"
-            )
-            cur_req["status"] = "rejected"
-            cur_req["phase"] = "rejected"
-            cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-            _save_requirements(reqs)
-            _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, "rejected")
-            mesh.set_pipeline_state(pipeline_id, "rejected")
-            _clear_pending_for_pipeline(pipeline_id)
-            # 同步 issue 状态
-            _sync_issue_status(pipeline_id, "rejected")
-            logger.info(f"🚫 Pipeline {pipeline_id}: 审查驳回 → rejected（终态）")
+            # design reject → 需求本身不合理 → rejected 终态
+            # review/verify/audit reject → 审查不通过 → 退回上一阶段修改
+            if current_status == "design":
+                cur_req["status"] = "rejected"
+                cur_req["phase"] = "rejected"
+                cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                _save_requirements(reqs)
+                _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, "rejected")
+                mesh.set_pipeline_state(pipeline_id, "rejected")
+                _clear_pending_for_pipeline(pipeline_id)
+                _sync_issue_status(pipeline_id, "rejected")
+                logger.info(f"🚫 Pipeline {pipeline_id}: 设计阶段驳回 → rejected（需求不合理）")
+            else:
+                # 审查驳回 → 退回上一阶段
+                fallback_map = {
+                    "review": "design",
+                    "verify": "develop_wt",
+                    "audit": "develop_code",
+                }
+                fallback = fallback_map.get(current_status)
+                if fallback:
+                    rejection_context = (
+                        f"\n\n⚠️ 【审查驳回原因】\n"
+                        f"审查阶段：{current_status}\n"
+                        f"审查结论：reject\n"
+                        f"{review_data.get('comments', []) if isinstance(review_data.get('comments'), str) else ''}\n"
+                        f"完整审查报告见：{MESH_DIR}/pipeline/{current_status}_{pipeline_id}.json\n"
+                    )
+                    cur_req["status"] = fallback
+                    cur_req["phase"] = fallback
+                    cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                    _save_requirements(reqs)
+                    _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, fallback)
+                    mesh.set_pipeline_state(pipeline_id, fallback)
+                    # 通知上一阶段 agent 修改
+                    next_agent = cur_req.get("assignee") or _pick_phase_agent(fallback)
+                    next_msg = _build_phase_message(fallback, pipeline_id, cur_req, cur_req.get("project", "feida_zoo"), extra_context=rejection_context, prev_phase=current_status, agent_id=next_agent)
+                    _panda_relay_post(next_agent, pipeline_id, current_status, fallback, cur_req)
+                    logger.info(f"🔄 Pipeline {pipeline_id}: 审查驳回，{current_status}→{fallback}")
             return
 
     # 正常推进到下一阶段
