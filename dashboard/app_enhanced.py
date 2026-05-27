@@ -690,6 +690,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             import uuid
             req_id = str(uuid.uuid4())
             assignee = (data.get('assignee') or '').strip()
+            priority = (data.get('priority') or 'P3').upper()
             
             requirement = {
                 "id": req_id,
@@ -698,6 +699,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 "assignee": assignee,
                 "status": "request",
                 "phase": "request",
+                "priority": priority,
                 "created_at": datetime.now().isoformat(),
                 "pipeline_id": f"pl_{req_id[:8]}",
                 "source": "dashboard_requirement"
@@ -897,8 +899,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 q = search_query.lower()
                 issues = [i for i in issues if q in (i.get('title', '') + i.get('description', '')).lower()]
 
-            # 按更新时间倒序
-            issues.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
+            # 排序已由前端统一处理（分组+优先级/时间排序），后端不排序
             self._send_json(issues)
         except Exception as e:
             self.send_response(500)

@@ -1311,7 +1311,8 @@ function loadIssues() {
                 'closed': '重新打开'
             };
             
-            list.innerHTML = issues.map(issue => {
+            var sortedIssues = sortIssuesForDisplay(issues);
+            list.innerHTML = sortedIssues.map(issue => {
                 const nextStatus = nextStatusMap[issue.status] || 'open';
                 const nextLabel = nextActionLabels[issue.status] || '操作';
                 const created = issue.created_at ? new Date(issue.created_at).toLocaleString('zh-CN') : '';
@@ -1462,10 +1463,66 @@ document.addEventListener('keydown', function(e) {
 });
 
 // ===== Requirement Functions =====
+// ===== 分组排序函数 =====
+
+// 需求终端状态（已解决/已关闭）
+const TERMINAL_REQ_STATUSES = ['done', 'cancelled', 'timed_out', 'escalated'];
+
+// 问题终端状态（已解决/已关闭）
+const CLOSED_ISSUE_STATUSES = ['resolved', 'closed'];
+
+// 优先级排序权重
+const PRIORITY_ORDER = { 'P0': 0, 'P1': 1, 'P2': 2, 'P3': 3 };
+
+// 优先级显示名和 CSS 类
+const PRIORITY_LABELS = { 'P0': 'P0 紧急', 'P1': 'P1 高', 'P2': 'P2 中', 'P3': 'P3 低' };
+const PRIORITY_CLASSES = { 'P0': 'p0', 'P1': 'p1', 'P2': 'p2', 'P3': 'p3' };
+
+function sortRequirementsForDisplay(reqs) {
+    var openReqs = reqs.filter(function(r) {
+        return TERMINAL_REQ_STATUSES.indexOf(r.status) === -1;
+    });
+    var closedReqs = reqs.filter(function(r) {
+        return TERMINAL_REQ_STATUSES.indexOf(r.status) !== -1;
+    });
+
+    openReqs.sort(function(a, b) {
+        return (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99);
+    });
+    closedReqs.sort(function(a, b) {
+        var ta = b.completed_at || b.updated_at || b.created_at || '';
+        var tb = a.completed_at || a.updated_at || a.created_at || '';
+        return ta.localeCompare(tb); // 新→旧
+    });
+
+    return openReqs.concat(closedReqs);
+}
+
+function sortIssuesForDisplay(issues) {
+    var openIssues = issues.filter(function(i) {
+        return CLOSED_ISSUE_STATUSES.indexOf(i.status) === -1;
+    });
+    var closedIssues = issues.filter(function(i) {
+        return CLOSED_ISSUE_STATUSES.indexOf(i.status) !== -1;
+    });
+
+    openIssues.sort(function(a, b) {
+        return (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99);
+    });
+    closedIssues.sort(function(a, b) {
+        var ta = b.resolved_at || b.updated_at || b.created_at || '';
+        var tb = a.resolved_at || a.updated_at || a.created_at || '';
+        return ta.localeCompare(tb); // 新→旧
+    });
+
+    return openIssues.concat(closedIssues);
+}
+
 function submitRequirement() {
     const title = document.getElementById('req-title');
     const desc = document.getElementById('req-desc');
     const assignee = document.getElementById('req-assignee');
+    const priority = document.getElementById('req-priority');
     const btn = document.getElementById('req-submit-btn');
     
     if (!title || !title.value.trim()) {
@@ -1484,7 +1541,8 @@ function submitRequirement() {
         body: JSON.stringify({
             title: title.value.trim(),
             description: desc ? desc.value.trim() : '',
-            assignee: assignee ? assignee.value : ''
+            assignee: assignee ? assignee.value : '',
+            priority: priority ? priority.value : 'P3'
         })
     })
     .then(r => r.json())
@@ -1584,16 +1642,18 @@ function loadRequirementsList() {
                 'panda': '🐼 达达'
             };
             
-            list.innerHTML = reqs.slice().reverse().map(r => `
+            var sortedReqs = sortRequirementsForDisplay(reqs);
+            list.innerHTML = sortedReqs.map(function(r) { return `
                 <div class="req-list-item">
                     <div class="req-title">${escapeHtml(r.title)}</div>
                     <div class="req-meta">
+                        <span><i class="fas fa-flag"></i> <span class="req-priority-badge ${PRIORITY_CLASSES[r.priority] || 'p3'}">${PRIORITY_LABELS[r.priority] || 'P3低'}</span></span>
                         <span><i class="fas fa-tag"></i> <span class="req-status-badge ${r.status}">${statusLabels[r.status] || r.status}</span></span>
                         <span><i class="fas fa-user"></i> ${agentNames[r.assignee] || '未指派'}</span>
                         <span><i class="fas fa-clock"></i> ${r.created_at ? new Date(r.created_at).toLocaleString('zh-CN') : ''}</span>
                     </div>
                 </div>
-            `).join('');
+            `; }).join('');
         })
         .catch(e => {
             console.error('loadRequirementsList error:', e);

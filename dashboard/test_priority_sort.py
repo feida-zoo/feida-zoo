@@ -33,7 +33,7 @@ def sort_requirements_for_display(reqs):
     open_reqs = [r for r in reqs if r.get('status') not in TERMINAL_REQ_STATUSES]
     closed_reqs = [r for r in reqs if r.get('status') in TERMINAL_REQ_STATUSES]
 
-    open_reqs.sort(key=lambda a: PRIORITY_ORDER.get(a.get('priority', 'P3'), 3))
+    open_reqs.sort(key=lambda a: PRIORITY_ORDER.get(a.get('priority'), 99))
     closed_reqs.sort(key=lambda a: (
         a.get('completed_at') or a.get('updated_at') or a.get('created_at') or ''
     ), reverse=True)
@@ -144,7 +144,7 @@ def sort_issues_for_display(issues):
     open_issues = [i for i in issues if i.get('status') not in CLOSED_ISSUE_STATUSES]
     closed_issues = [i for i in issues if i.get('status') in CLOSED_ISSUE_STATUSES]
 
-    open_issues.sort(key=lambda a: PRIORITY_ORDER.get(a.get('priority', 'P3'), 3))
+    open_issues.sort(key=lambda a: PRIORITY_ORDER.get(a.get('priority'), 99))
     closed_issues.sort(key=lambda a: (
         a.get('resolved_at') or a.get('updated_at') or a.get('created_at') or ''
     ), reverse=True)

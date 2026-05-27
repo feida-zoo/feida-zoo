@@ -1624,6 +1624,37 @@ body {
 .req-status-badge.timed_out { background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; }
 .req-status-badge.escalated { background: #fce4ec; color: #b71c1c; border: 1px solid #ffcdd2; }
 
+/* 需求管理页 - 优先级徽标 */
+.req-priority-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+.req-priority-badge.p0 {
+    background: rgba(231, 76, 60, 0.1);
+    color: #c0392b;
+    border: 1px solid rgba(231, 76, 60, 0.3);
+}
+.req-priority-badge.p1 {
+    background: rgba(243, 156, 18, 0.12);
+    color: #d35400;
+    border: 1px solid rgba(243, 156, 18, 0.3);
+}
+.req-priority-badge.p2 {
+    background: rgba(241, 196, 15, 0.15);
+    color: #b7950b;
+    border: 1px solid rgba(241, 196, 15, 0.3);
+}
+.req-priority-badge.p3 {
+    background: rgba(149, 165, 166, 0.15);
+    color: #7f8c8d;
+    border: 1px solid rgba(149, 165, 166, 0.3);
+}
+
+.success-toast {
+
 .success-toast {
     position: fixed;
     top: 20px;
