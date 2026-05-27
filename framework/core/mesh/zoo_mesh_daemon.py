@@ -654,7 +654,7 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
     task_id = payload.get("task_id", "") or payload.get("pipeline_id", "")
     title = payload.get("title", "未命名需求")
     req_id = payload.get("requirement_id", "")
-    assignee = payload.get("assignee") or _pick_phase_agent("validate")
+    assignee = payload.get("assignee") or _pick_phase_agent("design")
 
     if not task_id:
         logger.warning("pipeline_request 缺少 task_id")
@@ -697,43 +697,43 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
         reqs.append(cur_req)
         _save_requirements(reqs)
 
-    # 3. 推进 StateMachine（request → validate）
+    # 3. 推进 StateMachine（request → design）
     try:
-        StateMachine.transition("request", "validate")
+        StateMachine.transition("request", "design")
     except Exception as e:
         logger.warning(f"StateMachine transition failed: {e}")
 
     # 4. 更新 requirements.json
-    cur_req["status"] = "validate"
-    cur_req["phase"] = "validate"
+    cur_req["status"] = "design"
+    cur_req["phase"] = "design"
     cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
     _save_requirements(reqs)
 
     # 5. 发布推进事件
-    _publish_phase_advancement(title, task_id, "request", "validate")
+    _publish_phase_advancement(title, task_id, "request", "design")
 
     # 6. Agent 可用性检测（Pipeline V2 排队）
-    phase_assignee = _pick_phase_agent("validate")
+    phase_assignee = _pick_phase_agent("design")
     priority = cur_req.get("priority", payload.get("priority", "P3"))
 
     if not _agent_available(phase_assignee):
         # Agent 忙 → 入 pending 队列
-        _enqueue_pending(task_id, "validate", phase_assignee, priority, title)
+        _enqueue_pending(task_id, "design", phase_assignee, priority, title)
         logger.info(f"⏳ {phase_assignee} 忙碌，{task_id} 入 pending 队列等待")
     else:
         # Agent 空闲 → 发指令
         project_key = cur_req.get("project", "feida_zoo")
-        phase_msg = _build_phase_message("validate", task_id, cur_req, project_key)
+        phase_msg = _build_phase_message("design", task_id, cur_req, project_key)
         try:
-            _panda_relay_post(phase_assignee, task_id, "request", "validate", cur_req)
-            logger.info(f"已通知 {phase_assignee} 执行 validate 阶段")
+            _panda_relay_post(phase_assignee, task_id, "request", "design", cur_req)
+            logger.info(f"已通知 {phase_assignee} 执行 design 阶段")
         except Exception as e:
             logger.warning(f"通知 {phase_assignee} 失败: {e}")
 
     # 7. 设置 Pipeline 状态
-    pipeline.advance_to("validate")
-    mesh.set_pipeline_state(task_id, "validate")
-    logger.info(f"✅ Pipeline {task_id} 已启动，第一阶段: validate → {phase_assignee}")
+    pipeline.advance_to("design")
+    mesh.set_pipeline_state(task_id, "design")
+    logger.info(f"✅ Pipeline {task_id} 已启动，第一阶段: design → {phase_assignee}")
 
 
 def _sync_issue_status(pipeline_id: str, target_status: str) -> None:
@@ -1374,7 +1374,7 @@ def _dispatch_pending_agents():
             continue
 
         pipeline_id = item["pipeline_id"]
-        phase = item.get("phase", "validate")
+        phase = item.get("phase", "design")
         title = item.get("title", "")
 
         cur_req = None
