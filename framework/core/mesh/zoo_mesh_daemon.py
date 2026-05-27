@@ -131,32 +131,30 @@ _DISPATCH_LOG: dict = {}
 
 def _panda_relay_post(next_agent: str, pipeline_id: str, phase: str,
                            next_phase: str, cur_req: dict) -> None:
-    """通知下一阶段 Agent：写 inbox 文件，InboxWatcher 拾取后转发。
+    """通知下一阶段 Agent：通过 ZooNotify bridge (18794) 调用 sessions_send。"""
+    import urllib.request
 
-    不直接调用 openclaw agent CLI——通过 inbox 队列串行化，
-    避免并发 relay 与 QQ Bot 抢 session 锁。
-    """
     project_key = cur_req.get("project", "feida_zoo")
     next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key, agent_id=next_agent)
 
     try:
-        inbox_dir = Path(MESH_DIR) / "inbound" / next_agent / "queue"
-        inbox_dir.mkdir(parents=True, exist_ok=True)
-        ts = int(time.time() * 1000)
-        msg_file = inbox_dir / f"msg_{ts}_pipeline_{pipeline_id}_{next_phase}.json"
-        with open(msg_file, "w") as f:
-            json.dump({
-                "type": "pipeline_task",
-                "pipeline_id": pipeline_id,
-                "phase": next_phase,
-                "body": next_msg,
-                "from": "pipeline",
-                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
-            }, f)
-        logger.info(f"✅ relay → {next_agent} (phase={next_phase}): inbox 写入")
+        payload = json.dumps({
+            "agent": next_agent,
+            "pipeline_id": pipeline_id,
+            "phase": next_phase,
+            "message": next_msg,
+        }).encode()
+        req = urllib.request.Request(
+            "http://127.0.0.1:18794/api/sessions-send",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        urllib.request.urlopen(req, timeout=10)
+        logger.info(f"✅ relay → {next_agent} (phase={next_phase}): ZooNotify dispatched")
         _DISPATCH_LOG[pipeline_id] = (next_phase, time.time())
     except Exception as e:
-        logger.warning(f"⚠️ relay → {next_agent} inbox 写入失败: {e}")
+        logger.warning(f"⚠️ relay → {next_agent} ZooNotify 失败: {e}")
         try:
             _enqueue_pending(pipeline_id, next_phase, next_agent,
                            cur_req.get("priority", "P3"), cur_req.get("title", ""))
