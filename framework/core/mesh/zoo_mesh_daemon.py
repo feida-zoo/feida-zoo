@@ -314,57 +314,33 @@ def _get_project_info(project_key: str = "feida_zoo") -> dict:
 
 
 def _get_artifact_paths(pipeline_id: str, phase: str, project_key: str = "feida_zoo", prev_phase: str = "") -> dict:
-    """根据阶段和执行轮次返回 I/O 路径。
-    
-    prev_phase: 驳回场景下传入被驳回的审查阶段，用于确定正确的输入文件。
-    执行轮次通过实际存在的文件动态计算（v2/v3/...）。
-    """
+    """返回阶段的输出文件路径。输入已改用 commit id，不再需要 input 字段。"""
     project = _get_project_info(project_key)
     base = f"{project['path']}/{project['artifacts_dir']}"
     pid = pipeline_id
 
-    # 动态计算执行轮次（检查已存在的 artifact 文件）
     def _version_suffix(phase_name: str) -> str:
         base_name = f"{base}/{pid}_{phase_name}"
         if os.path.exists(f"{base_name}.md"):
-            return ""  # 第一版无后缀
+            return ""
         for v in range(2, 20):
             if os.path.exists(f"{base_name}_v{v}.md"):
                 return f"_v{v}"
         return ""
 
-    # 确定输入文件：驳回场景用 prev_phase 的输出，正常流程用 phase 自身的 version
-    if prev_phase:
-        in_suffix = _version_suffix(prev_phase)
-        in_file = f"{base}/{pid}_{prev_phase}{in_suffix}.md"
-    else:
-        in_suffix = _version_suffix(phase)
-        # 正常流程：输入是上一道工序的输出（根据标准链路）
-        normal_input_map = {
-            "design":        f"{base}/{pid}_design{in_suffix}.md",
-            "ui_design":     f"{base}/{pid}_design{in_suffix}.md",
-            "review":        f"{base}/{pid}_design{in_suffix}.md",
-            "develop_wt":    f"{base}/{pid}_design{in_suffix}.md",
-            "verify":   f"{base}/{pid}_design{in_suffix}.md",
-            "develop_code":  f"{base}/{pid}_design{in_suffix}.md",
-            "test":          f"{base}/{pid}_design{in_suffix}.md",
-            "audit":         f"{base}/{pid}_design{in_suffix}.md",
-            "deliver":   f"{base}/{pid}_audit{in_suffix}.md",
-        }
-        in_file = normal_input_map.get(phase, None)
-
-    # 输出文件
     out_suffix = _version_suffix(phase)
-    output_none_phases = {"develop_wt", "verify", "develop_code"}
 
-    table = {
-        "validate":      {"input": None,                              "output": f"{base}/{pid}_validate{_version_suffix('validate')}.md"},
-        "design":        {"input": in_file,                           "output": f"{base}/{pid}_design{out_suffix}.md"},        "review":        {"input": in_file,                           "output": f"{base}/{pid}_review{out_suffix}.md"},
-        "develop_wt":    {"input": in_file,                           "output": None},
-        "verify":        {"input": in_file, "output": f"{base}/{pid}_verify{out_suffix}.md"},
-        "develop_code":  {"input": in_file,                           "output": None},        "audit":         {"input": in_file, "output": f"{base}/{pid}_audit{out_suffix}.md"},
-        "deliver":       {"input": in_file, "output": f"{base}/{pid}_deliver{out_suffix}.md"},    }
-    return table.get(phase, {"input": None, "output": None})
+    output_map = {
+        "design":        f"{base}/{pid}_design{out_suffix}.md",
+        "review":        f"{base}/{pid}_review{out_suffix}.md",
+        "develop_wt":    None,
+        "verify":        f"{base}/{pid}_verify{out_suffix}.md",
+        "develop_code":  None,
+        "audit":         f"{base}/{pid}_audit{out_suffix}.md",
+        "deliver":       f"{base}/{pid}_deliver{out_suffix}.md",
+    }
+    output = output_map.get(phase, None)
+    return {"output": output}
 
 
 
