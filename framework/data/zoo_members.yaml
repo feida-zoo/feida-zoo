@@ -22,7 +22,6 @@ members:
       channel: internal
     responsible_phases:
       - request
-      - final_check
       - deliver
     capabilities:
       - orchestration
@@ -47,9 +46,7 @@ members:
       key: agent:alpha:main
       channel: internal
     responsible_phases:
-      - validate
       - design
-      - ui_design
       - develop_wt
       - develop_code
     capabilities:
@@ -76,8 +73,7 @@ members:
       channel: internal
     responsible_phases:
       - review
-      - review_test
-      - test
+      - verify
       - audit
     capabilities:
       - security_audit
