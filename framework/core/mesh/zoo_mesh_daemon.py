@@ -966,6 +966,8 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
                     cur_req["status"] = fallback
                     cur_req["phase"] = fallback
                     cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                    if commit_id:
+                        cur_req["last_commit"] = commit_id
                     _save_requirements(reqs)
                     _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, fallback)
                     mesh.set_pipeline_state(pipeline_id, fallback)

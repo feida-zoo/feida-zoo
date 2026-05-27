@@ -256,11 +256,12 @@
     "title": "看板页的需求ID过长，而且和聊天室里的pl id对不上，建议统一为pl id",
     "description": "",
     "assignee": "alpha",
-    "status": "design",
-    "phase": "design",
+    "status": "develop_wt",
+    "phase": "develop_wt",
     "pipeline_id": "pl_94726bf7",
     "created_at": "2026-05-27T21:09:59.886409",
     "source": "pipeline_auto",
-    "updated_at": "2026-05-27T21:36:26"
+    "updated_at": "2026-05-27T21:38:57",
+    "last_commit": "db44259"
   }
 ]
