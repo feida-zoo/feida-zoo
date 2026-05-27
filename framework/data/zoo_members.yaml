@@ -22,7 +22,6 @@ members:
       channel: internal
     responsible_phases:
       - request
-      - deliver
     capabilities:
       - orchestration
       - coordination
@@ -49,6 +48,7 @@ members:
       - design
       - develop_wt
       - develop_code
+      - deliver
     capabilities:
       - architecture_design
       - system_analysis

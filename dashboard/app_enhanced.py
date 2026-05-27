@@ -1328,7 +1328,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             "design": "alpha", "ui_design": "alpha", "review": "duci",
             "develop_wt": "alpha", "review_test": "duci",
             "develop_code": "alpha", "test": "duci",
-            "audit": "duci", "final_check": "panda", "deliver": "panda",
+            "audit": "duci", "deliver": "alpha",
         }
 
         seen_pipeline_ids = set()
