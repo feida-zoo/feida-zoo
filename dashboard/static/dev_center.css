@@ -1289,7 +1289,7 @@ body {
     flex-direction: column;
     height: 100%;
     width: 100%;
-    background: #1e1e2e;
+    background: white;
     border-radius: var(--border-radius);
     overflow: hidden;
     box-shadow: var(--card-shadow);
@@ -1298,8 +1298,8 @@ body {
 
 .chat-header {
     padding: 16px;
-    background: #181825;
-    border-bottom: 1px solid #313244;
+    background: white;
+    border-bottom: 1px solid var(--border-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1307,12 +1307,12 @@ body {
 
 .chat-header h3 {
     margin: 0;
-    color: #cdd6f4;
+    color: var(--dark-color);
     font-size: 1.1rem;
 }
 
 .chat-header h3 i {
-    color: #89b4fa;
+    color: var(--primary-color);
     margin-right: 8px;
 }
 
@@ -1329,35 +1329,35 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    color: #cdd6f4;
+    color: var(--dark-color);
     font-size: 0.9rem;
     min-height: 0;  /* flex 子项 min-height 修复 */
 }
 
 .chat-message-item {
     padding: 10px 12px;
-    background: #313244;
+    background: var(--light-color);
     border-radius: 8px;
     word-break: break-all;
     line-height: 1.5;
 }
 
 .chat-message-item .msg-from {
-    color: #89b4fa;
+    color: var(--primary-color);
     font-weight: 600;
     margin-right: 6px;
 }
 
 .chat-message-item .msg-time {
     font-size: 0.75rem;
-    color: #585b70;
+    color: var(--gray-color);
     margin-left: 8px;
 }
 
 .chat-message-item .mention-badge {
     display: inline-block;
     background: rgba(137, 180, 250, 0.2);
-    color: #89b4fa;
+    color: var(--primary-color);
     font-size: 0.7rem;
     padding: 1px 6px;
     border-radius: 4px;
@@ -1367,10 +1367,10 @@ body {
 
 .chat-input-area {
     padding: 12px 16px;
-    border-top: 1px solid #313244;
+    border-top: 1px solid var(--border-color);
     display: flex;
     gap: 10px;
-    background: #181825;
+    background: white;
 }
 
 .chat-mention-wrapper {
@@ -1380,9 +1380,9 @@ body {
 
 #chat-input {
     width: 100%;
-    background: #313244;
-    color: #cdd6f4;
-    border: 1px solid #45475a;
+    background: var(--light-color);
+    color: var(--dark-color);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 10px 12px;
     font-size: 0.9rem;
@@ -1393,16 +1393,16 @@ body {
 }
 
 #chat-input:focus {
-    border-color: #89b4fa;
+    border-color: var(--primary-color);
 }
 
 #chat-input::placeholder {
-    color: #585b70;
+    color: var(--gray-color);
 }
 
 #chat-send-btn {
-    background: #89b4fa;
-    color: #1e1e2e;
+    background: var(--primary-color);
+    color: var(--dark-color);
     border: none;
     border-radius: 8px;
     padding: 10px 18px;
@@ -1428,8 +1428,8 @@ body {
     bottom: 100%;
     left: 0;
     right: 0;
-    background: #313244;
-    border: 1px solid #45475a;
+    background: var(--light-color);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     margin-bottom: 4px;
     max-height: 180px;
@@ -1441,7 +1441,7 @@ body {
 .mention-item {
     padding: 8px 12px;
     cursor: pointer;
-    color: #cdd6f4;
+    color: var(--dark-color);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1451,7 +1451,7 @@ body {
 
 .mention-item:hover,
 .mention-item.active {
-    background: #45475a;
+    background: var(--light-color);
 }
 
 .mention-item .mention-emoji {
@@ -1459,7 +1459,7 @@ body {
 }
 
 .mention-item .mention-name {
-    color: #a6adc8;
+    color: var(--gray-color);
 }
 
 /* ===== Tab 4: 需求管理 ===== */
@@ -1686,7 +1686,7 @@ body {
     display: flex;
     flex-direction: column;
     width: 100%;
-    background: #1e1e2e;
+    background: white;
     border-radius: var(--border-radius);
     overflow: hidden;
     box-shadow: var(--card-shadow);
@@ -1697,13 +1697,13 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 16px 24px;
-    background: #181825;
-    border-bottom: 1px solid #313244;
+    background: white;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .members-tab-header h2 {
     margin: 0;
-    color: #cdd6f4;
+    color: var(--dark-color);
     font-size: 1.15rem;
     display: flex;
     align-items: center;
@@ -1711,11 +1711,11 @@ body {
 }
 
 .members-tab-header h2 i {
-    color: #89b4fa;
+    color: var(--primary-color);
 }
 
 .members-last-update {
-    color: #585b70;
+    color: var(--gray-color);
     font-size: 0.8rem;
 }
 
@@ -1740,10 +1740,10 @@ body {
 
 /* 成员管理卡片 */
 .member-tab-card {
-    background: #313244;
+    background: var(--light-color);
     border-radius: 12px;
     overflow: hidden;
-    border: 1px solid #45475a;
+    border: 1px solid var(--border-color);
     transition: all 0.25s ease;
     display: flex;
     flex-direction: column;
@@ -1751,7 +1751,7 @@ body {
 
 .member-tab-card:hover {
     transform: translateY(-4px);
-    border-color: #89b4fa;
+    border-color: var(--primary-color);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
@@ -1761,7 +1761,7 @@ body {
     align-items: center;
     justify-content: center;
     padding: 28px 20px 12px;
-    background: linear-gradient(180deg, #181825 0%, #313244 100%);
+    background: linear-gradient(180deg, var(--light-color) 0%, white 100%);
 }
 
 .member-tab-avatar {
@@ -1773,12 +1773,12 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #45475a;
+    background: var(--light-color);
     transition: border-color 0.2s;
 }
 
 .member-tab-card:hover .member-tab-avatar {
-    border-color: #89b4fa;
+    border-color: var(--primary-color);
 }
 
 .member-tab-avatar img {
@@ -1804,22 +1804,22 @@ body {
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    border: 3px solid #313244;
+    border: 3px solid var(--border-color);
     transition: background 0.3s, box-shadow 0.3s;
 }
 
 .member-tab-status-indicator.online {
-    background: #a6e3a1;
+    background: var(--success-color);
     box-shadow: 0 0 8px rgba(166, 227, 161, 0.6);
 }
 
 .member-tab-status-indicator.idle {
-    background: #f9e2af;
+    background: var(--warning-color);
     box-shadow: 0 0 8px rgba(249, 226, 175, 0.6);
 }
 
 .member-tab-status-indicator.offline {
-    background: #585b70;
+    background: var(--gray-color);
     box-shadow: 0 0 8px rgba(88, 91, 112, 0.4);
 }
 
@@ -1836,7 +1836,7 @@ body {
     margin: 0;
     font-size: 1.15rem;
     font-weight: 700;
-    color: #cdd6f4;
+    color: var(--dark-color);
     line-height: 1.3;
 }
 
@@ -1851,7 +1851,7 @@ body {
     padding: 4px 14px;
     border-radius: 12px;
     background: rgba(137, 180, 250, 0.15);
-    color: #89b4fa;
+    color: var(--primary-color);
     font-size: 0.85rem;
     font-weight: 500;
     border: 1px solid rgba(137, 180, 250, 0.25);
@@ -1859,7 +1859,7 @@ body {
 
 .member-tab-model {
     font-size: 0.85rem;
-    color: #a6adc8;
+    color: var(--gray-color);
     background: rgba(69, 71, 90, 0.5);
     padding: 3px 12px;
     border-radius: 8px;
@@ -1873,15 +1873,15 @@ body {
 }
 
 .member-tab-status-text.online {
-    color: #a6e3a1;
+    color: var(--success-color);
 }
 
 .member-tab-status-text.idle {
-    color: #f9e2af;
+    color: var(--primary-color);
 }
 
 .member-tab-status-text.offline {
-    color: #585b70;
+    color: var(--gray-color);
 }
 
 /* 响应式调整 */
@@ -1911,7 +1911,7 @@ body {
     display: flex;
     flex-direction: column;
     width: 100%;
-    background: #1e1e2e;
+    background: white;
     border-radius: var(--border-radius);
     overflow: hidden;
     box-shadow: var(--card-shadow);
@@ -1922,13 +1922,13 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 16px 24px;
-    background: #181825;
-    border-bottom: 1px solid #313244;
+    background: white;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .issues-header h2 {
     margin: 0;
-    color: #cdd6f4;
+    color: var(--dark-color);
     font-size: 1.15rem;
     display: flex;
     align-items: center;
@@ -1936,12 +1936,12 @@ body {
 }
 
 .issues-header h2 i {
-    color: #f9e2af;
+    color: var(--primary-color);
 }
 
 .btn-create-issue {
-    background: #a6e3a1;
-    color: #1e1e2e;
+    background: var(--primary-color);
+    color: white;
     border: none;
     padding: 8px 16px;
     border-radius: 8px;
@@ -1956,23 +1956,23 @@ body {
 }
 
 .btn-create-issue:hover {
-    background: #b8ebc2;
+    background: #2980b9;
 }
 
 .issues-toolbar {
     display: flex;
     gap: 10px;
     padding: 12px 24px;
-    background: #181825;
-    border-bottom: 1px solid #313244;
+    background: white;
+    border-bottom: 1px solid var(--border-color);
     align-items: center;
 }
 
 .issues-toolbar select,
 .issues-toolbar input[type="text"] {
-    background: #313244;
-    color: #cdd6f4;
-    border: 1px solid #45475a;
+    background: var(--light-color);
+    color: var(--dark-color);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 8px 12px;
     font-size: 0.85rem;
@@ -1984,7 +1984,7 @@ body {
 
 .issues-toolbar select:focus,
 .issues-toolbar input[type="text"]:focus {
-    border-color: #89b4fa;
+    border-color: var(--primary-color);
 }
 
 .issues-toolbar select {
@@ -1998,7 +1998,7 @@ body {
 }
 
 .issues-toolbar input[type="text"]::placeholder {
-    color: #585b70;
+    color: var(--gray-color);
 }
 
 .issues-list {
@@ -2015,21 +2015,21 @@ body {
 .issue-card {
     display: flex;
     gap: 12px;
-    background: #313244;
+    background: var(--light-color);
     border-radius: 10px;
     padding: 14px 16px;
-    border: 1px solid #45475a;
+    border: 1px solid var(--border-color);
     transition: all 0.2s;
-    border-left: 4px solid #585b70;
+    border-left: 4px solid var(--gray-color);
 }
 
 .issue-card:hover {
-    border-color: #89b4fa;
+    border-color: var(--primary-color);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .issue-card.priority-p0 {
-    border-left-color: #f38ba8;
+    border-left-color: var(--danger-color);
 }
 
 .issue-card.priority-p1 {
@@ -2037,11 +2037,11 @@ body {
 }
 
 .issue-card.priority-p2 {
-    border-left-color: #f9e2af;
+    border-left-color: var(--primary-color);
 }
 
 .issue-card.priority-p3 {
-    border-left-color: #585b70;
+    border-left-color: var(--gray-color);
 }
 
 .issue-card-left {
@@ -2063,7 +2063,7 @@ body {
 
 .issue-priority-badge.priority-p0 {
     background: rgba(243, 139, 168, 0.2);
-    color: #f38ba8;
+    color: var(--danger-color);
     border: 1px solid rgba(243, 139, 168, 0.3);
 }
 
@@ -2075,13 +2075,13 @@ body {
 
 .issue-priority-badge.priority-p2 {
     background: rgba(249, 226, 175, 0.2);
-    color: #f9e2af;
+    color: var(--primary-color);
     border: 1px solid rgba(249, 226, 175, 0.3);
 }
 
 .issue-priority-badge.priority-p3 {
     background: rgba(88, 91, 112, 0.3);
-    color: #a6adc8;
+    color: var(--gray-color);
     border: 1px solid rgba(88, 91, 112, 0.4);
 }
 
@@ -2103,7 +2103,7 @@ body {
 .issue-title {
     font-weight: 600;
     font-size: 0.95rem;
-    color: #cdd6f4;
+    color: var(--dark-color);
     word-break: break-word;
 }
 
@@ -2118,31 +2118,31 @@ body {
 
 .issue-status-badge.status-open {
     background: rgba(137, 180, 250, 0.2);
-    color: #89b4fa;
+    color: var(--primary-color);
     border: 1px solid rgba(137, 180, 250, 0.3);
 }
 
 .issue-status-badge.status-in-progress {
     background: rgba(249, 226, 175, 0.2);
-    color: #f9e2af;
+    color: var(--primary-color);
     border: 1px solid rgba(249, 226, 175, 0.3);
 }
 
 .issue-status-badge.status-resolved {
     background: rgba(166, 227, 161, 0.2);
-    color: #a6e3a1;
+    color: var(--success-color);
     border: 1px solid rgba(166, 227, 161, 0.3);
 }
 
 .issue-status-badge.status-closed {
     background: rgba(88, 91, 112, 0.3);
-    color: #585b70;
+    color: var(--gray-color);
     border: 1px solid rgba(88, 91, 112, 0.4);
 }
 
 .issue-desc {
     font-size: 0.8rem;
-    color: #a6adc8;
+    color: var(--gray-color);
     line-height: 1.4;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -2154,7 +2154,7 @@ body {
     display: flex;
     gap: 16px;
     font-size: 0.78rem;
-    color: #585b70;
+    color: var(--gray-color);
 }
 
 .issue-meta span {
@@ -2174,8 +2174,8 @@ body {
 .issue-btn-action,
 .issue-btn-delete {
     background: transparent;
-    border: 1px solid #45475a;
-    color: #a6adc8;
+    border: 1px solid var(--border-color);
+    color: var(--gray-color);
     width: 32px;
     height: 32px;
     border-radius: 6px;
@@ -2189,14 +2189,14 @@ body {
 
 .issue-btn-action:hover {
     background: rgba(137, 180, 250, 0.2);
-    border-color: #89b4fa;
-    color: #89b4fa;
+    border-color: var(--primary-color);
+    color: var(--primary-color);
 }
 
 .issue-btn-delete:hover {
     background: rgba(243, 139, 168, 0.2);
-    border-color: #f38ba8;
-    color: #f38ba8;
+    border-color: var(--danger-color);
+    color: var(--danger-color);
 }
 
 /* Issue form modal */
@@ -2223,8 +2223,8 @@ body {
 }
 
 .btn-cancel {
-    background: #45475a;
-    color: #cdd6f4;
+    background: var(--light-color);
+    color: var(--dark-color);
     border: none;
     padding: 10px 20px;
     border-radius: 6px;
@@ -2236,7 +2236,7 @@ body {
 }
 
 .btn-cancel:hover {
-    background: #585b70;
+    background: var(--gray-color);
 }
 
 @media (max-width: 768px) {
