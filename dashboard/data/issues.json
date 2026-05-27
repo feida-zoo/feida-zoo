@@ -154,5 +154,19 @@
     "source": "dashboard",
     "pipeline_id": "pl_94726bf7",
     "pipeline_status": "design"
+  },
+  {
+    "id": "54e418ee-6180-4312-b356-90049cfd669c",
+    "title": "问题管理UI优化",
+    "description": "和需求管理风格保持一致。\n现状：需求管理是亮色调，问题管理是暗色调，比较突兀。",
+    "priority": "P1",
+    "status": "open",
+    "assignee": "",
+    "created_at": "2026-05-28T00:03:16.322073",
+    "updated_at": "2026-05-28T00:03:16.322073",
+    "resolved_at": null,
+    "source": "dashboard",
+    "pipeline_id": "pl_3855650e",
+    "pipeline_status": "pushed"
   }
 ]
