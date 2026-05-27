@@ -410,7 +410,6 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "   如果需求本身不合理，直接 reject\n"
             "2. 架构设计：What/Why/Tradeoff/接口定义/文件清单\n"
             "3. UI 设计：页面布局、交互逻辑、状态定义\n"
-            "- 完成后立即 git commit\n"
         ),
         "review": (
             f"{io}"
@@ -421,7 +420,6 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "- 遗漏检查\n"
             "- 改进建议\n"
             "- 结论: pass / reject（reject 需说明原因）\n"
-            "- 完成后立即 git commit\n"
         ),
         "develop_wt": (
             f"{io}"
@@ -430,7 +428,6 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "- 覆盖所有验收标准\n"
             "- 含单元测试 + 集成测试\n"
             "- 测试代码写入项目 tests/ 目录\n"
-            "- 完成后立即 git commit\n"
         ),
         "verify": (
             f"{io}"
@@ -438,7 +435,6 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "1. 评审测试用例质量：覆盖度、边界用例\n"
             "2. 运行全部测试：通过率、失败分析\n"
             "3. 结论: pass / reject\n"
-            "- 完成后立即 git commit\n"
         ),
         "develop_code": (
             f"{io}"
@@ -446,7 +442,6 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "请根据设计文档编写实现代码，写入源码目录：\n"
             "- 测试用例全部通过\n"
             "- 不破坏现有功能\n"
-            "- 完成后立即 git commit\n"
         ),
         "audit": (
             f"{io}"
@@ -456,7 +451,6 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "- 代码质量（命名、结构、可维护性）\n"
             "- 性能风险\n"
             "- 结论: pass / reject\n"
-            "- 完成后立即 git commit\n"
         ),
         "deliver": (
             f"{io}"
@@ -469,7 +463,6 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "   ./zoo-service-restart           # 都改了\n"
             "4. 端到端验证：curl 确认修复生效\n"
             "5. 结论: pass / reject\n"
-            "- 完成后立即 git commit + zoo-phase-complete 上报\n"
         ),
     }
 
