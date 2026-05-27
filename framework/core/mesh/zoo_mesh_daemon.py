@@ -131,28 +131,31 @@ _DISPATCH_LOG: dict = {}
 
 def _panda_relay_post(next_agent: str, pipeline_id: str, phase: str,
                            next_phase: str, cur_req: dict) -> None:
-    """通知下一阶段 Agent 的 main session（fire-and-forget，不等待回复）。
+    """通知下一阶段 Agent：通过 openclaw agent --channel 对应通道发送。
 
-    Agent 完成任务后必须用 HTTP POST 回 daemon /phase_complete 端点。
-    发送失败时自动入 pending 队列，等待 _dispatch_pending_agents 重试。
+    使用 --channel qqbot 走 QQ Bot 通道，避免与 QQ Bot WebSocket 抢 session 锁。
+    Agent 完成后用 HTTP POST /phase_complete 上报。
     """
     import subprocess as _sp
 
     project_key = cur_req.get("project", "feida_zoo")
     next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key, agent_id=next_agent)
 
+    # Agent 通道映射：duci 走 qqbot，alpha/panda 走 webchat
+    channel_map = {"duci": "qqbot", "alpha": "webchat", "panda": "webchat"}
+    channel = channel_map.get(next_agent, "webchat")
+
     oc_bin = "/opt/homebrew/bin/openclaw"
     try:
         _sp.Popen(
-            [oc_bin, "agent", "--agent", next_agent, "-m", next_msg],
+            [oc_bin, "agent", "--agent", next_agent, "--channel", channel, "-m", next_msg],
             stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
             start_new_session=True
         )
-        logger.info(f"✅ relay → {next_agent} (phase={next_phase}): dispatched")
+        logger.info(f"✅ relay → {next_agent} (phase={next_phase}, channel={channel}): dispatched")
         _DISPATCH_LOG[pipeline_id] = (next_phase, time.time())
     except Exception as e:
         logger.warning(f"⚠️ relay → {next_agent} 失败: {e}")
-        # 入 pending 队列等待 _dispatch_pending_agents 重试
         try:
             _enqueue_pending(pipeline_id, next_phase, next_agent,
                            cur_req.get("priority", "P3"), cur_req.get("title", ""))
