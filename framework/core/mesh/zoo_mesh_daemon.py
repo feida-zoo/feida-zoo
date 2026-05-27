@@ -440,7 +440,7 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
         "review": (
             f"{io}"
             "【Review 阶段 - 设计评审】\n"
-            "请阅读输入文件，产出审查报告：\n"
+            "请审查上游产出（git show <commit>），产出审查报告：\n"
             "- 架构合理性\n"
             "- 安全风险\n"
             "- 遗漏检查\n"
@@ -476,7 +476,7 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
         "audit": (
             f"{io}"
             "【Audit 阶段 - 代码审计】\n"
-            "请审计实现代码：\n"
+            "请审计实现代码（git show <commit> 查看改动）：\n"
             "- 安全漏洞（SQL注入、XSS、硬编码密钥等）\n"
             "- 代码质量（命名、结构、可维护性）\n"
             "- 性能风险\n"
