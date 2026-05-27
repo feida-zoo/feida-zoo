@@ -419,7 +419,6 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "- 安全风险\n"
             "- 遗漏检查\n"
             "- 改进建议\n"
-            "- 结论: pass / reject（reject 需说明原因）\n"
         ),
         "develop_wt": (
             f"{io}"
@@ -434,7 +433,6 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "【Verify 阶段 - 测试评审 + 执行】\n"
             "1. 评审测试用例质量：覆盖度、边界用例\n"
             "2. 运行全部测试：通过率、失败分析\n"
-            "3. 结论: pass / reject\n"
         ),
         "develop_code": (
             f"{io}"
@@ -450,7 +448,6 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "- 安全漏洞（SQL注入、XSS、硬编码密钥等）\n"
             "- 代码质量（命名、结构、可维护性）\n"
             "- 性能风险\n"
-            "- 结论: pass / reject\n"
         ),
         "deliver": (
             f"{io}"
@@ -462,7 +459,6 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "   ./zoo-service-restart dashboard  # 修改了 dashboard 时\n"
             "   ./zoo-service-restart           # 都改了\n"
             "4. 端到端验证：curl 确认修复生效\n"
-            "5. 结论: pass / reject\n"
         ),
     }
 
