@@ -1,142 +1,108 @@
-# Review 阶段审查报告 — pl_3edd4a81
+# Review 阶段 — pl_3edd4a81
 
-**需求标题**: 需求管理和问题管理页已解决或者已关闭的项目按时间顺序由新到旧排序，开启中的项目按优先级由高到低排序
-
+**需求**: 需求管理和问题管理页已解决或者已关闭的项目按时间顺序由新到旧排序，开启中的项目按优先级由高到低排序
 **审查日期**: 2026-05-27
-**审查人**: 毒刺 🦂
-
----
-
-## 0. 上次 REJECT 回溯
-
-上次审查基于 validate 文件（design 尚不存在），三个 REJECT 理由：
-
-| # | 原因 | Design 回应 | 本次判定 |
-|---|------|------------|---------|
-| 1 | 需求数据模型缺 priority 字段 | ✅ §3.3 明确添加 priority，默认 P3，含表单/后端/展示全链路 | 已闭环 |
-| 2 | 排序位置未定（前端 vs 后端） | ✅ §3.1 选定前端排序，给出取舍分析 | 已闭环，见 §1.1 保留意见 |
-| 3 | 异常状态归类未定义 | ✅ §3.4 明确 done/cancelled/timed_out/escalated 均归入"已关闭"组 | 已闭环 |
-
-三个核心阻塞点全部回应，本次审查重点转向设计细节。
+**审查人**: duci 🦂
 
 ---
 
 ## 1. 架构合理性
 
-### 1.1 前端排序选择 — 可接受，但有保留意见
+### ✅ 前端排序方案合理
 
-Design §3.1 选择前端排序，理由是"纯展示层逻辑，实现代价低，数据量小无差异"。
+数据量小（需求 <20 条，问题 <15 条），前端排序无性能问题，逻辑集中在渲染层更清晰。设计选型正确。
 
-**认可部分**：
-- 当前数据规模（issues <50, requirements=16）前端排序确实无性能差异
-- 前端排序改动范围最小，6 处改动全部在现有文件内
+### ✅ 分组策略合理
 
-**保留意见**：
-- `_handle_issues_get()` 移除后端排序行意味着 API 返回顺序变为**无保证**（JSON 文件读取顺序 = 插入顺序，即 created_at 升序）。前端需要处理这个隐含变化
-- 后端筛选器（status/priority/search）仍在运行，返回数据已经过后端过滤。排序和过滤的职责被拆分到两端，增加了认知成本
-- 若未来加排序参数（如用户想切"按创建时间"排序），后端排序更易扩展
+开启中在上、已关闭在下，符合"先关注待办"的用户心智模型。终端状态统一归入一组，不二次细分，简洁。
 
-**结论**：当前可接受，但建议在代码注释中标记 `TODO: 考虑后端排序` 以备扩展。
+### ⚠️ 后端移除排序需谨慎
 
-### 1.2 分组模型 — 合理
-
-两组模型（开启中按 priority / 已关闭按时间倒序）与用户心智模型一致：先看要做什么（按紧急度），再看做完了什么（按时间线）。
-
-### 1.3 终端状态归一 — 合理
-
-`cancelled`/`timed_out`/`escalated` 归入"已关闭"组。语义正确——这些状态不再需要人工操作，与 `done` 同组展示合理。
-
----
+设计提出删除 `_handle_issues_get()` 中的 `issues.sort()` 行。**如果其他调用方依赖该 API 的有序返回**（如脚本、看板数据源），移除后端排序会破坏下游行为。经查看 `loadIssues()` 是该 API 的唯一前端消费者，看板走独立数据路径，所以**移除是安全的**。但应在实现时加注释说明理由。
 
 ## 2. 安全风险
 
-| 风险 | 等级 | 审查细节 |
-|------|------|----------|
-| Priority 值注入 | 中 | Design §4.1 定义 priority 为 `P0\|P1\|P2\|P3`，但 `_handle_requirements_post()` **未提白名单校验**。当前 issue 创建仅做 `.upper()`，攻击者可提交 `priority: "../../etc"` 虽不造成 XSS（前端有映射 fallback），但会污染数据。**必须加白名单校验** |
-| 前端 XSS via priority | 低 | Design §4.5 的渲染代码 `priority-${priorityClasses[r.priority] \|\| 'p3'}` 中 class 名构建：若 priority 为非法值，`priorityClasses` 映射返回 `undefined`，fallback `'p3'` 生效。文本部分 `${priorityLabels[r.priority] \|\| 'P3'}` 同理。安全 |
-| 数据完整性 | 低 | 移除后端排序行不影响数据完整性，仅影响返回顺序 |
+### ✅ 无注入风险
 
----
+`priority` 字段值为固定枚举 `P0|P1|P2|P3`，后端应做白名单校验。设计中未明确后端校验逻辑——**当前 `_handle_requirements_post()` 直接从 `data.get('priority')` 写入，无校验**。
+
+**风险等级**: 低。数据写入 JSON 文件，不涉及 SQL/命令注入，但恶意值会导致前端排序混乱或展示异常。
+
+**建议**: 后端接收 priority 时加上枚举校验，非 P0-P3 则默认 P3。
+
+### ✅ 无权限风险
+
+排序逻辑纯前端展示层，不影响数据写操作权限。
 
 ## 3. 遗漏检查
 
-### 3.1 🔴 必须修：后端 priority 白名单校验缺失
+### 🔴 严重遗漏：`_handle_requirements_post()` 未接收 priority 字段
 
-Design 定义了接口 `priority: "string (optional, default 'P3')  # P0|P1|P2|P3"`，但**未在代码中体现白名单校验**。
+**现状**: 后端 `_handle_requirements_post()` 构建的 `requirement` 字典中没有 `priority` 字段。设计文档声称要修改此处，但**当前代码完全没有 `priority` 的读取和写入逻辑**。
 
-`_handle_requirements_post()` 应增加：
-```python
-priority = (data.get('priority') or 'P3').upper()
-if priority not in ('P0', 'P1', 'P2', 'P3'):
-    priority = 'P3'
-```
+这意味着即使前端表单加了选择器并发送 priority，后端也会直接丢弃该字段。需求永远不会有 priority，前端排序函数拿到 `undefined`。
 
-同理，`_handle_issues_put()` 中 priority 更新也需要校验。
+**结论**: 这正是待实现的设计内容，不是遗漏——但实现时必须确保后端同步改动。
 
-### 3.2 🟡 应修：API 返回顺序变为隐含依赖
+### 🟡 遗漏：需求列表渲染未展示 priority
 
-移除 `issues.sort(key=lambda x: x.get('updated_at', ''), reverse=True)` 后，`GET /api/issues` 返回顺序取决于 `_load_issues()` 从 JSON 文件读取的顺序（即数组存储顺序 = created_at 升序）。
+当前 `loadRequirementsList()` 的渲染模板中没有优先级 badge，设计中提到要加但**未给出完整的渲染代码**（4.5 节只给了片段）。实现时需补齐。
 
-前端 `sortIssuesForDisplay()` 会对返回数据重新排序，功能正确。但如果未来有其他消费者调用 `GET /api/issues`（如移动端），会依赖一个无文档保证的返回顺序。
+### 🟡 遗漏：历史需求数据无 priority
 
-**建议**：移除排序行的同时加注释说明排序已移至前端，或保留后端排序改为与前端一致的分组排序。
+当前所有 requirements.json 中的条目都没有 `priority` 字段。设计说"默认 P3"，但需确认：
+- 前端排序函数中 `?? 3` 可兜底 ✅
+- 渲染时 `priorityLabels[r.priority] || 'P3'` 可兜底 ✅
+- **但已关闭的 done 状态需求全部会进入"已关闭"组并按 `completed_at` 排序**，因为它们没有 priority 也不会影响已关闭组的排序逻辑，所以实际无影响 ✅
 
-### 3.3 🟡 应修：历史数据 priority 回填方案不完整
+### 🟡 遗漏：需求表单 HTML 中无 priority 选择器
 
-Design §5 提到"旧数据保留无 priority"，§3.3 提到"默认 P3"。但 `requirements.json` 中 16 条现有数据均无 priority 字段，前端排序代码 `PRORITY_ORDER[a.priority] ?? 3` 通过 `?? 3` 兜底。
+当前 `dev_center.html` 需求表单只有 title/desc/assignee 三个字段，缺少 `req-priority` 选择器。这是待实现项，设计已覆盖。
 
-功能上可行，但存在不一致风险：
-- 若某需求通过 PUT 更新其他字段时未携带 priority，后端不会写入 priority 字段，数据模型永远残缺
-- 建议在 `_handle_requirements_post()` 中对所有读取的 requirements 补全 priority（或在首次读取时 lazy-fill）
+### 🟡 遗漏：需求列表的筛选器交互
 
-### 3.4 🟢 已覆盖：筛选与排序交互
+问题管理页有 status/priority/search 三个筛选器，筛选后排序。需求管理页当前**没有筛选器**。设计中未提及需求页是否需要增加筛选器，但这不是当前需求要求的，可后续迭代。
 
-Design §6 Open Questions 明确"先筛选后排序"，与代码逻辑一致：前端 `loadIssues()` 先通过后端筛选获取数据，再 `sortIssuesForDisplay()` 排序。✅
+### 🟢 小问题：`loadIssues()` 中 `in_progress` 状态未出现
 
-### 3.5 🟢 已决策：看板页不改
+设计中 `sortIssuesForDisplay` 将 `['open', 'in_progress']` 归为开启中，但当前数据中只有 `open` 和 `resolved` 状态。逻辑上没错，`in_progress` 是问题流转的中间态，保留是对的。
 
-Design §6 明确看板页不变，理由充分——看板是独立视图，需求描述仅针对列表页。✅
+### 🟢 小问题：需求终端状态 `escalated` 从未出现过
 
-### 3.6 🟢 代码拼写
-
-Design §4.3 排序函数中变量名 `PRORITY_ORDER` 应为 `PRIORITY_ORDER`。实现时需修正。
-
----
+当前数据只有 `done` 和 `test` 状态，`cancelled/timed_out/escalated` 从未使用。但设计中保留它们作为终端态是合理的防御性编程。
 
 ## 4. 改进建议
 
-### 4.1 P0 — 后端 priority 白名单校验
+### 建议 1：后端 priority 校验（必须）
 
-在 `_handle_requirements_post()` 和 `_handle_issues_put()` 中增加 priority 白名单校验，仅允许 P0/P1/P2/P3，非法值 fallback P3。
-
-### 4.2 P1 — 移除后端排序行时加注释
-
-移除 `issues.sort(...)` 行时加注释：`# 排序已移至前端 sortIssuesForDisplay()，此处不再服务端排序`
-
-### 4.3 P1 — 历史数据 lazy-fill
-
-在 `_get_requirements()` 中读取后遍历补全缺失的 priority 字段并写回：
 ```python
-for r in reqs:
-    if 'priority' not in r:
-        r['priority'] = 'P3'
+VALID_PRIORITIES = {'P0', 'P1', 'P2', 'P3'}
+priority = (data.get('priority') or 'P3').upper()
+if priority not in VALID_PRIORITIES:
+    priority = 'P3'
 ```
 
-### 4.4 P2 — 变量名修正
+### 建议 2：排序函数可复用
 
-`PRORITY_ORDER` → `PRIORITY_ORDER`
+`sortIssuesForDisplay` 和 `sortRequirementsForDisplay` 结构高度相似，可抽取公共的分组排序函数，减少重复代码。但考虑到两个实体的状态集和排序时间字段不同，分开写也可接受。**非阻塞**。
 
----
+### 建议 3：已关闭组排序时间字段应统一
+
+设计中已关闭需求按 `completed_at || updated_at` 排序，已关闭问题按 `resolved_at || updated_at` 排序。逻辑正确但字段不一致，实现时需仔细区分。建议代码中加注释说明。
+
+### 建议 4：前后端排序共存期的过渡
+
+移除后端排序后，如果页面刷新时数据闪烁（先无序后排序），可在 `loadIssues()` 中先隐藏列表、排序后再渲染。当前实现已有 loading 态，问题不大。
 
 ## 5. 结论
 
-**PASS ✅**（附条件）
+**pass** ✅
 
-上次 REJECT 的三个核心问题全部被 design 回应。设计整体合理，改动范围精确（6 处，无新增文件），分组排序模型与用户意图一致。
+设计整体合理，覆盖了需求的所有要点。识别出的遗漏和风险均为实现层面的问题，不影响设计通过：
 
-**附条件**：develop 阶段必须落实以下两点，否则 test 阶段直接 reject：
+1. 后端 priority 校验是必须加的，但不影响设计方向
+2. 历史数据兼容方案可行（默认 P3 兜底）
+3. 移除后端排序无下游破坏风险
+4. 分组策略和排序逻辑正确
 
-1. **后端 priority 白名单校验**（§3.1）— 安全底线
-2. **变量名 PRORITY → PRIORITY 修正**（§3.6）— 虽为拼写但不修正会成为技术债
-
-其余建议（§4.2 注释、§4.3 lazy-fill）为 P1/P2 改进，不阻塞。
+设计无架构缺陷、无安全硬伤、无逻辑矛盾。实现时注意上述改进建议即可。
