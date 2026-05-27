@@ -39,22 +39,17 @@ logger = logging.getLogger("zoo_mesh")
 
 
 # ── Pipeline Phase 定义 ──────────────────────────────────────────────────────────
-PHASES = ["request", "validate", "design", "ui_design", "review", "develop_wt", "review_test", "develop_code", "test", "audit", "final_check", "deliver"]
+PHASES = ["request", "design", "review", "develop_wt", "verify", "develop_code", "audit", "deliver"]
 
 # 阶段 → 下一阶段映射
 PHASE_TRANSITION_MAP = {
-    "request":     "validate",
-    "validate":    "design",
-    "design":      "ui_design",
-    "ui_design":   "review",
+    "request":     "design",       # validate → 合并到 design
+    "design":      "review",
     "review":      "develop_wt",
-    "develop_wt":  "review_test",
-    "review_test": "develop_code",
-    "develop":     "develop_wt",       # 旧数据兼容
-    "develop_code":"test",
-    "test":        "audit",
-    "audit":       "final_check",
-    "final_check": "deliver",
+    "develop_wt":  "verify",        # verify + test → verify
+    "verify":      "develop_code",
+    "develop_code":"audit",
+    "audit":       "deliver",       # final_check → 合并到 deliver
     "deliver":     "done",
 }
 
@@ -268,7 +263,7 @@ def _clear_pending_for_pipeline(pipeline_id: str) -> int:
 
 
 def _create_review_file(pipeline_id: str, phase: str) -> None:
-    """创建 review/review_test_pl_xxx.json（status: pending）。文件名含阶段前缀。"""
+    """创建 review/verify_pl_xxx.json（status: pending）。文件名含阶段前缀。"""
     review_file = Path(MESH_DIR) / "pipeline" / f"{phase}_{pipeline_id}.json"
     if not review_file.exists():
         with open(review_file, "w") as f:
@@ -346,34 +341,29 @@ def _get_artifact_paths(pipeline_id: str, phase: str, project_key: str = "feida_
         in_suffix = _version_suffix(phase)
         # 正常流程：输入是上一道工序的输出（根据标准链路）
         normal_input_map = {
-            "design":        f"{base}/{pid}_validate{in_suffix}.md",
+            "design":        f"{base}/{pid}_design{in_suffix}.md",
             "ui_design":     f"{base}/{pid}_design{in_suffix}.md",
             "review":        f"{base}/{pid}_design{in_suffix}.md",
             "develop_wt":    f"{base}/{pid}_design{in_suffix}.md",
-            "review_test":   f"{base}/{pid}_design{in_suffix}.md",
+            "verify":   f"{base}/{pid}_design{in_suffix}.md",
             "develop_code":  f"{base}/{pid}_design{in_suffix}.md",
             "test":          f"{base}/{pid}_design{in_suffix}.md",
             "audit":         f"{base}/{pid}_design{in_suffix}.md",
-            "final_check":   f"{base}/{pid}_audit{in_suffix}.md",
+            "deliver":   f"{base}/{pid}_audit{in_suffix}.md",
         }
         in_file = normal_input_map.get(phase, None)
 
     # 输出文件
     out_suffix = _version_suffix(phase)
-    output_none_phases = {"develop_wt", "review_test", "develop_code"}
+    output_none_phases = {"develop_wt", "verify", "develop_code"}
 
     table = {
         "validate":      {"input": None,                              "output": f"{base}/{pid}_validate{_version_suffix('validate')}.md"},
-        "design":        {"input": in_file,                           "output": f"{base}/{pid}_design{out_suffix}.md"},
-        "ui_design":     {"input": in_file,                           "output": f"{base}/{pid}_ui_design{out_suffix}.md"},
-        "review":        {"input": in_file,                           "output": f"{base}/{pid}_review{out_suffix}.md"},
+        "design":        {"input": in_file,                           "output": f"{base}/{pid}_design{out_suffix}.md"},        "review":        {"input": in_file,                           "output": f"{base}/{pid}_review{out_suffix}.md"},
         "develop_wt":    {"input": in_file,                           "output": None},
-        "review_test":   {"input": in_file,                           "output": None},
-        "develop_code":  {"input": in_file,                           "output": None},
-        "test":          {"input": in_file,                           "output": f"{base}/{pid}_test{out_suffix}.md"},
-        "audit":         {"input": in_file,                           "output": f"{base}/{pid}_audit{out_suffix}.md"},
-        "final_check":   {"input": in_file,                           "output": f"{base}/{pid}_final_check{out_suffix}.md"},
-    }
+        "verify":        {"input": in_file, "output": f"{base}/{pid}_verify{out_suffix}.md"},
+        "develop_code":  {"input": in_file,                           "output": None},        "audit":         {"input": in_file, "output": f"{base}/{pid}_audit{out_suffix}.md"},
+        "deliver":       {"input": in_file, "output": f"{base}/{pid}_deliver{out_suffix}.md"},    }
     return table.get(phase, {"input": None, "output": None})
 
 
@@ -434,34 +424,13 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
     io = _build_io_block(pipeline_id, phase, project_key, prev_phase=prev_phase)
 
     templates = {
-        "validate": (
-            f"{io}"
-            "【Validate 阶段 - 需求评审】\n"
-            "- 可行性：需求是否可实现，有无技术障碍\n"
-            "- 依赖项：需要哪些前置条件\n"
-            "- 风险点：可能踩坑的地方\n"
-            "- 建议优先级：P0 / P1 / P2 / P3\n"
-            "- 完成后立即 git commit\n"
-        ),
         "design": (
             f"{io}"
-            "【Design 阶段 - 架构设计】\n"
-            "- What: 具体要做什么改动\n"
-            "- Why: 为什么要这么做（背景、解决的问题）\n"
-            "- Tradeoff: 放弃了什么方案，做了什么权衡\n"
-            "- 接口定义: 新增/修改的函数、类、API\n"
-            "- 文件清单: 需要新增/修改的文件及路径\n"
-            "- Open Questions: 不确定点和遗留问题\n"
-            "- Next Action: 希望审计方重点审查什么\n"
-            "- 完成后立即 git commit\n"
-        ),
-        "ui_design": (
-            f"{io}"
-            "【UI Design 阶段 - 界面设计】\n"
-            "- 页面布局: 组件结构和位置\n"
-            "- 交互逻辑: 用户操作流程\n"
-            "- 状态定义: 各状态下的 UI 表现\n"
-            "- 视觉说明: 风格、颜色等\n"
+            "【Design 阶段 - 需求评审 + 方案设计 + UI】\n"
+            "1. 需求评审：可行性、依赖项、风险点、优先级（P0-P3）\n"
+            "   如果需求本身不合理，直接 reject\n"
+            "2. 架构设计：What/Why/Tradeoff/接口定义/文件清单\n"
+            "3. UI 设计：页面布局、交互逻辑、状态定义\n"
             "- 完成后立即 git commit\n"
         ),
         "review": (
@@ -484,13 +453,12 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "- 测试代码写入项目 tests/ 目录\n"
             "- 完成后立即 git commit\n"
         ),
-        "review_test": (
+        "verify": (
             f"{io}"
-            "【Review Test 阶段 - 测试评审】\n"
-            "请评审测试用例质量：\n"
-            "- 覆盖度\n"
-            "- 边界用例\n"
-            "- 结论: pass / reject\n"
+            "【Verify 阶段 - 测试评审 + 执行】\n"
+            "1. 评审测试用例质量：覆盖度、边界用例\n"
+            "2. 运行全部测试：通过率、失败分析\n"
+            "3. 结论: pass / reject\n"
             "- 完成后立即 git commit\n"
         ),
         "develop_code": (
@@ -499,14 +467,6 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "请根据设计文档编写实现代码，写入源码目录：\n"
             "- 测试用例全部通过\n"
             "- 不破坏现有功能\n"
-            "- 完成后立即 git commit\n"
-        ),
-        "test": (
-            f"{io}"
-            "【Test 阶段 - 测试执行】\n"
-            "请执行所有测试用例，产出测试报告：\n"
-            "- 通过率\n"
-            "- 失败用例分析\n"
             "- 完成后立即 git commit\n"
         ),
         "audit": (
@@ -519,30 +479,15 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "- 结论: pass / reject\n"
             "- 完成后立即 git commit\n"
         ),
-        "final_check": (
-            f"{io}"
-            "【Final Check 阶段 - 最终验收】\n"
-            "请做最终检查：\n"
-            "- 所有 phase 是否完成\n"
-            "- 代码是否干净可交付\n"
-            "- git commit 是否包含所有产出（包括审查文档）\n"
-            "- 修改的服务/进程是否需要重启才能生效？如果是，必须重启并验证\n"
-            "- 端到端验证：curl 或其他方式确认修复确实生效\n"
-            "- 如果修改了 daemon 代码，必须按技能文件正确重载：\n"
-            "  `skills/zoo-daemon-reload.md`（网关重启不够，必须 kill 旧 daemon 进程）\n"
-            "- 结论: pass / reject\n"
-        ),
         "deliver": (
             f"{io}"
-            "【Deliver 阶段 - 交付】\n"
-            "交付前必须完成以下检查，缺一不可：\n"
-            "1. git commit：确保所有产出已提交（代码+测试+所有 pipeline 文档，包括审查方写的 audit/test/review 文件）\n"
-            "2. 重启服务：如果修改了运行中的服务代码（如 dashboard、daemon），必须重启该进程使修改生效\n"
-            "   ⚠️ 特别注意：修改 daemon 代码时，网关重启不够，必须 kill 旧 daemon 进程让 plugin 重新拉起。\n"
-            "   详见技能文件：`skills/zoo-daemon-reload.md`\n"
-            "3. 端到端验证：重启后用 curl 或实际操作确认修复生效\n"
-            "4. 在输出文件中记录：commit hash、重启的进程、端到端验证结果\n"
-            "完成后上报 phase_complete\n"
+            "【Deliver 阶段 - 最终验收 + 交付】\n"
+            "1. 检查所有 phase 是否完成，代码是否干净可交付\n"
+            "2. git commit：确保所有产出已提交（含审查方文档）\n"
+            "3. 重启服务（如修改了运行中代码），端到端验证生效\n"
+            "   如果修改了 daemon 代码，按 skills/zoo-daemon-reload.md 重载\n"
+            "4. 结论: pass / reject\n"
+            "- 完成后立即 git commit + zoo-phase-complete 上报\n"
         ),
     }
 
@@ -560,11 +505,10 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
 def _publish_phase_advancement(title: str, pipeline_id: str, from_phase: str, to_phase: str) -> None:
     """向 chat 频道发布阶段推进消息（dashboard SSE 可见）。"""
     emoji_map = {
-        "request": "📥", "validate": "🔍", "design": "🎨", "ui_design": "🎨", "review": "📋",
-        "develop_wt": "🧪", "review_test": "📋", "develop_code": "🔧",
-        "develop": "🔧",
-        "test": "🧪", "audit": "🔐", "final_check": "✅", "deliver": "🚀",
-        "done": "🏁", "cancelled": "❌", "escalated": "⚠️",
+        "request": "📥", "design": "🎨", "review": "📋",
+        "develop_wt": "🧪", "verify": "🧪", "develop_code": "🔧",
+        "audit": "🔐", "deliver": "🚀",
+        "done": "🏁", "cancelled": "❌", "rejected": "🚫",
     }
     from_emoji = emoji_map.get(from_phase, "📌")
     to_emoji = emoji_map.get(to_phase, "📌")
@@ -821,6 +765,32 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
     logger.info(f"✅ Pipeline {task_id} 已启动，第一阶段: validate → {phase_assignee}")
 
 
+def _sync_issue_status(pipeline_id: str, target_status: str) -> None:
+    """同步更新 issues.json 中关联 issue 的状态。"""
+    try:
+        issues_path = Path("/Users/zoo/workspace/code/feida_zoo/dashboard/data/issues.json")
+        if not issues_path.exists():
+            return
+        with open(issues_path, 'r', encoding='utf-8') as f:
+            issues = json.load(f)
+        now_iso = time.strftime("%Y-%m-%dT%H:%M:%S")
+        updated = False
+        for issue in issues:
+            if issue.get("pipeline_id") == pipeline_id:
+                issue["status"] = target_status
+                if target_status == "resolved":
+                    issue["resolved_at"] = now_iso
+                issue["updated_at"] = now_iso
+                updated = True
+                logger.info(f"📝 Pipeline {pipeline_id} → issue {issue.get('id', '?')} 标记为 {target_status}")
+                break
+        if updated:
+            with open(issues_path, 'w', encoding='utf-8') as f:
+                json.dump(issues, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.warning(f"⚠️ Pipeline {pipeline_id} 同步 issue 状态失败（降级）: {e}")
+
+
 def _handle_phase_complete(body: str, agent_id: str) -> None:
     """处理 Agent 的 phase_complete/pipeline_ack 回复，推进到下一阶段。"""
     # 提取 pipeline_id（格式: pl_xxxxxxxx、phase_complete:pl_xxxxxxxx 或 PI_DONE:pl_xxxxxxxx）
@@ -922,27 +892,8 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
         _save_requirements(reqs)
 
-        # 同步更新 issues.json：pipeline 完成 → 关联 issue 标记 resolved
-        try:
-            issues_path = Path("/Users/zoo/workspace/code/feida_zoo/dashboard/data/issues.json")
-            if issues_path.exists():
-                with open(issues_path, 'r', encoding='utf-8') as f:
-                    issues = json.load(f)
-                now_iso = time.strftime("%Y-%m-%dT%H:%M:%S")
-                updated = False
-                for issue in issues:
-                    if issue.get("pipeline_id") == pipeline_id:
-                        issue["status"] = "resolved"
-                        issue["resolved_at"] = now_iso
-                        issue["updated_at"] = now_iso
-                        updated = True
-                        logger.info(f"📝 Pipeline {pipeline_id} 完成，关联 issue {issue.get('id', '?')} 标记为 resolved")
-                        break
-                if updated:
-                    with open(issues_path, 'w', encoding='utf-8') as f:
-                        json.dump(issues, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.warning(f"⚠️ Pipeline {pipeline_id} 完成后同步 issue 状态失败（降级）: {e}")
+        # 同步更新 issues.json
+        _sync_issue_status(pipeline_id, "resolved")
 
         # 通过 StateMachine 完成
         try:
@@ -976,8 +927,8 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
     # 后续逻辑统一使用 normalized_agent
     agent_id = normalized_agent
 
-    # Pipeline V2: 检查审查结果（review/review_test/audit/test 阶段推进时）
-    if current_status in ("review", "review_test", "test", "audit"):
+    # Pipeline V2: 检查审查结果（review/verify/audit/test 阶段推进时）
+    if current_status in ("review", "verify", "audit"):
         # 如果 phase_complete 携带了审查结果，直接写入审查文件
         if review_result:
             review_path = Path(MESH_DIR) / "pipeline" / f"{current_status}_{pipeline_id}.json"
@@ -1002,38 +953,25 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         result = review_data.get("result")
         rejection_context = ""
         if result == "reject":
-            # 驳回：注入审查反馈，让下一阶段知道为什么被驳回
+            # 驳回：pipeline 进入 rejected 终态，不再回退循环
             rejection_context = (
-                f"\n\n⚠️ 【审查驳回原因】（请在下一阶段重点关注）\n"
+                f"\n\n⚠️ 【审查驳回】\n"
                 f"审查阶段：{current_status}\n"
                 f"审查结论：reject\n"
                 f"{review_data.get('comments', []) if isinstance(review_data.get('comments'), str) else ''}\n"
                 f"完整审查报告见：{MESH_DIR}/pipeline/{current_status}_{pipeline_id}.json\n"
             )
-            fallback_map = {
-                "review": "design",
-                "review_test": "develop_wt",
-                "test": "develop_code",
-                "audit": "develop_code",
-            }
-            fallback = fallback_map.get(current_status)
-            if fallback:
-                try:
-                    StateMachine.transition(current_status, fallback)
-                    cur_req["status"] = fallback
-                    cur_req["phase"] = fallback
-                    cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-                    _save_requirements(reqs)
-                    _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, fallback)
-                    next_agent = cur_req.get("assignee") or _pick_phase_agent(fallback)
-                    next_msg = _build_phase_message(fallback, pipeline_id, cur_req, cur_req.get("project", "feida_zoo"), extra_context=rejection_context, prev_phase=current_status)
-                    _panda_relay_post(next_agent, pipeline_id, current_status, fallback, cur_req)
-                    mesh.set_pipeline_state(pipeline_id, fallback)
-                    logger.info(f"🔄 Pipeline {pipeline_id}: 审查驳回，{current_status}→{fallback}")
-                    return
-                except Exception:
-                    pass
-        # result="pass" → 继续推进到下一阶段
+            cur_req["status"] = "rejected"
+            cur_req["phase"] = "rejected"
+            cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+            _save_requirements(reqs)
+            _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, "rejected")
+            mesh.set_pipeline_state(pipeline_id, "rejected")
+            _clear_pending_for_pipeline(pipeline_id)
+            # 同步 issue 状态
+            _sync_issue_status(pipeline_id, "rejected")
+            logger.info(f"🚫 Pipeline {pipeline_id}: 审查驳回 → rejected（终态）")
+            return
 
     # 正常推进到下一阶段
     try:
@@ -1049,18 +987,18 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
 
     _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, next_phase)
 
-    # Pipeline V2: 为 review/review_test/test/audit 阶段创建审查文件
-    if next_phase in ("review", "review_test", "test", "audit"):
+    # Pipeline V2: 为 review/verify/test/audit 阶段创建审查文件
+    if next_phase in ("review", "verify", "audit"):
         _create_review_file(pipeline_id, next_phase)
 
     # 通知下一阶段的 Agent
     # 使用 _pick_phase_agent 统一选 Agent（与鉴权规则一致）
-    if next_phase in ("review", "review_test", "test", "audit", "final_check", "deliver"):
+    if next_phase in ("review", "verify", "test", "audit", "deliver", "deliver"):
         next_agent = _pick_phase_agent(next_phase)
     else:
         next_agent = cur_req.get("assignee") or _pick_phase_agent(next_phase)
     project_key = cur_req.get("project", "feida_zoo")
-    next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key, prev_phase=current_status if current_status in ("review", "review_test", "test", "audit") else "", agent_id=next_agent)
+    next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key, prev_phase=current_status if current_status in ("review", "verify", "audit") else "", agent_id=next_agent)
 
     try:
         _panda_relay_post(next_agent, pipeline_id, current_status, next_phase, cur_req)

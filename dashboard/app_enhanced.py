@@ -63,55 +63,47 @@ PIPELINE_DIR = PANDA_MESH_DIR / "pipeline"
 # 内部 Pipeline 状态不变，仅合并对外展示列
 PIPELINE_PHASE_TO_COLUMN = {
     "request":     "request",
-    "validate":    "request",
     "design":      "design",
-    "ui_design":   "design",
     "review":      "develop",
     "develop_wt":  "develop",
-    "review_test": "develop",
+    "verify":      "develop",
     "develop_code":"develop",
-    "develop":     "develop",
-    "test":        "develop",
     "audit":       "audit",
-    "final_check": "audit",
     "deliver":     "done",
     "done":        "done",
-    "cancelled":   "cancelled",      # 已取消 → 归入已取消列
-    "timed_out":   "audit",      # 超时 → 归入验收阶段列
-    "escalated":   "develop",     # 升级 → 归入开发阶段列
+    "rejected":    "rejected",
+    "cancelled":   "cancelled",
+    "timed_out":   "rejected",
+    "escalated":   "develop",
 }
 
 # Pipeline 阶段 → 中文显示名（卡片级展示）
 PHASE_TO_CHINESE = {
     "request":      "待处理",
-    "validate":     "验证中",
     "design":       "设计中",
-    "ui_design":    "UI设计中",
     "review":       "审查中",
-    "develop":      "开发中",
     "develop_wt":   "开发中(WT)",
-    "review_test":  "测试审查",
+    "verify":       "验证中",
     "develop_code": "编码中",
-    "test":         "测试中",
     "audit":        "验收中",
-    "final_check":  "终检中",
     "deliver":      "交付中",
     "done":         "已完成",
-    "cancelled":    "🚫 已取消",
+    "rejected":     "🚫 已驳回",
+    "cancelled":    "🗑️ 已取消",
     "timed_out":    "⏰ 已超时",
-    "escalated":    "🚨 已升级",
 }
 
 # 看板列定义（精简版5列，无异常独立列）
 # 内部 Pipeline 状态不变，仅在对外展示时合并
 # 异常状态（cancelled/timed_out/escalated）归入对应主列，卡片红色标识
 KANBAN_STATUS = {
-    "request":   "📥 需求池",      # request + validate
-    "design":    "🎨 设计阶段",     # design + ui_design
-    "develop":   "🔧 开发阶段",     # review + develop + develop_wt + review_test + develop_code + test
-    "audit":     "🔍 验收阶段",     # audit + final_check
-    "cancelled": "🗑️ 已取消",        # 已取消的 pipeline
-    "done":      "✅ 已完成",       # deliver + done
+    "request":   "📥 需求池",
+    "design":    "🎨 设计阶段",
+    "develop":   "🔧 开发阶段",
+    "audit":     "🔍 验收阶段",
+    "rejected":  "🚫 已驳回",
+    "cancelled": "🗑️ 已取消",
+    "done":      "✅ 已完成",
 }
 
 # SSE 客户端管理器
