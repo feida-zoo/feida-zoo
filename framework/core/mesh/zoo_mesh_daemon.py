@@ -131,35 +131,36 @@ _DISPATCH_LOG: dict = {}
 
 def _panda_relay_post(next_agent: str, pipeline_id: str, phase: str,
                            next_phase: str, cur_req: dict) -> None:
-    """通知下一阶段 Agent：通过 openclaw agent --channel 对应通道发送。
+    """通知下一阶段 Agent：写 inbox 文件，InboxWatcher 拾取后转发。
 
-    使用 --channel qqbot 走 QQ Bot 通道，避免与 QQ Bot WebSocket 抢 session 锁。
-    Agent 完成后用 HTTP POST /phase_complete 上报。
+    不直接调用 openclaw agent CLI——通过 inbox 队列串行化，
+    避免并发 relay 与 QQ Bot 抢 session 锁。
     """
-    import subprocess as _sp
-
     project_key = cur_req.get("project", "feida_zoo")
     next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key, agent_id=next_agent)
 
-    # Agent 通道映射：duci 走 qqbot，alpha/panda 走 webchat
-    channel_map = {"duci": "qqbot", "alpha": "webchat", "panda": "webchat"}
-    channel = channel_map.get(next_agent, "webchat")
-
-    oc_bin = "/opt/homebrew/bin/openclaw"
     try:
-        _sp.Popen(
-            [oc_bin, "agent", "--agent", next_agent, "--channel", channel, "-m", next_msg],
-            stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
-            start_new_session=True
-        )
-        logger.info(f"✅ relay → {next_agent} (phase={next_phase}, channel={channel}): dispatched")
+        inbox_dir = Path(MESH_DIR) / "inbound" / next_agent / "queue"
+        inbox_dir.mkdir(parents=True, exist_ok=True)
+        ts = int(time.time() * 1000)
+        msg_file = inbox_dir / f"msg_{ts}_pipeline_{pipeline_id}_{next_phase}.json"
+        with open(msg_file, "w") as f:
+            json.dump({
+                "type": "pipeline_task",
+                "pipeline_id": pipeline_id,
+                "phase": next_phase,
+                "body": next_msg,
+                "from": "pipeline",
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            }, f)
+        logger.info(f"✅ relay → {next_agent} (phase={next_phase}): inbox 写入")
         _DISPATCH_LOG[pipeline_id] = (next_phase, time.time())
     except Exception as e:
-        logger.warning(f"⚠️ relay → {next_agent} 失败: {e}")
+        logger.warning(f"⚠️ relay → {next_agent} inbox 写入失败: {e}")
         try:
             _enqueue_pending(pipeline_id, next_phase, next_agent,
                            cur_req.get("priority", "P3"), cur_req.get("title", ""))
-            logger.info(f"📥 relay 失败，{pipeline_id} 入 pending (agent={next_agent}, phase={next_phase})")
+            logger.info(f"📥 relay 失败，{pipeline_id} 入 pending")
         except Exception as enq_e:
             logger.warning(f"入 pending 队列失败: {enq_e}")
 
@@ -597,7 +598,21 @@ def _on_wakeup_callback(agent_id: str):
                 _move_to_processed(msg_file)
                 continue
 
-            # 类型 3：已删除。所有推进必须有明确信号。
+            # 类型 3：pipeline_task — 转发给 agent session（非 Panda）
+            if msg.get("type") == "pipeline_task" and agent_id != "panda":
+                import subprocess as _sp
+                try:
+                    _sp.Popen(
+                        ["/opt/homebrew/bin/openclaw", "agent", "--agent", agent_id, "-m", body],
+                        stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
+                        start_new_session=True
+                    )
+                    logger.info(f"📤 pipeline_task → {agent_id}: {body[:80]}")
+                except Exception as e:
+                    logger.warning(f"pipeline_task 转发失败: {e}")
+                _move_to_processed(msg_file)
+                continue
+
             # 其他消息 → 仅桥接通知（不自动推进），并移入 processed 避免死循环
             if agent_id != "panda":
                 # _send_agent_notification 已移除，改由 Panda relay 处理
