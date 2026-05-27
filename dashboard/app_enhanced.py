@@ -1324,7 +1324,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
         requirements = self._get_requirements()
         # 阶段 → 执行人映射（与子流程daemon PHASE_DEFAULT_AGENT 保持一致）
         PHASE_EXECUTOR = {
-            "request": "panda", "design": "alpha",
+            "design": "alpha",
             "design": "alpha", "ui_design": "alpha", "review": "duci",
             "develop_wt": "alpha", "review_test": "duci",
             "develop_code": "alpha", "test": "duci",
