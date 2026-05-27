@@ -766,7 +766,7 @@ class ZooDevCenter {
         
         taskCard.innerHTML = `
             <div class="task-header">
-                <div class="task-id">${task.id}</div>
+                <div class="task-id">${task.pipeline_id || task.id || ''}</div>
                 <div class="task-severity">${task.severity}</div>
             </div>
             <div class="task-title">${this.escapeHtml(task.name)}</div>
