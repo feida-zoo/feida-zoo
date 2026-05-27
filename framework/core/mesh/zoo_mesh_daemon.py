@@ -455,13 +455,15 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
         "deliver": (
             f"{io}"
             "【Deliver 阶段 - 最终验收 + 交付】\n"
+            "⚠️ 必须按顺序完成以下全部步骤，最后再执行 zoo-phase-complete：\n"
             "1. 检查所有 phase 是否完成，代码是否干净可交付\n"
             "2. git commit：确保所有产出已提交（含审查方文档）\n"
-            "3. ⚠️ 重启服务：如修改了运行中代码，必须重启使之生效\n"
-            "   ./zoo-service-restart daemon   # 修改了 daemon 代码时\n"
-            "   ./zoo-service-restart dashboard  # 修改了 dashboard 时\n"
-            "   ./zoo-service-restart           # 都改了\n"
-            "4. 端到端验证：curl 确认修复生效\n"
+            "3. ⚠️ 重启服务后验证（改了啥就重启啥，不可跳过）：\n"
+            "   改了 CSS/JS/HTML → ./zoo-service-restart dashboard\n"
+            "   改了 Python 代码  → ./zoo-service-restart daemon\n"
+            "   都改了             → ./zoo-service-restart\n"
+            "4. 端到端验证：curl http://127.0.0.1:18792/ 确认修复生效\n"
+            "5. 以上全部完成后，最后执行 zoo-phase-complete 上报\n"
         ),
     }
 
