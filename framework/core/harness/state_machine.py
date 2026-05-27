@@ -27,29 +27,26 @@ class StateMachine:
     """
 
     TRANSITIONS = {
-        "request":     ["validate", "cancelled"],
-        "validate":    ["request", "design", "cancelled"],
-        "design":      ["ui_design", "cancelled", "timed_out", "escalated"],
-        "ui_design":   ["review", "design", "cancelled", "timed_out", "escalated"],
-        "review":      ["design", "develop", "develop_wt", "cancelled", "timed_out", "escalated"],
-        "develop":     ["develop_wt", "test", "cancelled", "timed_out", "escalated"],
-        "develop_wt":  ["review_test", "cancelled", "timed_out", "escalated"],
-        "review_test": ["develop_code", "develop_wt", "cancelled", "timed_out", "escalated"],
-        "develop_code":["test", "cancelled", "timed_out", "escalated"],
-        "test":        ["audit", "develop", "develop_code", "cancelled", "timed_out", "escalated"],
-        "audit":       ["develop", "final_check", "cancelled", "timed_out", "escalated"],
-        "final_check": ["deliver", "develop", "cancelled", "escalated"],
-        "deliver":     ["done", "cancelled", "escalated"],
+        "request":     ["design", "cancelled"],
+        "validate":    ["design", "cancelled"],          # 旧阶段向后兼容
+        "design":      ["review", "cancelled", "rejected"],
+        "review":      ["design", "develop_wt", "cancelled", "rejected"],
+        "develop_wt":  ["verify", "cancelled", "rejected"],
+        "verify":      ["develop_code", "develop_wt", "cancelled", "rejected"],
+        "develop_code":["audit", "cancelled", "rejected"],
+        "audit":       ["develop_code", "deliver", "cancelled", "rejected"],
+        "deliver":     ["done", "cancelled"],
         "done":        [],
-        "timed_out":   ["escalated", "cancelled"],
+        "rejected":    [],
         "cancelled":   [],
-        "escalated":   ["request", "cancelled"],
+        "timed_out":   ["cancelled"],
+        "escalated":   ["request", "cancelled"],          # 旧数据兼容
     }
 
     ALL_STATES = list(TRANSITIONS.keys())
 
     # 终态：转换出去为空
-    TERMINAL_STATES = {"done", "cancelled"}
+    TERMINAL_STATES = {"done", "cancelled", "rejected"}
 
     @classmethod
     def transition(cls, from_state: str, to_state: str) -> bool:
