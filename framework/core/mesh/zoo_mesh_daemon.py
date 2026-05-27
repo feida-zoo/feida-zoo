@@ -25,7 +25,16 @@ from core.mesh.delivery_watcher import AsyncDeliveryWatcher
 from core.harness.pipeline import ZooPipeline
 from core.harness.state_machine import StateMachine
 
-logging.basicConfig(level=logging.INFO, format="[ZooMesh] %(asctime)s %(message)s")
+# 统一日志输出：文件 + 控制台，确保多实例日志可追踪
+DAEMON_LOG = os.environ.get("ZOO_DAEMON_LOG", "/tmp/zoo_mesh_daemon.log")
+logging.basicConfig(
+    level=logging.INFO,
+    format="[ZooMesh] %(asctime)s %(message)s",
+    handlers=[
+        logging.FileHandler(DAEMON_LOG),
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger("zoo_mesh")
 
 
@@ -1045,8 +1054,8 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         _create_review_file(pipeline_id, next_phase)
 
     # 通知下一阶段的 Agent
-    # review/review_test/test/audit 强制使用阶段默认 Agent（毒刺），不受需求 assignee 覆盖
-    if next_phase in ("review", "review_test", "test", "audit"):
+    # 使用 _pick_phase_agent 统一选 Agent（与鉴权规则一致）
+    if next_phase in ("review", "review_test", "test", "audit", "final_check", "deliver"):
         next_agent = _pick_phase_agent(next_phase)
     else:
         next_agent = cur_req.get("assignee") or _pick_phase_agent(next_phase)
@@ -1621,8 +1630,8 @@ def main():
     mesh = ZooMesh()
     mesh.init(MESH_DIR)
 
-    # 启动时扫描未启动的 Pipeline 请求
-    _scan_pending_requirements()
+    # 不再自动扫描启动 Pipeline——由 dashboard 显式发送 pipeline_request 触发
+    # _scan_pending_requirements()  # 已禁用，防止测试请求被误启动
 
     # Daemon threads
     # ── InboxWatcher (含 Pipeline 全自动驱动回调) ──
@@ -1655,7 +1664,7 @@ def main():
     try:
         while True:
             time.sleep(60)
-            _scan_pending_requirements()
+            # _scan_pending_requirements()  # 已禁用
             _dispatch_pending_agents()
             # 每 30 分钟检测一次卡死 pipeline（30min, 60min, ...）
             if time.time() - _LAST_STUCK_CHECK_TS >= 30 * 60:

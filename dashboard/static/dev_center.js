@@ -1315,7 +1315,10 @@ function loadIssues() {
             list.innerHTML = sortedIssues.map(issue => {
                 const nextStatus = nextStatusMap[issue.status] || 'open';
                 const nextLabel = nextActionLabels[issue.status] || '操作';
-                const created = issue.created_at ? new Date(issue.created_at).toLocaleString('zh-CN') : '';
+                const isClosed = CLOSED_ISSUE_STATUSES.indexOf(String(issue.status || '').trim()) !== -1;
+                const displayTime = isClosed
+                    ? (issue.resolved_at ? new Date(issue.resolved_at).toLocaleString('zh-CN') : '')
+                    : (issue.created_at ? new Date(issue.created_at).toLocaleString('zh-CN') : '');
                 
                 return `
                     <div class="issue-card priority-${priorityClasses[issue.priority] || 'p3'}">
@@ -1330,7 +1333,7 @@ function loadIssues() {
                             ${issue.description ? `<div class="issue-desc">${escapeHtml(issue.description)}</div>` : ''}
                             <div class="issue-meta">
                                 <span class="issue-assignee"><i class="fas fa-user"></i> ${agentNames[issue.assignee] || escapeHtml(issue.assignee) || '未指派'}</span>
-                                <span class="issue-time"><i class="fas fa-clock"></i> ${created}</span>
+                                <span class="issue-time"><i class="fas fa-clock"></i> ${isClosed ? '已解决: ' : ''}${displayTime}</span>
                             </div>
                         </div>
                         <div class="issue-card-actions">

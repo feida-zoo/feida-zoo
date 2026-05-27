@@ -76,7 +76,7 @@ PIPELINE_PHASE_TO_COLUMN = {
     "final_check": "audit",
     "deliver":     "done",
     "done":        "done",
-    "cancelled":   "done",      # 已取消 → 归入已完成列
+    "cancelled":   "cancelled",      # 已取消 → 归入已取消列
     "timed_out":   "audit",      # 超时 → 归入验收阶段列
     "escalated":   "develop",     # 升级 → 归入开发阶段列
 }
@@ -110,7 +110,8 @@ KANBAN_STATUS = {
     "design":    "🎨 设计阶段",     # design + ui_design
     "develop":   "🔧 开发阶段",     # review + develop + develop_wt + review_test + develop_code + test
     "audit":     "🔍 验收阶段",     # audit + final_check
-    "done":      "✅ 已完成",       # deliver + done + cancelled
+    "cancelled": "🗑️ 已取消",        # 已取消的 pipeline
+    "done":      "✅ 已完成",       # deliver + done
 }
 
 # SSE 客户端管理器
@@ -1297,9 +1298,16 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
         pipeline_dir = PIPELINE_DIR
         if not pipeline_dir.exists():
             return pipelines
+        # 加载 requirements 用于过滤已取消/已完成的 pipeline
+        reqs = self._get_requirements()
+        req_status = {r.get("pipeline_id", ""): r.get("status", "") for r in reqs if r.get("pipeline_id")}
         try:
             for state_file in pipeline_dir.glob("state_*.json"):
                 task_id = state_file.stem.replace("state_", "", 1)
+                # 跳过已取消或已完成的 pipeline（仅保留活跃的）
+                status = req_status.get(task_id, "")
+                if status in ("cancelled", "done"):
+                    continue
                 try:
                     with open(state_file, 'r', encoding='utf-8') as f:
                         state_data = json.load(f)
