@@ -84,14 +84,12 @@ class TestJSCodeStructure(unittest.TestCase):
 
     def test_createTaskCard_has_pipeline_id_display(self):
         """createTaskCard 应使用 pipeline_id 显示"""
-        m = self.js.find('createTaskCard')
-        self.assertNotEqual(m, -1, "找不到 createTaskCard 函数")
-        # 检查函数体内是否有 pipeline_id 相关显示逻辑
-        func_start = self.js.find('createTaskCard', m)
-        func_end = self.js.find('\n    }\n\n', func_start)
-        func_body = self.js[func_start:func_end]
-        self.assertIn('pipeline_id', func_body,
-                      "createTaskCard 未引用 pipeline_id")
+        # 找到 task-id div 行，确认使用 pipeline_id
+        import re
+        matches = re.findall(r'<div class="task-id">\$\{([^}]+)\}</div>', self.js)
+        self.assertTrue(len(matches) > 0, "找不到 task-id 显示逻辑")
+        self.assertIn('pipeline_id', matches[0],
+                      f"task-id 未使用 pipeline_id，当前: {matches[0]}")
 
 
 if __name__ == "__main__":
