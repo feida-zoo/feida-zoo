@@ -1469,7 +1469,7 @@ document.addEventListener('keydown', function(e) {
 var TERMINAL_REQ_STATUSES = ['done', 'cancelled', 'timed_out', 'escalated'];
 
 // 问题终端状态（已解决/已关闭）
-var CLOSED_ISSUE_STATUSES = ['resolved', 'closed'];
+var CLOSED_ISSUE_STATUSES = ['resolved', 'closed', 'cancelled'];
 
 // 优先级排序权重
 var PRIORITY_ORDER = { 'P0': 0, 'P1': 1, 'P2': 2, 'P3': 3 };
