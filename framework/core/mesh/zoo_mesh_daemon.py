@@ -43,7 +43,8 @@ PHASES = ["request", "design", "review", "develop_wt", "verify", "develop_code",
 
 # 阶段 → 下一阶段映射
 PHASE_TRANSITION_MAP = {
-    "request":     "design",       # validate → 合并到 design
+    "request":     "design",
+    "validate":    "design",       # 旧阶段向后兼容
     "design":      "review",
     "review":      "develop_wt",
     "develop_wt":  "verify",        # verify + test → verify
