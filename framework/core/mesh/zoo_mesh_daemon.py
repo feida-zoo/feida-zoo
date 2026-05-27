@@ -410,9 +410,8 @@ def _build_phase_message(phase: str, pipeline_id: str, requirement: dict, projec
     return (
         f"[Pipeline] Phase: {phase}\n"
         f"task_id: {pipeline_id}\n"
-        f"requirement_id: {requirement.get('id', '')}\n"
         f"title: {requirement.get('title', '')}\n"
-        f"description: {requirement.get('description', '')}\n"
+        f"{'description: ' + requirement.get('description', '') + '\n' if requirement.get('description', '') else ''}"
         f"指令: 请执行 {phase} 阶段\n"
         f"完成后：1) git commit   2) 执行上报命令\n"
         f"  {report_cmd}\n"
