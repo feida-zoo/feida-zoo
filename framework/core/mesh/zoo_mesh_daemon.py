@@ -375,12 +375,10 @@ def _build_io_block(pipeline_id: str, phase: str, project_key: str = "feida_zoo"
     project_dir = project["path"]
 
     lines = [f"项目路径: {project_dir}"]
-    if paths["input"]:
-        lines.append(f"输入文件: {paths['input']}")
     if paths["output"]:
         lines.append(f"输出文件: {paths['output']}（必须写入此文件，源码除外）")
     else:
-        lines.append("输出: 直接写入源码目录（见项目路径下的具体文件）")
+        lines.append("输出: 直接写入源码目录")
     return "\n".join(lines) + "\n"
 
 
@@ -399,11 +397,16 @@ def _build_phase_message(phase: str, pipeline_id: str, requirement: dict, projec
             f"-H 'Content-Type: application/json' "
             f"-d '{{\"pipeline_id\":\"{pipeline_id}\",\"phase\":\"{phase}\",\"result\":\"<pass|reject>\",\"commit_id\":\"<your_commit>\",\"agent_id\":\"<your_agent_id>\"}}'"
         )
-    # 全局幂等约束：防止 Agent 看到输出文件已存在就跳过内容核对
+    # 全局幂等约束
     idempotency_warning = (
         "⚠️ 幂等约束：即使输出文件已存在，也必须读取并确认内容符合当前阶段要求。"
         "如果内容匹配则可复用，否则必须覆盖重写。禁止仅凭文件存在就跳过工作直接上报。\n"
     )
+    # 上游 commit（如果上一阶段提供了）
+    upstream = ""
+    last_commit = requirement.get("last_commit", "")
+    if last_commit:
+        upstream = f"\n上游产出 commit: {last_commit}\n  执行 git show {last_commit} 查看完整改动\n"
     return (
         f"[Pipeline] Phase: {phase}\n"
         f"task_id: {pipeline_id}\n"
@@ -413,6 +416,7 @@ def _build_phase_message(phase: str, pipeline_id: str, requirement: dict, projec
         f"指令: 请执行 {phase} 阶段\n"
         f"完成后：1) git commit   2) 执行上报命令\n"
         f"  {report_cmd}\n"
+        f"{upstream}"
         f"{idempotency_warning}"
         f"{template}"
         f"{extra_context}"
@@ -844,6 +848,14 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
 
     logger.info(f"🎯 阶段完成: agent={agent_id}, phase={completed_phase}, pipeline_id={pipeline_id}")
 
+    # 提取 commit_id（格式: commit:xxxxxxxx 或 commit: xxxxxxxx）
+    commit_id = ""
+    commit_match = re.search(r'commit:\s*(\S+)', body)
+    if commit_match:
+        commit_id = commit_match.group(1)
+        if commit_id:
+            logger.info(f"📎 commit: {commit_id[:12]}...")
+
     # 载入 requirements
     reqs = _load_requirements()
     cur_req = None
@@ -890,6 +902,8 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         cur_req["phase"] = "done"
         cur_req["completed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
         cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+        if commit_id:
+            cur_req["last_commit"] = commit_id
         _save_requirements(reqs)
 
         # 同步更新 issues.json
@@ -983,6 +997,8 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
     cur_req["status"] = next_phase
     cur_req["phase"] = next_phase
     cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    if commit_id:
+        cur_req["last_commit"] = commit_id
     _save_requirements(reqs)
 
     _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, next_phase)
