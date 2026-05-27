@@ -126,32 +126,34 @@ _DISPATCH_LOG: dict = {}
 
 def _panda_relay_post(next_agent: str, pipeline_id: str, phase: str,
                            next_phase: str, cur_req: dict) -> None:
-    """通知下一阶段 Agent 的 main session。
+    """通知下一阶段 Agent 的 main session（fire-and-forget，不等待回复）。
 
-    Agent 完成任务后必须用 HTTP POST 回 daemon /phase_complete 端点，
-    不再依赖 CLI stdout 抓取（fire-and-forget 拿不到异步回复）。
+    Agent 完成任务后必须用 HTTP POST 回 daemon /phase_complete 端点。
+    发送失败时自动入 pending 队列，等待 _dispatch_pending_agents 重试。
     """
     import subprocess as _sp
 
     project_key = cur_req.get("project", "feida_zoo")
-
-    # 使用统一的 _build_phase_message 生成完整 prompt（含项目路径/I/O 约定 + curl 示例）
     next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key)
 
     oc_bin = "/opt/homebrew/bin/openclaw"
     try:
-        result = _sp.run(
+        _sp.Popen(
             [oc_bin, "agent", "--agent", next_agent, "-m", next_msg],
-            capture_output=True, text=True, timeout=30
+            stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
+            start_new_session=True
         )
         logger.info(f"✅ relay → {next_agent} (phase={next_phase}): dispatched")
-        # 记录派发时间，供 _check_stuck_pipelines 判断是否需要重发
-        _DISPATCH_LOG[pipeline_id] = (next_phase, time.time())
-    except _sp.TimeoutExpired:
-        logger.warning(f"⚠️ relay → {next_agent} CLI 超时（任务可能已下发，依赖 Agent POST 回信号）")
         _DISPATCH_LOG[pipeline_id] = (next_phase, time.time())
     except Exception as e:
         logger.warning(f"⚠️ relay → {next_agent} 失败: {e}")
+        # 入 pending 队列等待 _dispatch_pending_agents 重试
+        try:
+            _enqueue_pending(pipeline_id, next_phase, next_agent,
+                           cur_req.get("priority", "P3"), cur_req.get("title", ""))
+            logger.info(f"📥 relay 失败，{pipeline_id} 入 pending (agent={next_agent}, phase={next_phase})")
+        except Exception as enq_e:
+            logger.warning(f"入 pending 队列失败: {enq_e}")
 
 
 
@@ -389,7 +391,7 @@ def _build_phase_message(phase: str, pipeline_id: str, requirement: dict, projec
     curl_example = (
         f"curl -X POST http://127.0.0.1:{HTTP_PORT}/phase_complete "
         f"-H 'Content-Type: application/json' "
-        f"-d '{{\"pipeline_id\":\"{pipeline_id}\",\"result\":\"pass\",\"agent_id\":\"<your_agent_id>\"}}'"
+        f"-d '{{\"pipeline_id\":\"{pipeline_id}\",\"phase\":\"{phase}\",\"result\":\"pass\",\"agent_id\":\"<your_agent_id>\"}}'"
     )
     # 全局幂等约束：防止 Agent 看到输出文件已存在就跳过内容核对
     idempotency_warning = (
@@ -943,22 +945,23 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         logger.info(f"🏁 Pipeline {pipeline_id} 已完成！")
         return
 
-    # Pipeline V2: 检查审查结果（review/review_test/audit 阶段推进时）
+    # ── Agent 鉴权：所有阶段都必须由该阶段的默认 Agent 提交 ──
+    # 宽松匹配：session key 格式如 'agent:duci:main' 自动剥离为 'duci'
+    expected_agent = _pick_phase_agent(current_status)
+    normalized_agent = agent_id
+    if ":" in agent_id:
+        # 提取 agent:<name>:... 中间部分
+        parts = agent_id.split(":")
+        if len(parts) >= 2 and parts[0] == "agent":
+            normalized_agent = parts[1]
+    if normalized_agent != expected_agent:
+        logger.warning(f"Pipeline {pipeline_id}: {current_status} 阶段拒绝来自 {agent_id} 的信号（期望 {expected_agent}）")
+        return
+    # 后续逻辑统一使用 normalized_agent
+    agent_id = normalized_agent
+
+    # Pipeline V2: 检查审查结果（review/review_test/audit/test 阶段推进时）
     if current_status in ("review", "review_test", "test", "audit"):
-        # 验证信号发送者：只接受该阶段的默认 Agent
-        # 宽松匹配：session key 格式如 'agent:duci:main' 自动剥离为 'duci'
-        expected_agent = _pick_phase_agent(current_status)
-        normalized_agent = agent_id
-        if ":" in agent_id:
-            # 提取 agent:<name>:... 中间部分
-            parts = agent_id.split(":")
-            if len(parts) >= 2 and parts[0] == "agent":
-                normalized_agent = parts[1]
-        if normalized_agent != expected_agent:
-            logger.warning(f"Pipeline {pipeline_id}: {current_status} 阶段拒绝来自 {agent_id} 的信号（期望 {expected_agent}）")
-            return
-        # 后续逻辑统一使用 normalized_agent
-        agent_id = normalized_agent
         # 如果 phase_complete 携带了审查结果，直接写入审查文件
         if review_result:
             review_path = Path(MESH_DIR) / "pipeline" / f"{current_status}_{pipeline_id}.json"
@@ -1042,12 +1045,6 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         next_agent = cur_req.get("assignee") or _pick_phase_agent(next_phase)
     project_key = cur_req.get("project", "feida_zoo")
     next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key, prev_phase=current_status if current_status in ("review", "review_test", "test", "audit") else "")
-
-    try:
-        _panda_relay_post(next_agent, pipeline_id, current_status, next_phase, cur_req)
-        logger.info(f"已通知 {next_agent} 执行 {next_phase} 阶段")
-    except Exception as e:
-        logger.warning(f"通知 {next_agent} 失败: {e}")
 
     try:
         _panda_relay_post(next_agent, pipeline_id, current_status, next_phase, cur_req)
@@ -1234,14 +1231,18 @@ class Handler(BaseHTTPRequestHandler):
             pipeline_id = data.get("pipeline_id", "")
             result = data.get("result", "pass")  # pass or reject
             agent_id = data.get("agent_id", "unknown")
+            phase = data.get("phase", "")
 
             if not pipeline_id:
                 self._json(400, {"error": "missing pipeline_id"})
                 return
 
             # Agent 主动通知 daemon 推进，直接构造信号触发 _handle_phase_complete
-            signal_body = f"phase_complete:{pipeline_id}:{result}"
-            logger.info(f"📡 Agent {agent_id} 直接通知 phase_complete: {signal_body}")
+            if phase:
+                signal_body = f"Phase: {phase}\nphase_complete:{pipeline_id}:{result}"
+            else:
+                signal_body = f"phase_complete:{pipeline_id}:{result}"
+            logger.info(f"📡 Agent {agent_id} 直接通知 phase_complete: {signal_body[:80]}")
 
             # 幂等校验：已 done 的 pipeline 不接受重复上报
             reqs_check = _load_requirements()
