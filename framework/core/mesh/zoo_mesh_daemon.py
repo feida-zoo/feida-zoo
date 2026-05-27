@@ -423,6 +423,7 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "- 依赖项：需要哪些前置条件\n"
             "- 风险点：可能踩坑的地方\n"
             "- 建议优先级：P0 / P1 / P2 / P3\n"
+            "- 完成后立即 git commit\n"
         ),
         "design": (
             f"{io}"
@@ -434,6 +435,7 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "- 文件清单: 需要新增/修改的文件及路径\n"
             "- Open Questions: 不确定点和遗留问题\n"
             "- Next Action: 希望审计方重点审查什么\n"
+            "- 完成后立即 git commit\n"
         ),
         "ui_design": (
             f"{io}"
@@ -442,6 +444,7 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "- 交互逻辑: 用户操作流程\n"
             "- 状态定义: 各状态下的 UI 表现\n"
             "- 视觉说明: 风格、颜色等\n"
+            "- 完成后立即 git commit\n"
         ),
         "review": (
             f"{io}"
@@ -452,6 +455,7 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "- 遗漏检查\n"
             "- 改进建议\n"
             "- 结论: pass / reject（reject 需说明原因）\n"
+            "- 完成后立即 git commit\n"
         ),
         "develop_wt": (
             f"{io}"
@@ -460,6 +464,7 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "- 覆盖所有验收标准\n"
             "- 含单元测试 + 集成测试\n"
             "- 测试代码写入项目 tests/ 目录\n"
+            "- 完成后立即 git commit\n"
         ),
         "review_test": (
             f"{io}"
@@ -468,6 +473,7 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "- 覆盖度\n"
             "- 边界用例\n"
             "- 结论: pass / reject\n"
+            "- 完成后立即 git commit\n"
         ),
         "develop_code": (
             f"{io}"
@@ -475,6 +481,7 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "请根据设计文档编写实现代码，写入源码目录：\n"
             "- 测试用例全部通过\n"
             "- 不破坏现有功能\n"
+            "- 完成后立即 git commit\n"
         ),
         "test": (
             f"{io}"
@@ -482,6 +489,7 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "请执行所有测试用例，产出测试报告：\n"
             "- 通过率\n"
             "- 失败用例分析\n"
+            "- 完成后立即 git commit\n"
         ),
         "audit": (
             f"{io}"
@@ -491,6 +499,7 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "- 代码质量（命名、结构、可维护性）\n"
             "- 性能风险\n"
             "- 结论: pass / reject\n"
+            "- 完成后立即 git commit\n"
         ),
         "final_check": (
             f"{io}"
