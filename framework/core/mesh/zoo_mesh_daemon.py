@@ -965,7 +965,8 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
     cur_req["status"] = next_phase
     cur_req["phase"] = next_phase
     cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-    if commit_id:
+    # 仅当非旧阶段（validate/ui_design 等桥接阶段）时存储 commit
+    if commit_id and completed_phase not in ("validate", "ui_design", "review_test", "test", "final_check"):
         cur_req["last_commit"] = commit_id
     _save_requirements(reqs)
 
