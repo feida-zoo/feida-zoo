@@ -134,7 +134,7 @@ def _panda_relay_post(next_agent: str, pipeline_id: str, phase: str,
     import subprocess as _sp
 
     project_key = cur_req.get("project", "feida_zoo")
-    next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key)
+    next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key, agent_id=next_agent)
 
     oc_bin = "/opt/homebrew/bin/openclaw"
     try:
@@ -343,8 +343,8 @@ def _get_artifact_paths(pipeline_id: str, phase: str, project_key: str = "feida_
             "develop_wt":    f"{base}/{pid}_design{in_suffix}.md",
             "review_test":   f"{base}/{pid}_design{in_suffix}.md",
             "develop_code":  f"{base}/{pid}_design{in_suffix}.md",
-            "test":          f"{base}/{pid}_develop_code{in_suffix}.md",
-            "audit":         f"{base}/{pid}_develop_code{in_suffix}.md",
+            "test":          f"{base}/{pid}_design{in_suffix}.md",
+            "audit":         f"{base}/{pid}_design{in_suffix}.md",
             "final_check":   f"{base}/{pid}_audit{in_suffix}.md",
         }
         in_file = normal_input_map.get(phase, None)
@@ -385,14 +385,21 @@ def _build_io_block(pipeline_id: str, phase: str, project_key: str = "feida_zoo"
     return "\n".join(lines) + "\n"
 
 
-def _build_phase_message(phase: str, pipeline_id: str, requirement: dict, project_key: str = "feida_zoo", extra_context: str = "", prev_phase: str = "") -> str:
+def _build_phase_message(phase: str, pipeline_id: str, requirement: dict, project_key: str = "feida_zoo", extra_context: str = "", prev_phase: str = "", agent_id: str = "") -> str:
     """构建发给 Agent 的完整阶段消息（统一入口）。"""
     template = _get_phase_template(phase, pipeline_id, project_key, prev_phase=prev_phase)
-    curl_example = (
-        f"curl -X POST http://127.0.0.1:{HTTP_PORT}/phase_complete "
-        f"-H 'Content-Type: application/json' "
-        f"-d '{{\"pipeline_id\":\"{pipeline_id}\",\"phase\":\"{phase}\",\"result\":\"pass\",\"agent_id\":\"<your_agent_id>\"}}'"
-    )
+    # 上报命令（通过脚本，agent 只需执行即可）
+    if agent_id:
+        report_cmd = (
+            f"./zoo-phase-complete {pipeline_id} {phase} <pass|reject> <commit_id> {agent_id}\n"
+            f"  （pass 通过 / reject 驳回，commit_id 填你刚 git commit 的 hash）"
+        )
+    else:
+        report_cmd = (
+            f"curl -X POST http://127.0.0.1:{HTTP_PORT}/phase_complete "
+            f"-H 'Content-Type: application/json' "
+            f"-d '{{\"pipeline_id\":\"{pipeline_id}\",\"phase\":\"{phase}\",\"result\":\"<pass|reject>\",\"commit_id\":\"<your_commit>\",\"agent_id\":\"<your_agent_id>\"}}'"
+        )
     # 全局幂等约束：防止 Agent 看到输出文件已存在就跳过内容核对
     idempotency_warning = (
         "⚠️ 幂等约束：即使输出文件已存在，也必须读取并确认内容符合当前阶段要求。"
@@ -404,9 +411,9 @@ def _build_phase_message(phase: str, pipeline_id: str, requirement: dict, projec
         f"requirement_id: {requirement.get('id', '')}\n"
         f"title: {requirement.get('title', '')}\n"
         f"description: {requirement.get('description', '')}\n"
-        f"指令: 请执行 {phase} 阶段，完成后必须用 curl POST 上报 daemon（禁止用对话回复）\n"
-            f"上报命令（复制后把 result 改为 pass 或 reject，agent_id 填你的短名如 alpha/duci/panda/weaver/aeterna/gulu，不是 session key）：\n"
-        f"  {curl_example}\n"
+        f"指令: 请执行 {phase} 阶段\n"
+        f"完成后：1) git commit   2) 执行上报命令\n"
+        f"  {report_cmd}\n"
         f"{idempotency_warning}"
         f"{template}"
         f"{extra_context}"
@@ -1044,7 +1051,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
     else:
         next_agent = cur_req.get("assignee") or _pick_phase_agent(next_phase)
     project_key = cur_req.get("project", "feida_zoo")
-    next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key, prev_phase=current_status if current_status in ("review", "review_test", "test", "audit") else "")
+    next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key, prev_phase=current_status if current_status in ("review", "review_test", "test", "audit") else "", agent_id=next_agent)
 
     try:
         _panda_relay_post(next_agent, pipeline_id, current_status, next_phase, cur_req)
@@ -1071,7 +1078,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
             reqs2 = _load_requirements()
             for r in reqs2:
                 if r.get("pipeline_id") == pid and r.get("status") == next_phase:
-                    msg = _build_phase_message(next_phase, pid, r, r.get("project", "feida_zoo"))
+                    msg = _build_phase_message(next_phase, pid, r, r.get("project", "feida_zoo"), agent_id=next_agent)
                     _panda_relay_post(next_agent, pid, next_phase, next_phase, r)
                     logger.info(f"📤 pending 任务 {pid} 已派发")
                     break
@@ -1232,6 +1239,25 @@ class Handler(BaseHTTPRequestHandler):
             result = data.get("result", "pass")  # pass or reject
             agent_id = data.get("agent_id", "unknown")
             phase = data.get("phase", "")
+            commit_id = data.get("commit_id", "")
+
+            # 校验 commit_id（如果提供）
+            if commit_id:
+                import subprocess as _git_sp
+                try:
+                    _git_sp.run(
+                        ["git", "cat-file", "-t", commit_id],
+                        capture_output=True, timeout=5, check=True
+                    )
+                    logger.info(f"✅ commit {commit_id[:10]} 校验通过")
+                except Exception:
+                    logger.warning(f"❌ commit {commit_id[:10]} 不存在，拒绝 phase_complete")
+                    self._json(400, {
+                        "status": "invalid_commit",
+                        "pipeline_id": pipeline_id,
+                        "hint": f"commit {commit_id[:10]} 不存在，请重新 git commit 后上报"
+                    })
+                    return
 
             if not pipeline_id:
                 self._json(400, {"error": "missing pipeline_id"})
@@ -1240,6 +1266,8 @@ class Handler(BaseHTTPRequestHandler):
             # Agent 主动通知 daemon 推进，直接构造信号触发 _handle_phase_complete
             if phase:
                 signal_body = f"Phase: {phase}\nphase_complete:{pipeline_id}:{result}"
+                if commit_id:
+                    signal_body += f"\ncommit:{commit_id}"
             else:
                 signal_body = f"phase_complete:{pipeline_id}:{result}"
             logger.info(f"📡 Agent {agent_id} 直接通知 phase_complete: {signal_body[:80]}")

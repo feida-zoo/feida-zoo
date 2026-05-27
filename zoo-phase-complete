@@ -1,0 +1,44 @@
+#!/bin/bash
+# zoo-phase-complete — Pipeline 阶段完成上报
+# 用法: ./zoo-phase-complete <pipeline_id> <phase> <pass|reject> [commit_id] [agent_id]
+# 例:   ./zoo-phase-complete pl_3edd4a81 audit pass def5678 duci
+
+set -e
+
+PIPELINE_ID="${1:?缺少 pipeline_id}"
+PHASE="${2:?缺少 phase}"
+RESULT="${3:?缺少 result (pass/reject)}"
+COMMIT_ID="${4:-}"
+AGENT_ID="${5:-unknown}"
+
+if [[ "$RESULT" != "pass" && "$RESULT" != "reject" ]]; then
+    echo "错误: result 必须是 pass 或 reject，收到: $RESULT"
+    exit 1
+fi
+
+# 校验 commit id（如果提供）
+if [[ -n "$COMMIT_ID" ]]; then
+    if ! git cat-file -t "$COMMIT_ID" &>/dev/null; then
+        echo "错误: commit $COMMIT_ID 不存在"
+        exit 2
+    fi
+fi
+
+# 上报 daemon
+RESP=$(curl -s -X POST http://127.0.0.1:18793/phase_complete \
+    -H 'Content-Type: application/json' \
+    -d "{\"pipeline_id\":\"$PIPELINE_ID\",\"phase\":\"$PHASE\",\"result\":\"$RESULT\",\"commit_id\":\"$COMMIT_ID\",\"agent_id\":\"$AGENT_ID\"}")
+
+echo "$RESP"
+
+# 检查返回
+STATUS=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','error'))" 2>/dev/null || echo "parse_error")
+if [[ "$STATUS" == "ok" ]]; then
+    exit 0
+elif [[ "$STATUS" == "already_done" ]]; then
+    echo "提示: pipeline 已完成，无需重复提交"
+    exit 0
+else
+    echo "失败: $RESP"
+    exit 1
+fi
