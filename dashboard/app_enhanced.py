@@ -43,6 +43,8 @@ TASK_TRACKER_PATH = PROJECT_ROOT / "framework" / "shared" / "task_tracker.json"
 AGENTS_DIR = PANDA_ROOT / "agents"
 TEMPLATES_DIR = PROJECT_ROOT / "dashboard" / "templates"
 STATIC_DIR = PROJECT_ROOT / "dashboard" / "static"
+VALID_PRIORITIES = {'P0', 'P1', 'P2', 'P3'}
+
 DATA_DIR = PROJECT_ROOT / "dashboard" / "data"
 
 # 确保数据目录存在
@@ -691,6 +693,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             req_id = str(uuid.uuid4())
             assignee = (data.get('assignee') or '').strip()
             priority = (data.get('priority') or 'P3').upper()
+            if priority not in VALID_PRIORITIES:
+                priority = 'P3'
             
             requirement = {
                 "id": req_id,
@@ -953,11 +957,14 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
 
             import uuid
             now = datetime.now().isoformat()
+            issue_priority = (data.get('priority') or 'P3').upper()
+            if issue_priority not in VALID_PRIORITIES:
+                issue_priority = 'P3'
             issue = {
                 "id": str(uuid.uuid4()),
                 "title": title,
                 "description": (data.get('description') or '').strip(),
-                "priority": (data.get('priority') or 'P3').upper(),
+                "priority": issue_priority,
                 "status": "open",
                 "assignee": (data.get('assignee') or '').strip(),
                 "created_at": now,
@@ -1051,7 +1058,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                     if 'description' in data:
                         issue['description'] = data['description']
                     if 'priority' in data:
-                        issue['priority'] = data['priority']
+                        p = data['priority'].upper()
+                        issue['priority'] = p if p in VALID_PRIORITIES else 'P3'
                     if 'assignee' in data:
                         issue['assignee'] = data['assignee']
                     issue['updated_at'] = now

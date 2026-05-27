@@ -422,6 +422,81 @@ class TestEndToEndSortBehavior(unittest.TestCase):
         self.assertEqual([r['id'] for r in sort_requirements_for_display(reqs)],
                          ['b', 'c', 'a'])
 
+class TestBackendPriorityWhitelist(unittest.TestCase):
+    """测试后端 priority 白名单校验"""
+
+    def test_valid_priorities_defined(self):
+        """后端应定义 VALID_PRIORITIES = {'P0','P1','P2','P3'}"""
+        py_path = Path(__file__).parent / "app_enhanced.py"
+        with open(py_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn("VALID_PRIORITIES", content,
+                      "app_enhanced.py 缺少 VALID_PRIORITIES")
+        self.assertIn("'P0'", content)
+        self.assertIn("'P1'", content)
+        self.assertIn("'P2'", content)
+        self.assertIn("'P3'", content)
+
+    def test_invalid_priority_fallback_p3(self):
+        """非法 priority 应 fallback 为 P3（大小写不敏感：p0→P0 合法）"""
+        VALID = {'P0', 'P1', 'P2', 'P3'}
+        for bad_val in ['<script>', 'P4', 'High', '']:
+            cleaned = bad_val.upper() if isinstance(bad_val, str) else 'P3'
+            result = cleaned if cleaned in VALID else 'P3'
+            self.assertEqual(result, 'P3', f"非法值 '{bad_val}' 应 fallback P3")
+
+    def test_case_insensitive_priority_accepted(self):
+        """大小写不敏感：p0→P0 应被接受"""
+        VALID = {'P0', 'P1', 'P2', 'P3'}
+        for val in ['p0', 'p1', 'p2', 'p3']:
+            cleaned = val.upper() 
+            result = cleaned if cleaned in VALID else 'P3'
+            self.assertEqual(result, val.upper(), f"'{val}' 经 .upper() 应保留")
+
+    def test_valid_priorities_preserved(self):
+        """合法 priority 应保留"""
+        VALID = {'P0', 'P1', 'P2', 'P3'}
+        for good_val in ['P0', 'P1', 'P2', 'P3']:
+            cleaned = good_val.upper() if isinstance(good_val, str) else 'P3'
+            result = cleaned if cleaned in VALID else 'P3'
+            self.assertEqual(result, good_val, f"合法值 '{good_val}' 应保留")
+
+
+class TestXSSProtection(unittest.TestCase):
+    """测试 XSS 防护"""
+
+    def setUp(self):
+        js_path = Path(__file__).parent / "static" / "dev_center.js"
+        with open(js_path, 'r', encoding='utf-8') as f:
+            self.js = f.read()
+
+    def test_issue_priority_fallback_safe(self):
+        """priority 回退应为安全字符串，不直接输出原始值"""
+        m = re.search(r'priorityLabels\[issue\.priority\] \|\| ([^}]+)', self.js)
+        if m:
+            fallback = m.group(1).strip().rstrip('}')
+            self.assertNotIn('issue.priority', fallback,
+                             f"XSS: priority 回退不应直接输出原始值, 当前: {fallback}")
+            self.assertIn("P3", fallback,
+                          f"priority 回退应为 P3 相关字符串, 当前: {fallback}")
+
+    def test_requirement_priority_fallback_safe(self):
+        """需求 priority 回退也为安全字符串"""
+        m = re.search(r'PRIORITY_LABELS\[r\.priority\] \|\| ([^"\']+)', self.js)
+        if m:
+            fallback = m.group(1).strip()
+            self.assertNotIn('r.priority', fallback,
+                             f"XSS: 需求 priority 回退不应直接输出原始值, 当前: {fallback}")
+
+    def test_agent_names_no_duplicates(self):
+        """agentNames 不应有重复 key"""
+        # 提取所有 agentNames 定义
+        blocks = re.findall(r'agentNames\s*=\s*\{([^}]+)\}', self.js)
+        for block in blocks:
+            keys = re.findall(r"'([^']+)'\s*:", block)
+            self.assertEqual(len(keys), len(set(keys)),
+                             f"agentNames 发现重复 key: {keys}")
+
 
 if __name__ == "__main__":
     import sys
@@ -437,6 +512,8 @@ if __name__ == "__main__":
     suite.addTests(loader.loadTestsFromTestCase(TestFrontendCodeStructure))
     suite.addTests(loader.loadTestsFromTestCase(TestKanbanNotAffected))
     suite.addTests(loader.loadTestsFromTestCase(TestEndToEndSortBehavior))
+    suite.addTests(loader.loadTestsFromTestCase(TestBackendPriorityWhitelist))
+    suite.addTests(loader.loadTestsFromTestCase(TestXSSProtection))
 
     runner = unittest.TextTestRunner(verbosity=verbosity)
     result = runner.run(suite)

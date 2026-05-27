@@ -1320,7 +1320,7 @@ function loadIssues() {
                 return `
                     <div class="issue-card priority-${priorityClasses[issue.priority] || 'p3'}">
                         <div class="issue-card-left">
-                            <div class="issue-priority-badge priority-${priorityClasses[issue.priority] || 'p3'}">${priorityLabels[issue.priority] || issue.priority}</div>
+                            <div class="issue-priority-badge priority-${priorityClasses[issue.priority] || 'p3'}">${priorityLabels[issue.priority] || 'P3 低'}</div>
                         </div>
                         <div class="issue-card-body">
                             <div class="issue-title-row">
@@ -1636,7 +1636,6 @@ function loadRequirementsList() {
             };
             
             const agentNames = {
-                'alpha': '🐢 阿尔法',
                 'alpha': '🐢 阿尔法',
                 'duci': '🦂 毒刺',
                 'panda': '🐼 达达'
