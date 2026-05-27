@@ -920,9 +920,14 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 8px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--light-color);
     border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border-color);
+}
+
+.member-status-item:hover {
+    background: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
 .member-status-item {
@@ -952,7 +957,7 @@ body {
     flex-direction: column;
     gap: 2px;
     font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--gray-color);
     max-width: 120px;
 }
 
@@ -964,7 +969,7 @@ body {
 
 .member-model {
     font-size: 0.65rem;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--gray-color);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

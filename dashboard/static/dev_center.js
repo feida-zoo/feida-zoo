@@ -333,9 +333,9 @@ class ZooDevCenter {
             ...m,
             name: this.memberNameMap[m.id] || m.name
         })) : [
-            { id: 'alpha', name: '阿尔法', code_name: 'Alpha', role_display: '首席架构师 · 玄龟', model: 'DeepSeek V4 Flash', avatar_emoji: '🐢' },
-            { id: 'duci', name: '毒刺', code_name: 'Duci', role_display: '代码审计师 · 毒刺蝎', model: 'GLM-5.1', avatar_emoji: '🦂' },
-            { id: 'panda', name: '达达', code_name: 'Panda', role_display: '调度者 · 熊猫', model: 'MiniMax-M2.7', avatar_emoji: '🐼' }
+            { id: 'alpha', name: '阿尔法', code_name: 'Alpha', role_display: '首席架构师 · 玄龟', avatar_emoji: '🐢' },
+            { id: 'duci', name: '毒刺', code_name: 'Duci', role_display: '代码审计师 · 毒刺蝎', avatar_emoji: '🦂' },
+            { id: 'panda', name: '达达', code_name: 'Panda', role_display: '调度者 · 熊猫', avatar_emoji: '🐼' }
         ];
         
         let html = '<div class="member-status-grid">';
