@@ -2,7 +2,13 @@
  * gateway_start Hook — 启动 ZooMesh 守护进程
  */
 import { spawn, type ChildProcess } from "node:child_process";
+import { readFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { createRequire } from "node:module";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
+
+const _r = createRequire(import.meta.url);
+const { n: callGatewayFromCli } = _r("/opt/homebrew/lib/node_modules/openclaw/dist/gateway-rpc-COT1oBPJ.js");
 
 const LOG_PREFIX = "[ZooPipeline]";
 
@@ -84,6 +90,51 @@ function startNotifyServer(api: OpenClawPluginApi): void {
           res.end(JSON.stringify({ status: "ok" }));
         } catch (e: any) {
           api.logger.warn(`${LOG_PREFIX} 解析通知失败: ${e.message}`);
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: "invalid json" }));
+        }
+      });
+    }
+    // ── POST /api/sessions-send: daemon 专用，RPC 发送到 agent main session ──
+    else if (req.method === "POST" && req.url === "/api/sessions-send") {
+      let body = "";
+      req.on("data", (chunk: string) => (body += chunk));
+      req.on("end", async () => {
+        try {
+          const data = JSON.parse(body);
+          const agent = data.agent as string;
+          const message = (data.message || "") as string;
+          if (!agent || !message) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ error: "missing agent or message" }));
+            return;
+          }
+          const yamlPath = resolve(process.env.ZOO_FRAMEWORK_DIR || "/Users/zoo/workspace/code/feida_zoo/framework", "data", "zoo_members.yaml");
+          let sessionKey = `agent:${agent}:main`;
+          if (existsSync(yamlPath)) {
+            try {
+              const yaml = require("js-yaml");
+              const cfg = yaml.load(readFileSync(yamlPath, "utf-8"));
+              sessionKey = (cfg as any)?.members?.[agent]?.session?.key || sessionKey;
+            } catch (_) { /* fallback */ }
+          }
+          api.logger.info(`${LOG_PREFIX} 🔔 sessions-send RPC → ${agent} (${sessionKey})`);
+          try {
+            await callGatewayFromCli("sessions.send", {}, {
+              key: sessionKey,
+              message: message.slice(0, 8000),
+            });
+            api.logger.info(`${LOG_PREFIX} ✅ sessions-send → ${agent} ok`);
+          } catch (e: any) {
+            api.logger.warn(`${LOG_PREFIX} sessions-send RPC fail: ${e.message}`);
+            res.writeHead(502);
+            res.end(JSON.stringify({ error: e.message }));
+            return;
+          }
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ status: "ok" }));
+        } catch (e: any) {
+          api.logger.warn(`${LOG_PREFIX} sessions-send parse: ${e.message}`);
           res.writeHead(400);
           res.end(JSON.stringify({ error: "invalid json" }));
         }
