@@ -1259,7 +1259,7 @@ function sendChat() {
 
 function escapeHtml(s) {
     if (!s) return '';
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;');
 }
 
 // ===== Issue Functions =====
@@ -1340,7 +1340,7 @@ function loadIssues() {
                             <button class="issue-btn-action" onclick="updateIssueStatus('${issue.id}', '${nextStatus}')" title="${nextLabel}">
                                 <i class="fas fa-arrow-right"></i>
                             </button>
-                            <button class="issue-btn-reject" onclick="showIssueRejectModal('${issue.id}', '${issue.title}')" title="驳回"${REJECTABLE_ISSUE_STATUSES.indexOf(issue.status) === -1 ? ' style="display:none"' : ''}>
+                            <button class="issue-btn-reject" onclick="showIssueRejectModal('${issue.id}', '${escapeHtml(issue.title)}')" title="驳回"${REJECTABLE_ISSUE_STATUSES.indexOf(issue.status) === -1 ? ' style="display:none"' : ''}>
                                 <i class="fas fa-times-circle"></i>
                             </button>
                             <button class="issue-btn-delete" onclick="deleteIssue('${issue.id}')" title="删除问题">
@@ -1655,7 +1655,7 @@ function loadRequirementsList() {
                 <div class="req-list-item">
                     <div class="req-title-row">
                         <div class="req-title">${escapeHtml(r.title)}</div>
-                        <button class="req-btn-reject" onclick="showReqRejectModal('${r.id}', '${r.title}')" title="驳回"${REJECTABLE_REQ_STATUSES.indexOf(r.status) === -1 ? ' style="display:none"' : ''}>
+                        <button class="req-btn-reject" onclick="showReqRejectModal('${r.id}', '${escapeHtml(r.title)}')" title="驳回"${REJECTABLE_REQ_STATUSES.indexOf(r.status) === -1 ? ' style="display:none"' : ''}>
                             <i class="fas fa-times-circle"></i> 驳回
                         </button>
                     </div>

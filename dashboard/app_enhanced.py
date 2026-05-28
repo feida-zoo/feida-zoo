@@ -888,9 +888,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                             # 24h 冷却期检查
                             if req.get('rejected_at'):
                                 try:
-                                    from datetime import datetime as dt
-                                    last_reject = dt.fromisoformat(req['rejected_at'])
-                                    now_dt = dt.fromisoformat(now)
+                                    last_reject = datetime.fromisoformat(req['rejected_at'])
+                                    now_dt = datetime.fromisoformat(now)
                                     if (now_dt - last_reject).total_seconds() < 86400:
                                         self.send_response(429)
                                         self.send_header('Content-Type', 'application/json')
@@ -899,11 +898,12 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                                         return
                                 except Exception:
                                     pass
+                            # 先保存原状态，再改为 rejected
+                            req['previous_status'] = req.get('status', 'done')
                             req['status'] = 'rejected'
                             req['reject_reason'] = reject_reason
-                            req['rejected_by'] = data.get('rejected_by', 'human')
+                            req['rejected_by'] = 'dashboard_user'
                             req['rejected_at'] = now
-                            req['previous_status'] = req.get('status', 'done')
                             req['audit_status'] = 'pending'
                             req['audit_comment'] = ''
                             req['audit_agent'] = 'duci'
@@ -1299,13 +1299,11 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                                 self.end_headers()
                                 self.wfile.write(json.dumps({"error": "驳回原因不能为空"}).encode())
                                 return
-                            now_iso = now
                             # 24h 冷却期检查
                             if issue.get('rejected_at'):
                                 try:
-                                    from datetime import datetime as dt
-                                    last_reject = dt.fromisoformat(issue['rejected_at'])
-                                    now_dt = dt.fromisoformat(now_iso)
+                                    last_reject = datetime.fromisoformat(issue['rejected_at'])
+                                    now_dt = datetime.fromisoformat(now)
                                     if (now_dt - last_reject).total_seconds() < 86400:
                                         self.send_response(429)
                                         self.send_header('Content-Type', 'application/json')
@@ -1314,15 +1312,15 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                                         return
                                 except Exception:
                                     pass
+                            # 先保存原状态，再改为 rejected
+                            issue['previous_status'] = issue.get('status', 'resolved')
                             issue['status'] = 'rejected'
                             issue['reject_reason'] = reject_reason
-                            issue['rejected_by'] = data.get('rejected_by', 'human')
-                            issue['rejected_at'] = now_iso
-                            issue['previous_status'] = issue.get('status', 'resolved')
+                            issue['rejected_by'] = 'dashboard_user'
+                            issue['rejected_at'] = now
                             issue['audit_status'] = 'pending'
                             issue['audit_comment'] = ''
                             issue['audit_agent'] = 'duci'
-                            # 立即使状态变为 rejected（上面已赋值）
                             # 通知 Duci 进行审计
                             self._notify_duci_audit('issue', issue.get('id', ''), issue.get('title', ''), reject_reason)
                         else:
