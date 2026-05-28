@@ -56,6 +56,30 @@ def _load_openclaw_models(openclaw_path: str) -> dict:
         return {}
 
 
+def _load_openclaw_agents_models(openclaw_path: str) -> dict:
+    """加载 openclaw.json 中各 Agent 的 model 配置。返回 {agent_id: primary_model_id}。"""
+    path = Path(openclaw_path)
+    if not path.exists():
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        agents_list = data.get("agents", {}).get("list", [])
+        if not isinstance(agents_list, list):
+            return {}
+        result = {}
+        for entry in agents_list:
+            aid = entry.get("id")
+            model_cfg = entry.get("model", {})
+            if isinstance(model_cfg, dict):
+                primary = model_cfg.get("primary", "")
+                if primary and aid:
+                    result[aid] = primary
+        return result
+    except (json.JSONDecodeError, Exception):
+        return {}
+
+
 def _load_openclaw_primary_model(openclaw_path: str) -> Optional[str]:
     """加载 openclaw.json 的主 Agent 主用模型 ID。"""
     path = Path(openclaw_path)
@@ -132,6 +156,7 @@ class ZooRegistry:
         # 加载 openclaw.json（不强制存在）
         self._oc_models = _load_openclaw_models(self._openclaw_path)
         self._oc_primary = _load_openclaw_primary_model(self._openclaw_path)
+        self._oc_agent_models = _load_openclaw_agents_models(self._openclaw_path)
 
         # 初始化时从 YAML 加载
         self._load_from_yaml(self._yaml_path)
@@ -185,6 +210,7 @@ class ZooRegistry:
         self._status.clear()
         self._oc_models = {}
         self._oc_primary = None
+        self._oc_agent_models = {}
 
     def clear(self) -> None:
         """清空所有注册信息并重置初始化状态（测试用）。"""
@@ -304,7 +330,10 @@ class ZooRegistry:
     def get_model_display(self, agent_id: str) -> Optional[str]:
         """Dashboard 展示用模型名。
 
-        - 非主 Agent: YAML 的 model 字段 → 查 openclaw.json 转 alias
+        - 非主 Agent:
+          1. YAML 的 model 字段 → 查 openclaw.json 转 alias
+          2. YAML 无 model → openclaw.json agents.list[i].model.primary → 转 alias
+          3. 以上均无 → "未知"
         - 主 Agent (is_main_agent==true): openclaw.json defaults.model.primary → alias
         - openclaw.json 不可读 → 返回原始 model ID
         """
@@ -324,11 +353,16 @@ class ZooRegistry:
             model_id = full.get("model")
             return _resolve_model_alias(model_id, self._oc_models) if model_id else "未知"
         else:
-            # 非主 Agent：使用 YAML 中的 model
+            # 非主 Agent：
+            # 1. 优先 YAML 的 model 字段
             model_id = full.get("model")
-            if not model_id:
-                return "未知"
-            return _resolve_model_alias(model_id, self._oc_models)
+            if model_id:
+                return _resolve_model_alias(model_id, self._oc_models)
+            # 2. YAML 无 model → 查 openclaw.json agents.list[id].model.primary
+            oc_model_id = self._oc_agent_models.get(agent_id)
+            if oc_model_id:
+                return _resolve_model_alias(oc_model_id, self._oc_models)
+            return "未知"
 
     # ── Session 缓存 ──
 

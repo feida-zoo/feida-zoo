@@ -969,7 +969,8 @@ body {
 
 .member-model {
     font-size: 0.65rem;
-    color: var(--dark-color);
+    color: #1a252f;
+    background: transparent;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
