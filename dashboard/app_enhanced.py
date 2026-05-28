@@ -1368,6 +1368,10 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                                 state_file = PIPELINE_DIR / f"state_{issue['pipeline_id']}.json"
                                 with open(state_file, 'w') as f:
                                     json.dump({"state": "audit", "updated_at": now}, f)
+                                # 创建审查文件（daemon 推进 audit 阶段所需）
+                                review_file = PIPELINE_DIR / f"audit_{issue['pipeline_id']}.json"
+                                with open(review_file, 'w') as f:
+                                    json.dump({"status": "pending", "phase": "audit", "pipeline_id": issue['pipeline_id'], "created_at": now}, f)
                         else:
                             issue['status'] = new_status
                             if new_status == 'resolved':
