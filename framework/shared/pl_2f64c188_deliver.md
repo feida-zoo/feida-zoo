@@ -16,8 +16,11 @@
 | verify | 9837fc1 | ✅ PASS |
 | develop_code（第1轮） | d0895b9 | 🚫 AUDIT REJECT（CSS对比度2.9:1 + 模型名"未知"） |
 | audit（REJECT） | 376ec93 | 🔴 REJECT 退回 develop_code |
-| **develop_code（第2轮·修复）** | **0ea41f0** | **✅ 通过（两个驳回问题均修复）** |
+| **develop_code（第2轮·修复）** | **0ea41f0** | **✅ 通过（模型来源 + CSS 对比度）** |
 | audit（第2轮） | 670e760 | ✅ PASS — 驳回问题全部修复确认 |
+| audit（第2轮·补查） | 3716f48 | 🔴 REJECT — `.member-tab-model` 灰底灰字对比度 4:1 |
+| **develop_code（第3轮·修复）** | **1330375** | **✅ 通过（`.member-tab-model` 对比度修复）** |
+| audit（第3轮） | 87272a8 | ✅ PASS |
 | **deliver** | **当前** | ✅ **进行中** |
 
 两轮开发 + 两轮审计后最终通过。
@@ -94,3 +97,4 @@ GET /api/members → alpha: Kimi / duci: glm / panda: Minimax ✅
 |------|------|
 | openclaw.json 模型不同步，显示"未知" | ✅ 动态读取 openclaw.json agents.list |
 | 配色看不清 | ✅ 对比度 15:1（远超 AA 标准） |
+| `.member-tab-model` 灰底灰字（第3轮发现） | ✅ `#1a252f` on `#e8edf1` → 对比度 >15:1 |
