@@ -874,8 +874,8 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         return
 
     current_status = cur_req.get("status", "request")
-    # ── 幂等校验：已 done 的 pipeline 拒绝重复上报（reject 除外，需重新打开）──
-    if current_status == "done" and result != "reject":
+    # ── 幂等校验：已 done 的 pipeline 拒绝重复上报 ──
+    if current_status == "done":
         logger.info(f"Pipeline {pipeline_id} 已终态 done，忽略来自 {agent_id} 的重复 phase_complete")
         return  # 调用方（HTTP handler）单独处理响应
 
@@ -1252,17 +1252,16 @@ class Handler(BaseHTTPRequestHandler):
                 signal_body = f"phase_complete:{pipeline_id}:{result}"
             logger.info(f"📡 Agent {agent_id} 直接通知 phase_complete: {signal_body[:80]}")
 
-            # 幂等校验：已 done 的 pipeline 不接受重复上报（reject 除外，需重新打开）
+            # 幂等校验：已 done 的 pipeline 不接受重复上报
             reqs_check = _load_requirements()
             already_done = False
-            if result != "reject":
-                for r in reqs_check:
-                    if r.get("pipeline_id") == pipeline_id and r.get("status") == "done":
-                        already_done = True
-                        break
-                if already_done:
-                    self._json(200, {"status": "already_done", "pipeline_id": pipeline_id, "hint": "pipeline 已终态，phase_complete 被忽略"})
-                    return
+            for r in reqs_check:
+                if r.get("pipeline_id") == pipeline_id and r.get("status") == "done":
+                    already_done = True
+                    break
+            if already_done:
+                self._json(200, {"status": "already_done", "pipeline_id": pipeline_id, "hint": "pipeline 已终态，phase_complete 被忽略"})
+                return
 
             try:
                 _handle_phase_complete(signal_body, agent_id)
