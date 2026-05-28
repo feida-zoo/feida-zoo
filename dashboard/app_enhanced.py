@@ -37,15 +37,15 @@ if _project_root not in sys.path:
 from framework.core.mesh.zoo_registry import ZooRegistry
 
 PANDA_ROOT = Path(os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo")).parent / "panda"
-PROJECT_AGENTS_DIR = PROJECT_ROOT / "agents"
+PROJECT_AGENTS_DIR = PANDA_ROOT / "zoo_mesh" / "agents"
 REGISTRY_PATH = PROJECT_ROOT / "framework" / "data" / "registry.json"
-TASK_TRACKER_PATH = PROJECT_ROOT / "framework" / "shared" / "task_tracker.json"
+TASK_TRACKER_PATH = PANDA_ROOT / "zoo_mesh" / "dashboard" / "task_tracker.json"
 AGENTS_DIR = PANDA_ROOT / "agents"
 TEMPLATES_DIR = PROJECT_ROOT / "dashboard" / "templates"
 STATIC_DIR = PROJECT_ROOT / "dashboard" / "static"
 VALID_PRIORITIES = {'P0', 'P1', 'P2', 'P3'}
 
-DATA_DIR = PROJECT_ROOT / "dashboard" / "data"
+DATA_DIR = PANDA_ROOT / "zoo_mesh" / "dashboard"
 
 # 确保数据目录存在
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -1447,15 +1447,15 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
         """服务成员头像"""
         from urllib.parse import urlparse
         member_id = urlparse(self.path).path.split('/')[-1]
-        # 优先从项目 agents/ 目录查找（权威来源）
+        # 优先从运行数据 agents/ 目录查找
         avatar_path = PROJECT_AGENTS_DIR / member_id / "avatar.png"
         if avatar_path.exists():
             self._serve_file(avatar_path, 'image/png')
             return
-        # fallback：直接从成员自身目录查找（members/<member_id>/avatar.png）
-        fallback_path = Path(os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo")).parent / member_id / "avatar.png"
-        if fallback_path.exists():
-            self._serve_file(fallback_path, 'image/png')
+        # fallback：旧项目 agents/ 目录（已迁移的文件可能仍在旧位置）
+        legacy_path = PROJECT_ROOT / "agents" / member_id / "avatar.png"
+        if legacy_path.exists():
+            self._serve_file(legacy_path, 'image/png')
         else:
             self.send_error(404)
     

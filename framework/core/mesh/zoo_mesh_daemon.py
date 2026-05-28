@@ -303,7 +303,8 @@ def _read_review_result(pipeline_id: str, phase: str) -> dict | None:
 PROJECTS = {
     "feida_zoo": {
         "path": str(Path(FRAMEWORK_DIR).parent),
-        "artifacts_dir": "framework/shared",
+        "artifacts_dir": "docs/pipeline",
+        "legacy_artifacts_dir": "framework/shared",
     },
     "panda": {
         "path": os.path.join(os.path.dirname(_DEFAULT_ZOO_HOME), "panda"),
@@ -330,30 +331,42 @@ def _get_git_root_for_pipeline(pipeline_id: str) -> str:
 
 
 def _get_artifact_paths(pipeline_id: str, phase: str, project_key: str = "feida_zoo", prev_phase: str = "") -> dict:
-    """返回阶段的输出文件路径。输入已改用 commit id，不再需要 input 字段。"""
+    """返回阶段的输出文件路径。输入已改用 commit id，不再需要 input 字段。
+    
+    向后兼容：新路径 docs/pipeline/ 优先，旧路径 framework/shared/ fallback。
+    """
     project = _get_project_info(project_key)
     base = f"{project['path']}/{project['artifacts_dir']}"
+    legacy_base = f"{project['path']}/{project.get('legacy_artifacts_dir', project['artifacts_dir'])}"
     pid = pipeline_id
 
-    def _version_suffix(phase_name: str) -> str:
-        base_name = f"{base}/{pid}_{phase_name}"
-        if os.path.exists(f"{base_name}.md"):
-            return ""
+    def _resolve_path(phase_name: str) -> str:
+        """优先新路径，不存在时 fallback 到旧路径。"""
+        new_path = f"{base}/{pid}_{phase_name}.md"
+        if os.path.exists(new_path):
+            return new_path
+        legacy_path = f"{legacy_base}/{pid}_{phase_name}.md"
+        if os.path.exists(legacy_path):
+            return legacy_path
+        # 新路径 v2/v3... 版本
         for v in range(2, 20):
-            if os.path.exists(f"{base_name}_v{v}.md"):
-                return f"_v{v}"
-        return ""
+            legacy_v = f"{legacy_base}/{pid}_{phase_name}_v{v}.md"
+            if os.path.exists(legacy_v):
+                return legacy_v
+        # 都找不到，返回新路径（由写入方创建）
+        return new_path
 
-    out_suffix = _version_suffix(phase)
+    # 确保新路径目录存在
+    os.makedirs(base, exist_ok=True)
 
     output_map = {
-        "design":        f"{base}/{pid}_design{out_suffix}.md",
-        "review":        f"{base}/{pid}_review{out_suffix}.md",
+        "design":        _resolve_path("design"),
+        "review":        _resolve_path("review"),
         "develop_wt":    None,
-        "verify":        f"{base}/{pid}_verify{out_suffix}.md",
+        "verify":        _resolve_path("verify"),
         "develop_code":  None,
-        "audit":         f"{base}/{pid}_audit{out_suffix}.md",
-        "deliver":       f"{base}/{pid}_deliver{out_suffix}.md",
+        "audit":         _resolve_path("audit"),
+        "deliver":       _resolve_path("deliver"),
     }
     output = output_map.get(phase, None)
     return {"output": output}

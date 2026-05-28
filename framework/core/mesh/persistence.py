@@ -14,7 +14,7 @@ import os
 import tempfile
 from typing import Any, Dict
 
-TRACKER_PATH = "framework/shared/task_tracker.json"
+TRACKER_PATH = "docs/pipeline/task_tracker.json"
 
 
 def save_task_tracker(data: Dict[str, Any]) -> None:
