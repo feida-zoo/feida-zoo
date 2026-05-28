@@ -894,8 +894,9 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                             req['audit_status'] = 'pending'
                             req['audit_comment'] = ''
                             req['audit_agent'] = 'duci'
-                            # 通知 Duci 审计
-                            self._notify_duci_audit('requirement', req.get('id', ''), req.get('title', ''), reject_reason)
+                            # 通知 Duci 审计（用 pipeline_id 而非 uuid）
+                            pid = req.get('pipeline_id', '') or req.get('id', '')
+                            self._notify_duci_audit('requirement', pid, req.get('title', ''), reject_reason)
                         else:
                             req['status'] = new_status
                             if new_status == 'done':
@@ -1348,8 +1349,9 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                             issue['audit_status'] = 'pending'
                             issue['audit_comment'] = ''
                             issue['audit_agent'] = 'duci'
-                            # 通知 Duci 进行审计
-                            self._notify_duci_audit('issue', issue.get('id', ''), issue.get('title', ''), reject_reason)
+                            # 通知 Duci 进行审计（用 pipeline_id 而非 uuid）
+                            pid = issue.get('pipeline_id', '') or issue.get('id', '')
+                            self._notify_duci_audit('issue', pid, issue.get('title', ''), reject_reason)
                         else:
                             issue['status'] = new_status
                             if new_status == 'resolved':
