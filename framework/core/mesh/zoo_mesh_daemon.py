@@ -11,6 +11,7 @@ from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 import urllib.parse
+from typing import Optional
 
 _DEFAULT_FEIDA_ZOO_HOME = "/home/afei/workspace/code/feida_zoo"
 _DEFAULT_ZOO_HOME = os.environ.get("FEIDA_ZOO_HOME", _DEFAULT_FEIDA_ZOO_HOME)
@@ -660,14 +661,21 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
     # 5. 发布推进事件
     _publish_phase_advancement(title, task_id, "request", "design")
 
-    # 6. 发指令给 design 阶段 Agent
-    project_key = cur_req.get("project", "feida_zoo")
-    try:
-        phase_assignee = _pick_phase_agent("design")
-        _panda_relay_post(phase_assignee, task_id, "request", "design", cur_req)
-        logger.info(f"已通知 {phase_assignee} 执行 design 阶段")
-    except Exception as e:
-        logger.warning(f"通知 design 阶段失败: {e}")
+    # 6. Agent 可用性检测（内存 pending 队列）
+    phase_assignee = _pick_phase_agent("design")
+    priority = cur_req.get("priority", "P3")
+
+    if not _agent_available(phase_assignee):
+        _enqueue_pending(task_id, "design", phase_assignee, priority, title)
+        logger.info(f"⏳ {phase_assignee} 忙碌，{task_id} 入 pending 队列等待")
+    else:
+        try:
+            _panda_relay_post(phase_assignee, task_id, "request", "design", cur_req)
+            logger.info(f"已通知 {phase_assignee} 执行 design 阶段")
+        except Exception as e:
+            logger.warning(f"通知 {phase_assignee} 失败: {e}")
+            _enqueue_pending(task_id, "design", phase_assignee, priority, title)
+            logger.info(f"📥 通知失败，{task_id} 入 pending 队列")
 
     logger.info(f"✅ Pipeline {task_id} 已启动，第一阶段: design")
     _save_requirements(reqs)
@@ -913,7 +921,26 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
     except Exception as e:
         logger.warning(f"Pipeline advance_to 失败: {e}")
 
+    # 清理 pending 队列中的残留条目
+    _clear_pending_for_pipeline(pipeline_id)
+
     logger.info(f"✅ Pipeline {pipeline_id}: {current_status} → {next_phase}")
+
+    # 检查是否有 pending 任务可以派发给该 agent
+    try:
+        pending_item = _dequeue_next(next_agent)
+        if pending_item:
+            pid = pending_item["task_id"]
+            phase = pending_item["phase"]
+            logger.info(f"📤 pending 队列: {pid} → {next_agent} (phase={phase})")
+            reqs2 = _load_requirements()
+            for r in reqs2:
+                if r.get("pipeline_id") == pid and r.get("status") == phase:
+                    _panda_relay_post(next_agent, pid, phase, phase, r)
+                    logger.info(f"📤 pending 任务 {pid} 已派发")
+                    break
+    except Exception as e:
+        logger.warning(f"Pending 队列弹出失败: {e}")
 
 
 # ── ChatWriter ───────────────────────────────────────────────────────────────────
@@ -1242,9 +1269,69 @@ mesh = None
 
 
 
+_pending_queue: list = []  # 内存 pending 队列，[{task_id, phase, assignee, priority, title}]
+
+
+def _agent_available(agent_id: str) -> bool:
+    """检查 agent 是否有活跃 pipeline 任务。"""
+    reqs = _load_requirements()
+    for r in reqs:
+        status = r.get("status", "")
+        assignee = r.get("assignee", "")
+        if status and status not in ("done", "rejected", "request", "") and assignee == agent_id:
+            return False
+    # 检查内存 pending 队列
+    for item in _pending_queue:
+        if item.get("assignee") == agent_id:
+            return False
+    return True
+
+
+def _enqueue_pending(task_id: str, phase: str, assignee: str, priority: str = "P3", title: str = "") -> None:
+    """入队列（按优先级排序: P0最高, P1, P2, P3, P4最低）。"""
+    priority_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3, "P4": 4}
+    item = {"task_id": task_id, "phase": phase, "assignee": assignee, "priority": priority, "title": title}
+    _pending_queue.append(item)
+    _pending_queue.sort(key=lambda x: priority_order.get(x.get("priority", "P3"), 3))
+    logger.info(f"📥 {task_id} ({priority}) 入 pending 队列 → {assignee}")
+
+
+def _dequeue_next(assignee: str) -> Optional[dict]:
+    """弹出指定 agent 的 pending 任务。"""
+    for i, item in enumerate(_pending_queue):
+        if item.get("assignee") == assignee:
+            return _pending_queue.pop(i)
+    return None
+
+
+def _clear_pending_for_pipeline(task_id: str) -> None:
+    """清理某个 pipeline 的所有 pending 条目。"""
+    before = len(_pending_queue)
+    _pending_queue[:] = [item for item in _pending_queue if item.get("task_id") != task_id]
+    removed = before - len(_pending_queue)
+    if removed:
+        logger.info(f"🧹 已清理 pending 中 {task_id} 的 {removed} 条残留")
+
+
 def _dispatch_pending_agents():
-    """已废弃 — pending.json 已移除"""
-    pass
+    """每 60s 主循环调用。检查空闲 agent 是否有 pending 任务。"""
+    if not _pending_queue:
+        return
+    dispatched = 0
+    for item in list(_pending_queue):
+        assignee = item["assignee"]
+        task_id = item["task_id"]
+        phase = item["phase"]
+        if _agent_available(assignee):
+            _pending_queue.remove(item)
+            reqs = _load_requirements()
+            cur_req = next((r for r in reqs if r.get("pipeline_id") == task_id), None)
+            if cur_req and cur_req.get("status") == phase:
+                _panda_relay_post(assignee, task_id, phase, phase, cur_req)
+                logger.info(f"📤 pending 任务派发: {task_id} → {assignee}")
+                dispatched += 1
+    if dispatched:
+        logger.info(f"📤 本轮 pending 派发完成: {dispatched} 个任务")
 
 
 def _scan_pending_requirements():
@@ -1326,6 +1413,11 @@ def _check_stuck_pipelines() -> None:
         phase_agent = _pick_phase_agent(status)
         assignee = phase_agent or req.get("assignee", "")
         if not assignee:
+            continue
+
+        # 负责人有 pending 任务 → 在忙，跳过
+        if any(item.get("assignee") == assignee for item in _pending_queue):
+            logger.info(f"⏭️ stuck 检测：{pipeline_id} 负责人 {assignee} 在忙，跳过")
             continue
 
         # 检查 updated_at
