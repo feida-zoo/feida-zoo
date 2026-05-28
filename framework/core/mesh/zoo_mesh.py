@@ -198,20 +198,6 @@ class ZooMesh:
 
     # ---- Pipeline 状态 ----
 
-    def set_pipeline_state(self, task_id: str, state: str) -> None:
-        """设置 Pipeline 状态。"""
-        state_file = self.pipeline_dir / f"state_{task_id}.json"
-        _atomic_write_json(state_file, {"state": state, "updated_at": _now_iso()})
-
-    def get_pipeline_state(self, task_id: str) -> Optional[str]:
-        """获取 Pipeline 状态。"""
-        state_file = self.pipeline_dir / f"state_{task_id}.json"
-        if not state_file.exists():
-            return None
-        with open(state_file, "r", encoding="utf-8") as f:
-            return json.load(f).get("state")
-
-
 # ---- 工具函数 ----
 
 def _now_iso() -> str:

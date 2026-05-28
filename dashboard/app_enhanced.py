@@ -56,9 +56,6 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 # 保留空 dict 作为极端情况下的 fallback
 MEMBERS_INFO = {}
 
-# ZooMesh 管道状态文件路径（与 Harness Pipeline 对接）
-PIPELINE_DIR = ZOO_MESH_DIR / "pipeline"
-
 # Pipeline 阶段 → 看板列映射（5列合并精简版）
 # 内部 Pipeline 状态不变，仅合并对外展示列
 PIPELINE_PHASE_TO_COLUMN = {
@@ -1364,10 +1361,6 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                                 reqs_path = DATA_DIR / "requirements.json"
                                 with open(reqs_path, 'w') as f:
                                     json.dump(reqs, f, indent=2, ensure_ascii=False)
-                                # 创建审查文件（daemon 推进 audit 阶段所需）
-                                review_file = PIPELINE_DIR / f"audit_{issue['pipeline_id']}.json"
-                                with open(review_file, 'w') as f:
-                                    json.dump({"status": "pending", "phase": "audit", "pipeline_id": issue['pipeline_id'], "created_at": now}, f)
                         else:
                             issue['status'] = new_status
                             if new_status == 'resolved':

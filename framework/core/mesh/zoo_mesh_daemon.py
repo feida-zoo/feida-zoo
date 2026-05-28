@@ -162,12 +162,6 @@ def _panda_relay_post(next_agent: str, pipeline_id: str, phase: str,
         _DISPATCH_LOG[pipeline_id] = (next_phase, time.time())
     except Exception as e:
         logger.warning(f"⚠️ relay → {next_agent} ZooNotify 失败: {e}")
-        try:
-            _enqueue_pending(pipeline_id, next_phase, next_agent,
-                           cur_req.get("priority", "P3"), cur_req.get("title", ""))
-            logger.info(f"📥 relay 失败，{pipeline_id} 入 pending")
-        except Exception as enq_e:
-            logger.warning(f"入 pending 队列失败: {enq_e}")
 
 
 
@@ -200,106 +194,6 @@ def _move_to_processed(msg_file) -> None:
     processed_dir = msg_file.parent / "processed"
     processed_dir.mkdir(exist_ok=True)
     msg_file.rename(processed_dir / msg_file.name)
-
-
-def _agent_available(agent_id: str) -> bool:
-    """检查 agent 是否有未完成的活跃任务（不限阶段）。"""
-    reqs = _load_requirements()
-    active = [r for r in reqs
-              if r.get("assignee") == agent_id
-              and r.get("status") not in ("done", "cancelled")]
-    return len(active) == 0
-
-
-def _load_pending_queue() -> list:
-    """加载 pending 队列。"""
-    pending_file = Path(MESH_DIR) / "pipeline" / "pending.json"
-    if not pending_file.exists():
-        return []
-    try:
-        with open(pending_file) as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-
-def _save_pending_queue(queue: list) -> None:
-    """写入 pending 队列。"""
-    pending_file = Path(MESH_DIR) / "pipeline" / "pending.json"
-    temp = pending_file.with_suffix(".tmp")
-    with open(temp, "w") as f:
-        json.dump(queue, f, indent=2)
-    os.rename(str(temp), str(pending_file))
-
-
-def _enqueue_pending(pipeline_id: str, phase: str, assignee: str, priority: str, title: str) -> None:
-    """任务入 pending 队列。"""
-    queue = _load_pending_queue()
-    queue.append({
-        "pipeline_id": pipeline_id,
-        "phase": phase,
-        "assignee": assignee,
-        "priority": priority or "P3",
-        "title": title,
-        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-    })
-    _save_pending_queue(queue)
-
-
-def _pop_next_pending(agent_id: str) -> dict | None:
-    """从 pending 队列弹出指定 agent 的优先级最高任务（不限 phase）。"""
-    queue = _load_pending_queue()
-    candidates = [t for t in queue if t.get("assignee") == agent_id]
-    if not candidates:
-        return None
-    priority_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3, "": 4}
-    candidates.sort(key=lambda x: (priority_order.get(x.get("priority", ""), 4), x.get("created_at", "")))
-    best = candidates[0]
-    queue = [t for t in queue if t.get("pipeline_id") != best["pipeline_id"]]
-    _save_pending_queue(queue)
-    return best
-
-
-def _clear_pending_for_pipeline(pipeline_id: str) -> int:
-    """清理 pending 队列中指定 pipeline_id 的所有条目。返回清理数量。"""
-    queue = _load_pending_queue()
-    before = len(queue)
-    queue = [t for t in queue if t.get("pipeline_id") != pipeline_id]
-    removed = before - len(queue)
-    if removed > 0:
-        _save_pending_queue(queue)
-        logger.info(f"🧹 已清理 pending 队列中 {pipeline_id} 的 {removed} 条残留")
-    return removed
-
-
-def _create_review_file(pipeline_id: str, phase: str) -> None:
-    """创建 review/verify_pl_xxx.json（status: pending）。文件名含阶段前缀。"""
-    review_file = Path(MESH_DIR) / "pipeline" / f"{phase}_{pipeline_id}.json"
-    if not review_file.exists():
-        with open(review_file, "w") as f:
-            json.dump({
-                "pipeline_id": pipeline_id,
-                "phase": phase,
-                "status": "pending",
-                "result": None,
-                "comments": [],
-                "reviewer": None,
-                "reviewed_at": None,
-            }, f, indent=2)
-
-def _read_review_result(pipeline_id: str, phase: str) -> dict | None:
-    """读取审查结果（按阶段区分配置文件）。返回 None 如果文件不存在或未完成。"""
-    review_file = Path(MESH_DIR) / "pipeline" / f"{phase}_{pipeline_id}.json"
-    if not review_file.exists():
-        return None
-    try:
-        with open(review_file) as f:
-            data = json.load(f)
-        if data.get("status") != "completed":
-            return None
-        return data
-    except Exception:
-        return None
 
 
 # ── Pipeline 辅助函数 ────────────────────────────────────────────────────────────
@@ -766,28 +660,17 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
     # 5. 发布推进事件
     _publish_phase_advancement(title, task_id, "request", "design")
 
-    # 6. Agent 可用性检测（Pipeline V2 排队）
-    phase_assignee = _pick_phase_agent("design")
-    priority = cur_req.get("priority", payload.get("priority", "P3"))
+    # 6. 发指令给 design 阶段 Agent
+    project_key = cur_req.get("project", "feida_zoo")
+    try:
+        phase_assignee = _pick_phase_agent("design")
+        _panda_relay_post(phase_assignee, task_id, "request", "design", cur_req)
+        logger.info(f"已通知 {phase_assignee} 执行 design 阶段")
+    except Exception as e:
+        logger.warning(f"通知 design 阶段失败: {e}")
 
-    if not _agent_available(phase_assignee):
-        # Agent 忙 → 入 pending 队列
-        _enqueue_pending(task_id, "design", phase_assignee, priority, title)
-        logger.info(f"⏳ {phase_assignee} 忙碌，{task_id} 入 pending 队列等待")
-    else:
-        # Agent 空闲 → 发指令
-        project_key = cur_req.get("project", "feida_zoo")
-        phase_msg = _build_phase_message("design", task_id, cur_req, project_key)
-        try:
-            _panda_relay_post(phase_assignee, task_id, "request", "design", cur_req)
-            logger.info(f"已通知 {phase_assignee} 执行 design 阶段")
-        except Exception as e:
-            logger.warning(f"通知 {phase_assignee} 失败: {e}")
-
-    # 7. 设置 Pipeline 状态
-    pipeline.advance_to("design")
-    mesh.set_pipeline_state(task_id, "design")
-    logger.info(f"✅ Pipeline {task_id} 已启动，第一阶段: design → {phase_assignee}")
+    logger.info(f"✅ Pipeline {task_id} 已启动，第一阶段: design")
+    _save_requirements(reqs)
 
 
 def _sync_issue_status(pipeline_id: str, target_status: str) -> None:
@@ -889,12 +772,6 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         logger.warning(f"找不到 pipeline_id={pipeline_id} 对应的 requirement")
         return
 
-    # ── 并发安全：二次检查 state 文件，防止竞态覆盖 ──
-    state_now = mesh.get_pipeline_state(pipeline_id)
-    if state_now == "done":
-        logger.info(f"Pipeline {pipeline_id} state 文件已 done，跳过重复处理")
-        return
-
     current_status = cur_req.get("status", "request")
     # ── 幂等校验：已 done 的 pipeline 拒绝重复上报 ──
     if current_status == "done":
@@ -939,10 +816,6 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
             pass
 
         _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, "done")
-        mesh.set_pipeline_state(pipeline_id, "done")
-
-        # 清理 pending 队列中该 pipeline 的所有残留条目
-        _clear_pending_for_pipeline(pipeline_id)
 
         logger.info(f"🏁 Pipeline {pipeline_id} 已完成！")
         return
@@ -962,60 +835,35 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
     # 后续逻辑统一使用 normalized_agent
     agent_id = normalized_agent
 
-    # Pipeline V2: 检查审查结果（review/verify/audit/test 阶段推进时）
+    # Pipeline V2: 检查审查结果（review/verify/audit 阶段推进时）
     if current_status in ("review", "verify", "audit"):
-        # 如果 phase_complete 携带了审查结果，直接写入审查文件
+        # 从 phase_complete 信号中获取审查结果（存入 requirement 字段）
         if review_result:
-            review_path = Path(MESH_DIR) / "pipeline" / f"{current_status}_{pipeline_id}.json"
-            if review_path.exists():
-                try:
-                    with open(review_path) as f:
-                        rdata = json.load(f)
-                    rdata["status"] = "completed"
-                    rdata["result"] = review_result
-                    rdata["reviewer"] = agent_id
-                    rdata["reviewed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-                    with open(review_path, "w") as f:
-                        json.dump(rdata, f, indent=2)
-                    logger.info(f"📝 phase_complete 内联审查结果已写入: {current_status}={review_result}")
-                except Exception as e:
-                    logger.warning(f"写入内联审查结果失败: {e}")
-        review_data = _read_review_result(pipeline_id, current_status)
-        if not review_data:
-            # 审查文件不存在或 status 非 completed → 阻塞推进，不跳过
+            cur_req["review_result"] = review_result
+            cur_req["reviewer"] = agent_id
+            cur_req["reviewed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+            _save_requirements(reqs)
+            logger.info(f"📝 phase_complete 审查结果: {current_status}={review_result}")
+        
+        result = review_result or cur_req.get("review_result")
+        if not result:
             logger.warning(f"Pipeline {pipeline_id}: {current_status} 审查结果未完成，拒绝推进")
             return
-        result = review_data.get("result")
         rejection_context = ""
         if result == "reject":
-            # design reject → 需求本身不合理 → rejected 终态
-            # review/verify/audit reject → 审查不通过 → 退回上一阶段修改
             if current_status == "design":
                 cur_req["status"] = "rejected"
                 cur_req["phase"] = "rejected"
                 cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
                 _save_requirements(reqs)
                 _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, "rejected")
-                mesh.set_pipeline_state(pipeline_id, "rejected")
-                _clear_pending_for_pipeline(pipeline_id)
                 _sync_issue_status(pipeline_id, "rejected")
                 logger.info(f"🚫 Pipeline {pipeline_id}: 设计阶段驳回 → rejected（需求不合理）")
             else:
-                # 审查驳回 → 退回上一阶段
-                fallback_map = {
-                    "review": "design",
-                    "verify": "develop_wt",
-                    "audit": "develop_code",
-                }
+                fallback_map = {"review": "design", "verify": "develop_wt", "audit": "develop_code"}
                 fallback = fallback_map.get(current_status)
                 if fallback:
-                    rejection_context = (
-                        f"\n\n⚠️ 【审查驳回原因】\n"
-                        f"审查阶段：{current_status}\n"
-                        f"审查结论：reject\n"
-                        f"{review_data.get('comments', []) if isinstance(review_data.get('comments'), str) else ''}\n"
-                        f"完整审查报告见：{MESH_DIR}/pipeline/{current_status}_{pipeline_id}.json\n"
-                    )
+                    rejection_context = f"\n\n⚠️ 【审查驳回】阶段={current_status}\n"
                     cur_req["status"] = fallback
                     cur_req["phase"] = fallback
                     cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -1023,10 +871,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
                         cur_req["last_commit"] = commit_id
                     _save_requirements(reqs)
                     _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, fallback)
-                    mesh.set_pipeline_state(pipeline_id, fallback)
-                    # 通知上一阶段 agent 修改
                     next_agent = cur_req.get("assignee") or _pick_phase_agent(fallback)
-                    next_msg = _build_phase_message(fallback, pipeline_id, cur_req, cur_req.get("project", "feida_zoo"), extra_context=rejection_context, prev_phase=current_status, agent_id=next_agent)
                     _panda_relay_post(next_agent, pipeline_id, current_status, fallback, cur_req)
                     logger.info(f"🔄 Pipeline {pipeline_id}: 审查驳回，{current_status}→{fallback}")
             return
@@ -1041,19 +886,13 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
     cur_req["status"] = next_phase
     cur_req["phase"] = next_phase
     cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-    # 仅当非旧阶段（validate/ui_design 等桥接阶段）时存储 commit
     if commit_id and completed_phase not in ("validate", "ui_design", "review_test", "test", "final_check"):
         cur_req["last_commit"] = commit_id
     _save_requirements(reqs)
 
     _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, next_phase)
 
-    # Pipeline V2: 为 review/verify/test/audit 阶段创建审查文件
-    if next_phase in ("review", "verify", "audit"):
-        _create_review_file(pipeline_id, next_phase)
-
     # 通知下一阶段的 Agent
-    # 使用 _pick_phase_agent 统一选 Agent（与鉴权规则一致）
     if next_phase in ("review", "verify", "test", "audit", "deliver", "deliver"):
         next_agent = _pick_phase_agent(next_phase)
     else:
@@ -1074,24 +913,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
     except Exception as e:
         logger.warning(f"Pipeline advance_to 失败: {e}")
 
-    mesh.set_pipeline_state(pipeline_id, next_phase)
     logger.info(f"✅ Pipeline {pipeline_id}: {current_status} → {next_phase}")
-
-    # Pipeline V2: 检查 pending 队列弹出下一任务
-    try:
-        pending = _pop_next_pending(next_agent)
-        if pending:
-            pid = pending["pipeline_id"]
-            logger.info(f"📤 从 pending 队列弹出 {pid} 给 {next_agent} (phase={next_phase})")
-            reqs2 = _load_requirements()
-            for r in reqs2:
-                if r.get("pipeline_id") == pid and r.get("status") == next_phase:
-                    msg = _build_phase_message(next_phase, pid, r, r.get("project", "feida_zoo"), agent_id=next_agent)
-                    _panda_relay_post(next_agent, pid, next_phase, next_phase, r)
-                    logger.info(f"📤 pending 任务 {pid} 已派发")
-                    break
-    except Exception as e:
-        logger.warning(f"Pending 队列弹出失败: {e}")
 
 
 # ── ChatWriter ───────────────────────────────────────────────────────────────────
@@ -1421,69 +1243,8 @@ mesh = None
 
 
 def _dispatch_pending_agents():
-    """主动推进 pending 队列中的任务，防止卡住。
-    
-    每 60s main loop 调用一次。遍历所有 agent，将 pending 队列中属于该 agent 的任务
-    直接派发（pending 任务的 assignee 就是目标 agent，无需检查 _agent_available）。
-    """
-    queue = _load_pending_queue()
-    if not queue:
-        return
-
-    # 从 registry 获取所有 agent
-    from framework.core.mesh.zoo_registry import ZooRegistry
-    try:
-        agent_ids = ZooRegistry().list_agents()
-    except Exception:
-        pass
-
-    reqs = _load_requirements()
-    dispatched = 0
-
-    for agent_id in agent_ids:
-        item = _pop_next_pending(agent_id)
-        if not item:
-            continue
-
-        pipeline_id = item["pipeline_id"]
-        phase = item.get("phase", "design")
-        title = item.get("title", "")
-
-        cur_req = None
-        for r in reqs:
-            if r.get("pipeline_id") == pipeline_id:
-                cur_req = r
-                break
-
-        if not cur_req:
-            logger.warning(f"pending 任务 {pipeline_id} 找不到对应 requirement，跳过")
-            continue
-
-        if cur_req.get("status") != phase:
-            logger.info(f"pending 任务 {pipeline_id} 状态已变更 ({phase} → {cur_req.get('status')})，跳过派发")
-            continue
-
-        description = cur_req.get("description", "")
-        template = _get_phase_template(phase, pipeline_id)
-        msg = (
-            f"[Pipeline] Phase: {phase}\n"
-            f"task_id: {pipeline_id}\n"
-            f"requirement_id: {cur_req.get('id', '')}\n"
-            f"title: {title}\n"
-            f"description: {description}\n"
-            f"指令: 请执行 {phase} 阶段，完成后回复 phase_complete:{pipeline_id}\n"
-            f"{template}"
-        )
-
-        try:
-            _panda_relay_post(agent_id, pipeline_id, phase, phase, cur_req)
-            logger.info(f"📤 pending 任务重新派发: {pipeline_id} → {agent_id} (phase={phase})")
-            dispatched += 1
-        except Exception as e:
-            logger.warning(f"📤 pending 任务派发失败: {pipeline_id} → {agent_id}: {e}")
-
-    if dispatched:
-        logger.info(f"📤 本轮 pending 派发完成: {dispatched} 个任务")
+    """已废弃 — pending.json 已移除"""
+    pass
 
 
 def _scan_pending_requirements():
@@ -1503,16 +1264,11 @@ def _scan_pending_requirements():
         logger.warning(f"读取 requirements.json 失败: {e}")
         return
 
-    existing = set()
-    for f in _glob.glob(str(Path(MESH_DIR) / "pipeline" / "state_pl_*.json")):
-        pid = Path(f).stem.replace("state_", "")
-        existing.add(pid)
-
     import uuid as _uuid
     for req in reqs:
         pid = req.get("pipeline_id", "")
         req_status = req.get("status", "request")
-        if pid and pid not in existing and req_status in ("request", ""):
+        if pid and req_status in ("request", ""):
             req_data = json.dumps({
                 "type": "pipeline_request", "task_id": pid,
                 "requirement_id": req.get("id", ""),
@@ -1555,7 +1311,6 @@ def _check_stuck_pipelines() -> None:
     if not reqs:
         return
 
-    pending_assignees = {item.get("assignee") for item in _load_pending_queue() if item.get("assignee")}
     now = time.time()
     stuck_count = 0
 
@@ -1571,10 +1326,6 @@ def _check_stuck_pipelines() -> None:
         phase_agent = _pick_phase_agent(status)
         assignee = phase_agent or req.get("assignee", "")
         if not assignee:
-            continue
-        # 负责人有其他 pending 任务 → 在忙，跳过
-        if assignee in pending_assignees:
-            logger.info(f"⏭️ stuck 检测：{pipeline_id} 负责人 {assignee} 在忙，跳过")
             continue
 
         # 检查 updated_at
