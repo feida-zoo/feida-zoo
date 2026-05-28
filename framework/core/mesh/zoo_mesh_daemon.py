@@ -69,8 +69,12 @@ def _get_next_phase(current: str) -> str | None:
 
 def _load_requirements() -> list:
     """加载 requirements.json 并自动执行旧数据迁移。"""
-    reqs_file = Path(FRAMEWORK_DIR).parent / "dashboard" / "data" / "requirements.json"
+    reqs_file = Path(os.environ.get("ZOO_MESH_DIR", os.path.join(os.path.expanduser("~"), "workspace", "members", "panda", "zoo_mesh"))) / "dashboard" / "requirements.json"
     if not reqs_file.exists():
+        # 向后兼容：尝试旧路径
+        old_path = Path(FRAMEWORK_DIR).parent / "dashboard" / "data" / "requirements.json"
+        if old_path.exists():
+            return []
         return []
     try:
         with open(reqs_file) as f:
@@ -92,7 +96,8 @@ def _load_requirements() -> list:
 
 def _save_requirements(reqs: list) -> None:
     """原子写入 requirements.json。"""
-    reqs_file = Path(FRAMEWORK_DIR).parent / "dashboard" / "data" / "requirements.json"
+    mesh_dir = os.environ.get("ZOO_MESH_DIR", os.path.join(os.path.expanduser("~"), "workspace", "members", "panda", "zoo_mesh"))
+    reqs_file = Path(mesh_dir) / "dashboard" / "requirements.json"
     temp = reqs_file.with_suffix(".tmp")
     with open(temp, "w", encoding="utf-8") as f:
         json.dump(reqs, f, indent=2, ensure_ascii=False)
@@ -728,6 +733,9 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
         # 尚未创建对应 requirement（dashboard 创建消息转发至此）
         logger.info("  未找到对应 requirement，创建中")
         import uuid
+        priority = (payload.get("priority") or "P3").upper()
+        if priority not in ("P0", "P1", "P2", "P3"):
+            priority = "P3"
         cur_req = {
             "id": req_id or str(uuid.uuid4()),
             "title": title,
@@ -736,6 +744,7 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
             "status": "request",
             "phase": "request",
             "pipeline_id": task_id,
+            "priority": priority,
             "created_at": payload.get("timestamp", time.strftime("%Y-%m-%dT%H:%M:%S")),
             "source": "pipeline_auto",
         }
@@ -1481,7 +1490,8 @@ def _scan_pending_requirements():
     """扫描 requirements.json 中未启动的 Pipeline 请求，自动写入 Panda inbox。
     解决 Dashboard HTTP POST 到 ZooMesh 可能因重启丢失的问题。"""
     import glob as _glob
-    reqs_path = str(Path(FRAMEWORK_DIR).parent / "dashboard" / "data" / "requirements.json")
+    mesh_dir = os.environ.get("ZOO_MESH_DIR", os.path.join(os.path.expanduser("~"), "workspace", "members", "panda", "zoo_mesh"))
+    reqs_path = os.path.join(mesh_dir, "dashboard", "requirements.json")
     logger.info(f"📋 扫描未启动的 Pipeline 请求: {reqs_path}")
     if not os.path.exists(reqs_path):
         logger.warning("requirements.json 不存在")
