@@ -1865,8 +1865,8 @@ body {
 
 .member-tab-model {
     font-size: 0.85rem;
-    color: var(--gray-color);
-    background: rgba(69, 71, 90, 0.5);
+    color: #1a252f;
+    background: #e8edf1;
     padding: 3px 12px;
     border-radius: 8px;
     margin-top: 4px;
