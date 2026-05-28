@@ -728,7 +728,7 @@ class ZooDevCenter {
     
     createTaskCard(task) {
         const taskCard = document.createElement('div');
-        taskCard.className = `task-card severity-${task.severity?.toLowerCase() || 'p3'}`;
+        taskCard.className = `task-card severity-${(task.priority || task.severity || 'P3').toLowerCase()}`;
         taskCard.dataset.taskId = task.id;
         
         // 检测异常状态（cancelled/timed_out/escalated）
@@ -767,7 +767,7 @@ class ZooDevCenter {
         taskCard.innerHTML = `
             <div class="task-header">
                 <div class="task-id">${task.pipeline_id || task.id || ''}</div>
-                <div class="task-severity">${task.severity}</div>
+                <div class="task-severity">${task.priority || task.severity}</div>
             </div>
             <div class="task-title">${this.escapeHtml(task.name)}</div>
             <div class="task-meta">
@@ -893,7 +893,7 @@ class ZooDevCenter {
                         </div>
                         <div class="detail-item">
                             <span class="detail-label">严重程度:</span>
-                            <span class="detail-value severity-${task.severity?.toLowerCase() || 'p3'}">${task.severity}</span>
+                            <span class="detail-value severity-${(task.priority || task.severity || 'P3').toLowerCase()}">${task.priority || task.severity}</span>
                         </div>
                         <div class="detail-item">
                             <span class="detail-label">分配成员:</span>
