@@ -1444,25 +1444,50 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
         self.wfile.write(content)
     
     def _serve_avatar(self):
-        """服务成员头像"""
+        """服务成员头像（路径遍历防护已启用）"""
         from urllib.parse import urlparse
         member_id = urlparse(self.path).path.split('/')[-1]
+        
+        # 安全检查：禁止路径遍历
+        if '..' in member_id or member_id.startswith('/'):
+            self.send_error(403)
+            return
+        
         # 优先从运行数据 agents/ 目录查找
         avatar_path = PROJECT_AGENTS_DIR / member_id / "avatar.png"
-        if avatar_path.exists():
-            self._serve_file(avatar_path, 'image/png')
-            return
+        try:
+            if avatar_path.exists() and avatar_path.resolve().relative_to(PROJECT_AGENTS_DIR.resolve()):
+                self._serve_file(avatar_path, 'image/png')
+                return
+        except ValueError:
+            pass  # resolve 后不在 PROJECT_AGENTS_DIR 下，拒绝
+        
         # fallback：旧项目 agents/ 目录（已迁移的文件可能仍在旧位置）
         legacy_path = PROJECT_ROOT / "agents" / member_id / "avatar.png"
-        if legacy_path.exists():
-            self._serve_file(legacy_path, 'image/png')
-        else:
-            self.send_error(404)
+        try:
+            if legacy_path.exists() and legacy_path.resolve().relative_to((PROJECT_ROOT / "agents").resolve()):
+                self._serve_file(legacy_path, 'image/png')
+                return
+        except ValueError:
+            pass
+        
+        self.send_error(404)
     
     def _serve_static_file(self):
-        """服务静态文件"""
+        """服务静态文件（路径遍历防护已启用）"""
         from urllib.parse import urlparse
-        file_path = STATIC_DIR / urlparse(self.path).path.split('/static/')[-1]
+        raw_suffix = urlparse(self.path).path.split('/static/')[-1]
+        # 安全检查：禁止路径遍历
+        if '..' in raw_suffix or raw_suffix.startswith('/'):
+            self.send_error(403)
+            return
+        file_path = STATIC_DIR / raw_suffix
+        try:
+            resolved = file_path.resolve()
+            resolved.relative_to(STATIC_DIR.resolve())
+        except (ValueError, RuntimeError):
+            self.send_error(403)
+            return
         if file_path.exists() and file_path.is_file():
             # 根据文件扩展名确定 Content-Type
             if file_path.suffix == '.css':
