@@ -26,16 +26,18 @@ interface ZooPipelineConfig {
   httpPort: string;
 }
 
+const _DEFAULT_FEIDA_ZOO_HOME = process.env.FEIDA_ZOO_HOME || "/home/afei/workspace/code/feida_zoo";
+
 const DEFAULT_CONFIG: ZooPipelineConfig = {
   daemonPath:
     process.env.ZOO_MESH_DAEMON ||
-    "/Users/zoo/workspace/code/feida_zoo/framework/core/mesh/zoo_mesh_daemon.py",
+    `${_DEFAULT_FEIDA_ZOO_HOME}/framework/core/mesh/zoo_mesh_daemon.py`,
   meshDir:
     process.env.ZOO_MESH_DIR ||
-    "/Users/zoo/workspace/members/panda/zoo_mesh",
+    `${_DEFAULT_FEIDA_ZOO_HOME}/../panda/zoo_mesh`,
   frameworkDir:
     process.env.ZOO_FRAMEWORK_DIR ||
-    "/Users/zoo/workspace/code/feida_zoo/framework",
+    `${_DEFAULT_FEIDA_ZOO_HOME}/framework`,
   httpPort: process.env.ZOO_MESH_HTTP_PORT || "18793",
 };
 
@@ -69,13 +71,13 @@ function startNotifyServer(api: OpenClawPluginApi): void {
             `${LOG_PREFIX} 🔔 转发通知到 ${agent}: ${pid}`,
           );
 
-          // Agent QQ openid 映射
-          const QQ_OPENID: Record<string, string> = {
-            alpha: "639C0438DCC3CCA674064F1AFFBAE57D",
-            duci: "9BF8D96BAAB8D6CAF91FA0B6118C42CB",
-            panda: "C0B6F9464E1C6191FDE7A35065CEA549",
+          // Agent QQ openid 映射（通过环境变量注入）
+          const QQ_OPENID_ENV: Record<string, string> = {
+            alpha: process.env.QQ_OPENID_ALPHA || "",
+            duci: process.env.QQ_OPENID_DUCI || "",
+            panda: process.env.QQ_OPENID_PANDA || "",
           };
-          const openId = QQ_OPENID[agent];
+          const openId = QQ_OPENID_ENV[agent];
           if (!openId) {
             api.logger.warn(`${LOG_PREFIX} 未知 agent: ${agent}`);
             res.writeHead(200);
@@ -84,7 +86,8 @@ function startNotifyServer(api: OpenClawPluginApi): void {
           }
           const { execSync } = require("node:child_process");
           const target = `qqbot:c2c:${openId}`;
-          const cmd = `/opt/homebrew/bin/openclaw message send --channel qqbot --target ${target} -m ${JSON.stringify(msg)} 2>/dev/null`;
+          const openclawBin = process.env.OPENCLAW_BIN || "/opt/homebrew/bin/openclaw";
+          const cmd = `${openclawBin} message send --channel qqbot --target ${target} -m ${JSON.stringify(msg)} 2>/dev/null`;
           try {
             execSync(cmd, { timeout: 5000, stdio: "pipe" });
             api.logger.info(`${LOG_PREFIX} ✅ 通知 ${agent} 发送成功`);
@@ -116,7 +119,7 @@ function startNotifyServer(api: OpenClawPluginApi): void {
             res.end(JSON.stringify({ error: "missing agent or message" }));
             return;
           }
-          const yamlPath = resolve(process.env.ZOO_FRAMEWORK_DIR || "/Users/zoo/workspace/code/feida_zoo/framework", "data", "zoo_members.yaml");
+          const yamlPath = resolve(process.env.ZOO_FRAMEWORK_DIR || `${_DEFAULT_FEIDA_ZOO_HOME}/framework`, "data", "zoo_members.yaml");
           let sessionKey = `agent:${agent}:main`;
           if (existsSync(yamlPath)) {
             try {
@@ -163,10 +166,10 @@ function startNotifyServer(api: OpenClawPluginApi): void {
 
 const DASHBOARD_PATH =
   process.env.ZOO_DASHBOARD_SCRIPT ||
-  "/Users/zoo/workspace/code/feida_zoo/dashboard/app_enhanced.py";
+  `${_DEFAULT_FEIDA_ZOO_HOME}/dashboard/app_enhanced.py`;
 const DASHBOARD_PYTHON =
   process.env.ZOO_DASHBOARD_PYTHON ||
-  "/Users/zoo/workspace/code/feida_zoo/venv/bin/python";
+  `${_DEFAULT_FEIDA_ZOO_HOME}/venv/bin/python`;
 const DASHBOARD_PORT = parseInt(process.env.ZOO_DASHBOARD_PORT || "18792", 10);
 
 let dashboardProcess: ChildProcess | null = null;

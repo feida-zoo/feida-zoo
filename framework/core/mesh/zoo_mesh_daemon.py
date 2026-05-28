@@ -12,8 +12,10 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 import urllib.parse
 
-FRAMEWORK_DIR = os.environ.get("ZOO_FRAMEWORK_DIR", "/Users/zoo/workspace/code/feida_zoo/framework")
-MESH_DIR = os.environ.get("ZOO_MESH_DIR", "/Users/zoo/workspace/members/panda/zoo_mesh")
+_DEFAULT_FEIDA_ZOO_HOME = "/home/afei/workspace/code/feida_zoo"
+_DEFAULT_ZOO_HOME = os.environ.get("FEIDA_ZOO_HOME", _DEFAULT_FEIDA_ZOO_HOME)
+FRAMEWORK_DIR = os.environ.get("ZOO_FRAMEWORK_DIR", os.path.join(_DEFAULT_ZOO_HOME, "framework"))
+MESH_DIR = os.environ.get("ZOO_MESH_DIR", os.path.join(os.path.dirname(_DEFAULT_ZOO_HOME), "panda", "zoo_mesh"))
 HTTP_PORT = int(os.environ.get("ZOO_MESH_HTTP_PORT", "18793"))
 
 sys.path.insert(0, str(Path(FRAMEWORK_DIR)))
@@ -304,7 +306,7 @@ PROJECTS = {
         "artifacts_dir": "framework/shared",
     },
     "panda": {
-        "path": "/Users/zoo/workspace/members/panda",
+        "path": os.path.join(os.path.dirname(_DEFAULT_ZOO_HOME), "panda"),
         "artifacts_dir": "memory",
     },
 }
@@ -603,7 +605,7 @@ def _on_wakeup_callback(agent_id: str):
                 import subprocess as _sp
                 try:
                     _sp.Popen(
-                        ["/opt/homebrew/bin/openclaw", "agent", "--agent", agent_id, "-m", body],
+                        [os.environ.get("OPENCLAW_BIN", "/opt/homebrew/bin/openclaw"), "agent", "--agent", agent_id, "-m", body],
                         stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
                         start_new_session=True
                     )
@@ -758,7 +760,7 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
 def _sync_issue_status(pipeline_id: str, target_status: str) -> None:
     """同步更新 issues.json 中关联 issue 的状态。"""
     try:
-        issues_path = Path("/Users/zoo/workspace/code/feida_zoo/dashboard/data/issues.json")
+        issues_path = Path(_DEFAULT_ZOO_HOME) / "dashboard" / "data" / "issues.json"
         if not issues_path.exists():
             return
         with open(issues_path, 'r', encoding='utf-8') as f:
@@ -1157,7 +1159,7 @@ class Handler(BaseHTTPRequestHandler):
             # 通过 openclaw agent 直接联系 to_agent 的 main session
             # Alpha/Duci 后续工作走 main session，绕开 QQ Bot
             import subprocess as _sp
-            oc_bin = "/opt/homebrew/bin/openclaw"
+            oc_bin = os.environ.get("OPENCLAW_BIN", "/opt/homebrew/bin/openclaw")
             try:
                 result = _sp.run(
                     [oc_bin, "agent", "--agent", to_agent, "-m", msg],

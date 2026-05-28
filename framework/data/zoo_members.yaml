@@ -1,11 +1,11 @@
 # 飝龘动物园成员统一配置
 # 单文件权威来源 — 修改此处即可影响 ZooRegistry / Dashboard / Pipeline
 #
-# 模型 ID 必须与 ~/.openclaw/openclaw.json 中 agents.defaults.models 的 key 匹配
-# session.key 使用 OpenClaw main session 格式: agent:<id>:main
+# 注意：此文件公开可见，不包含 model / session.key / session.channel 等敏感字段。
+# 运行时通过环境变量注入模型和会话配置。
 
 _version: "1.0.0"
-_updated: "2026-05-20"
+_updated: "2026-05-28"
 
 members:
   panda:
@@ -16,10 +16,6 @@ members:
     display_name: 中枢调度大管家
     emoji: 🐼
     species: 熊猫
-    model: minimax/MiniMax-M2.7
-    session:
-      key: agent:main:main
-      channel: internal
     responsible_phases: []
     capabilities:
       - orchestration
@@ -39,10 +35,6 @@ members:
     display_name: 首席架构师
     emoji: 🐢
     species: 玄龟
-    model: deepseek/deepseek-v4-flash
-    session:
-      key: agent:alpha:main
-      channel: internal
     responsible_phases:
       - design
       - develop_wt
@@ -66,10 +58,6 @@ members:
     display_name: 无情审计师
     emoji: 🦂
     species: 蝎子
-    model: minimax/MiniMax-M2.7
-    session:
-      key: agent:duci:main
-      channel: internal
     responsible_phases:
       - review
       - verify
@@ -92,10 +80,6 @@ members:
     display_name: 疯狂工程师
     emoji: 🐜
     species: 蚂蚁
-    model: minimax/MiniMax-M2.7
-    session:
-      key: agent:weaver:main
-      channel: internal
     responsible_phases: []
     capabilities:
       - code_implementation
@@ -104,7 +88,7 @@ members:
     metadata:
       language: zh-CN
       is_main_agent: false
-      status: inactive   # 已退出活跃成员
+      status: inactive
 
   aeterna:
     id: aeterna
@@ -114,10 +98,6 @@ members:
     display_name: 永恒史官
     emoji: 🪨
     species: 黑曜石
-    model: minimax/MiniMax-M2.7
-    session:
-      key: agent:aeterna:main
-      channel: internal
     responsible_phases: []
     capabilities:
       - documentation
@@ -126,7 +106,7 @@ members:
     metadata:
       language: zh-CN
       is_main_agent: false
-      status: inactive   # 已退出活跃成员
+      status: inactive
 
   gulu:
     id: gulu
@@ -136,10 +116,6 @@ members:
     display_name: 美术设计师
     emoji: 🟢
     species: 史莱姆
-    model: minimax/MiniMax-M2.7
-    session:
-      key: agent:gulu:main
-      channel: internal
     responsible_phases: []
     capabilities:
       - ui_design
@@ -148,7 +124,7 @@ members:
     metadata:
       language: zh-CN
       is_main_agent: false
-      status: inactive   # 已退出活跃成员
+      status: inactive
 
 groups:
   core_team:

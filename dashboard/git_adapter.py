@@ -35,19 +35,21 @@ class GitAdapter:
     """Git 适配器类 - 支持多仓库"""
     
     # 项目定义
+    _FEIDA_ZOO_HOME = os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo")
+
     PROJECTS = {
         "feida_zoo": {
-            "path": "/Users/zoo/workspace/code/feida_zoo",
+            "path": _FEIDA_ZOO_HOME,
             "name": "feida-zoo",
             "emoji": "🏗️"
         },
         "panda": {
-            "path": "/Users/zoo/workspace/members/panda",
+            "path": os.path.join(os.path.dirname(_FEIDA_ZOO_HOME), "panda"),
             "name": "panda",
             "emoji": "🐼"
         },
         "members": {
-            "path": "/Users/zoo/workspace/members",
+            "path": os.path.dirname(_FEIDA_ZOO_HOME),
             "name": "members",
             "emoji": "🏠"
         }

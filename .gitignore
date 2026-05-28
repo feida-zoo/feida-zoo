@@ -16,3 +16,31 @@ framework/shared/archive/
 # 临时产物
 artifacts/
 *.log
+
+# 虚拟环境
+venv/
+.venv/
+
+# 依赖
+node_modules/
+
+# 环境配置
+.env
+.env.local
+.env.example
+
+# 运行时数据
+dashboard/data/*.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# 编译产物
+*.js.map
+dist/

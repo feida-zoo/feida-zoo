@@ -12,12 +12,12 @@ from pathlib import Path
 from typing import Optional
 
 # ---- Project paths ----
-FEIDA_ZOO_ROOT = Path("/Users/zoo/workspace/code/feida_zoo")
+FEIDA_ZOO_ROOT = Path(os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo"))
 FRAMEWORK_DIR = FEIDA_ZOO_ROOT / "framework"
 DASHBOARD_DATA_DIR = FEIDA_ZOO_ROOT / "dashboard" / "data"
 
 # ---- Claude Code binary ----
-CLAUDE_BIN = "/opt/homebrew/bin/claude"
+CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "/opt/homebrew/bin/claude")
 
 # ---- ZooMesh (lazy init to avoid import order issues) ----
 _zoo_mesh_instance = None
@@ -30,7 +30,7 @@ def _get_zoo_mesh():
         from core.mesh.zoo_mesh import ZooMesh
         ZooMesh._reset_instance()
         _zoo_mesh_instance = ZooMesh()
-        mesh_dir = "/Users/zoo/workspace/members/panda/zoo_mesh"
+        mesh_dir = os.environ.get("ZOO_MESH_DIR", str(Path(os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo")).parent / "panda" / "zoo_mesh"))
         _zoo_mesh_instance.init(str(mesh_dir))
     return _zoo_mesh_instance
 

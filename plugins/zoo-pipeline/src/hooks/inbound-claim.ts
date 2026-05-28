@@ -79,7 +79,7 @@ export function registerInboundClaim(api: OpenClawPluginApi): void {
       const taskId = generateTaskId();
       const meshDir =
         process.env.ZOO_MESH_DIR ||
-        "/Users/zoo/workspace/members/panda/zoo_mesh";
+        `${process.env.FEIDA_ZOO_HOME || "/home/afei/workspace/code/feida_zoo"}/../panda/zoo_mesh`;
       const sender = event.senderId || "human";
 
       try {

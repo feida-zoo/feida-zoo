@@ -26,7 +26,7 @@ from git_adapter import get_git_adapter, get_git_watcher
 
 # 配置
 PORT = 18792  # 使用新端口避免冲突
-PROJECT_ROOT = Path("/Users/zoo/workspace/code/feida_zoo")
+PROJECT_ROOT = Path(os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo"))
 
 # 确保项目根目录在 sys.path 中，以便导入 framework 包
 _project_root = str(PROJECT_ROOT)
@@ -36,7 +36,7 @@ if _project_root not in sys.path:
 # 导入 ZooRegistry
 from framework.core.mesh.zoo_registry import ZooRegistry
 
-PANDA_ROOT = Path("/Users/zoo/workspace/members/panda")
+PANDA_ROOT = Path(os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo")).parent / "panda"
 PROJECT_AGENTS_DIR = PROJECT_ROOT / "agents"
 REGISTRY_PATH = PROJECT_ROOT / "framework" / "data" / "registry.json"
 TASK_TRACKER_PATH = PROJECT_ROOT / "framework" / "shared" / "task_tracker.json"
@@ -1123,7 +1123,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             self._serve_file(avatar_path, 'image/png')
             return
         # fallback：直接从成员自身目录查找（members/<member_id>/avatar.png）
-        fallback_path = Path("/Users/zoo/workspace/members") / member_id / "avatar.png"
+        fallback_path = Path(os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo")).parent / member_id / "avatar.png"
         if fallback_path.exists():
             self._serve_file(fallback_path, 'image/png')
         else:
