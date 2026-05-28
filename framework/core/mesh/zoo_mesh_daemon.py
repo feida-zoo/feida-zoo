@@ -320,9 +320,12 @@ def _get_project_info(project_key: str = "feida_zoo") -> dict:
 def _get_git_root_for_pipeline(pipeline_id: str) -> str:
     """根据 pipeline_id 查找对应项目的 git 根目录。"""
     reqs = _load_requirements()
-    cur_req = _find_req_by_pipeline_id(reqs, pipeline_id)
-    project_key = cur_req.get("project", "feida_zoo") if cur_req else "feida_zoo"
-    return _get_project_info(project_key)["path"]
+    for req in reqs:
+        if req.get("id") == pipeline_id or req.get("pipeline_id") == pipeline_id:
+            project_key = req.get("project", "feida_zoo")
+            return _get_project_info(project_key)["path"]
+    # 找不到对应的 requirement，fallback 到默认项目
+    return _get_project_info("feida_zoo")["path"]
 
 
 
