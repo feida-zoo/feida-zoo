@@ -892,26 +892,6 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
 
     next_phase = _get_next_phase(current_status)
 
-    # ── Reject 处理：终态 pipeline 被驳回时，退回 develop_code ──
-    if review_result == "reject" and current_status in ("done", "cancelled"):
-        fallback_map = {
-            "review": "design",
-            "verify": "develop_wt",
-            "audit": "develop_code",
-        }
-        fallback = fallback_map.get(completed_phase or "audit", "develop_code")
-        cur_req["status"] = fallback
-        cur_req["phase"] = fallback
-        cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-        if commit_id:
-            cur_req["last_commit"] = commit_id
-        _save_requirements(reqs)
-        _sync_issue_status(pipeline_id, "in_progress")
-        mesh.set_pipeline_state(pipeline_id, fallback)
-        _publish_phase_advancement(cur_req["title"], pipeline_id, "done", fallback)
-        logger.info(f"🔄 Pipeline {pipeline_id}: 终态驳回，退回 {fallback} 阶段")
-        return
-
     if not next_phase:
         logger.info(f"Pipeline {pipeline_id} 已到达终态: {current_status}")
         return
