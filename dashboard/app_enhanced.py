@@ -1352,6 +1352,16 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                             # 通知 Duci 进行审计（用 pipeline_id 而非 uuid）
                             pid = issue.get('pipeline_id', '') or issue.get('id', '')
                             self._notify_duci_audit('issue', pid, issue.get('title', ''), reject_reason)
+                            # 同步 requirement 状态到 audit
+                            if issue.get('pipeline_id'):
+                                reqs = self._load_requirements()
+                                for r in reqs:
+                                    if r.get('pipeline_id') == issue['pipeline_id']:
+                                        r['status'] = 'audit'
+                                        r['phase'] = 'audit'
+                                        r['updated_at'] = now
+                                        break
+                                self._save_requirements(reqs)
                         else:
                             issue['status'] = new_status
                             if new_status == 'resolved':
