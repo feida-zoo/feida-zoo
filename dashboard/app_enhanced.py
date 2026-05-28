@@ -1122,11 +1122,22 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"error": str(e)}).encode())
 
     def _notify_duci_audit(self, target_type: str, target_id: str, title: str, reason: str):
-        """通知 Duci 进行驳回审计（通过 ZooNotify bridge sessions_send）"""
+        """"通知 Duci 进行驳回审计（通过 ZooNotify bridge sessions_send）"""
         try:
             import json as _json
             import urllib.request
-            msg = f"📋 驳回审计请求\n目标: {target_id}\n类型: {target_type}\n标题: {title}\n原因: {reason}\n驳回人: dashboard"
+            # 改为与其他阶段一致的格式，明确 PASS/REJECT 标准
+            msg = (
+                f"[Pipeline] Phase: audit\n"
+                f"task_id: {target_id}\n"
+                f"title: {title}\n"
+                f"description: 驳回原因：{reason}\n"
+                f"指令: 请执行 audit 阶段，判定驳回原因是否成立\n"
+                f"- 驳回原因属实，需要修改 → reject（退回 develop_code）\n"
+                f"- 驳回原因不成立，无需修改 → pass（直接放行）\n"
+                f"完成后：1) git commit   2) 执行上报命令\n"
+                f"./zoo-phase-complete {target_id} audit <pass|reject> <commit_id> duci\n"
+            )
             payload = _json.dumps({
                 "agent": "duci",
                 "message": msg

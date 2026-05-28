@@ -14,6 +14,7 @@ restart_daemon() {
     kill $(lsof -t -i :$DAEMON_PORT) 2>/dev/null || true
     sleep 2
     cd "$PROJECT_ROOT"
+    FEIDA_ZOO_HOME="$PROJECT_ROOT" 
     nohup ./venv/bin/python framework/core/mesh/zoo_mesh_daemon.py > /tmp/zoo_mesh_daemon.log 2>&1 &
     sleep 3
     if curl -s http://127.0.0.1:$DAEMON_PORT/ > /dev/null 2>&1; then
@@ -29,7 +30,7 @@ restart_dashboard() {
     kill $(lsof -t -i :$DASHBOARD_PORT) 2>/dev/null || true
     sleep 2
     cd "$PROJECT_ROOT"
-    nohup ./venv/bin/python dashboard/app_enhanced.py > /tmp/dashboard.log 2>&1 &
+    FEIDA_ZOO_HOME="$PROJECT_ROOT" nohup ./venv/bin/python dashboard/app_enhanced.py > /tmp/dashboard.log 2>&1 &
     sleep 3
     if curl -s http://127.0.0.1:$DASHBOARD_PORT/ > /dev/null 2>&1; then
         echo "✅ dashboard 已启动"

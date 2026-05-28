@@ -313,8 +313,16 @@ PROJECTS = {
 
 
 def _get_project_info(project_key: str = "feida_zoo") -> dict:
-    """返回项目的路径配置。"""
+    """"返回项目的路径配置。"""
     return PROJECTS.get(project_key, PROJECTS["feida_zoo"])
+
+
+def _get_git_root_for_pipeline(pipeline_id: str) -> str:
+    """根据 pipeline_id 查找对应项目的 git 根目录。"""
+    reqs = _load_requirements()
+    cur_req = _find_req_by_pipeline_id(reqs, pipeline_id)
+    project_key = cur_req.get("project", "feida_zoo") if cur_req else "feida_zoo"
+    return _get_project_info(project_key)["path"]
 
 
 
@@ -1212,9 +1220,11 @@ class Handler(BaseHTTPRequestHandler):
             if commit_id:
                 import subprocess as _git_sp
                 try:
+                    _git_worktree = _get_git_root_for_pipeline(pipeline_id)
                     _git_sp.run(
                         ["git", "cat-file", "-t", commit_id],
-                        capture_output=True, timeout=5, check=True
+                        capture_output=True, timeout=5, check=True,
+                        cwd=_git_worktree
                     )
                     logger.info(f"✅ commit {commit_id[:10]} 校验通过")
                 except Exception:
