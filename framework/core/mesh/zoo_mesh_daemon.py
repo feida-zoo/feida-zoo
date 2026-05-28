@@ -910,7 +910,6 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
         mesh.set_pipeline_state(pipeline_id, fallback)
         _publish_phase_advancement(cur_req["title"], pipeline_id, "done", fallback)
         logger.info(f"🔄 Pipeline {pipeline_id}: 终态驳回，退回 {fallback} 阶段")
-        _notify_next_agent(fallback, pipeline_id, cur_req, "alpha")
         return
 
     if not next_phase:
