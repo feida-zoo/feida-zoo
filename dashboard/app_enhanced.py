@@ -1364,6 +1364,10 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                                 reqs_path = DATA_DIR / "requirements.json"
                                 with open(reqs_path, 'w') as f:
                                     json.dump(reqs, f, indent=2, ensure_ascii=False)
+                                # 同步更新 pipeline state 文件
+                                state_file = PIPELINE_DIR / f"state_{issue['pipeline_id']}.json"
+                                with open(state_file, 'w') as f:
+                                    json.dump({"state": "audit", "updated_at": now}, f)
                         else:
                             issue['status'] = new_status
                             if new_status == 'resolved':
