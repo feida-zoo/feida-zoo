@@ -1364,10 +1364,6 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                                 reqs_path = DATA_DIR / "requirements.json"
                                 with open(reqs_path, 'w') as f:
                                     json.dump(reqs, f, indent=2, ensure_ascii=False)
-                                # 同步更新 pipeline state 文件
-                                state_file = PIPELINE_DIR / f"state_{issue['pipeline_id']}.json"
-                                with open(state_file, 'w') as f:
-                                    json.dump({"state": "audit", "updated_at": now}, f)
                                 # 创建审查文件（daemon 推进 audit 阶段所需）
                                 review_file = PIPELINE_DIR / f"audit_{issue['pipeline_id']}.json"
                                 with open(review_file, 'w') as f:
@@ -1640,30 +1636,23 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             return []
 
     def _get_active_pipelines(self) -> dict:
-        """从 Pipeline 状态文件读取活跃管道"""
+        """从 requirements.json 读取活跃 pipeline（不再依赖 state 文件）"""
         pipelines = {}
-        pipeline_dir = PIPELINE_DIR
-        if not pipeline_dir.exists():
-            return pipelines
-        # 加载 requirements 用于过滤已取消/已完成的 pipeline
         reqs = self._get_requirements()
-        req_status = {r.get("pipeline_id", ""): r.get("status", "") for r in reqs if r.get("pipeline_id")}
         try:
-            for state_file in pipeline_dir.glob("state_*.json"):
-                task_id = state_file.stem.replace("state_", "", 1)
-                # 跳过已取消或已完成的 pipeline（仅保留活跃的）
-                status = req_status.get(task_id, "")
+            for r in reqs:
+                pid = r.get("pipeline_id", "")
+                if not pid:
+                    continue
+                status = r.get("status", "unknown")
                 if status in ("cancelled", "done"):
                     continue
-                try:
-                    with open(state_file, 'r', encoding='utf-8') as f:
-                        state_data = json.load(f)
-                    pipelines[task_id] = {
-                        "state": state_data.get("state", "unknown"),
-                        "updated_at": state_data.get("updated_at", "")
-                    }
-                except (json.JSONDecodeError, Exception):
-                    continue
+                pipelines[pid] = {
+                    "state": status,
+                    "updated_at": r.get("updated_at", ""),
+                    "priority": r.get("priority", "P3"),
+                    "title": r.get("title", "")
+                }
         except Exception:
             pass
         return pipelines
