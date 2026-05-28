@@ -1136,7 +1136,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
 
-        # /relay: ZooMesh daemon relay 端点，通过 sessions_send CLI 直接联系 Alpha/Duci 的 main session
+        # /relay: ZooMesh daemon relay 端点，通过 ZooNotify bridge sessions_send 直接联系 Alpha/Duci 的 main session
         if parsed.path == "/relay":
             content_len = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_len)
@@ -1156,40 +1156,32 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(400, {"error": "missing to or message"})
                 return
 
-            # 通过 openclaw agent 直接联系 to_agent 的 main session
-            # Alpha/Duci 后续工作走 main session，绕开 QQ Bot
-            import subprocess as _sp
-            oc_bin = os.environ.get("OPENCLAW_BIN", "/opt/homebrew/bin/openclaw")
             try:
-                result = _sp.run(
-                    [oc_bin, "agent", "--agent", to_agent, "-m", msg],
-                    capture_output=True, text=True, timeout=30
+                payload = json.dumps({
+                    "agent": to_agent,
+                    "message": msg
+                }).encode()
+                req = urllib.request.Request(
+                    "http://127.0.0.1:18794/api/sessions-send",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST"
                 )
-                logger.info(f"✅ relay → {to_agent} (phase={phase}): stdout={len(result.stdout)}chars")
-
-                # 从 stdout 中捕获 phase_complete 信号并触发推进
-                if result.stdout:
-                    _capture_phase_complete_from_output(result.stdout, to_agent)
+                resp = urllib.request.urlopen(req, timeout=30)
+                resp_data = resp.read().decode()
+                logger.info(f"✅ relay → {to_agent} (phase={phase}): sessions_send ok")
 
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
-                resp_data = json.dumps({
+                self.wfile.write(json.dumps({
                     "status": "ok",
                     "agent": to_agent,
                     "pipeline_id": pipeline_id,
                     "phase": phase,
-                    "stdout": result.stdout[:500] if result.stdout else "",
-                }, ensure_ascii=False).encode()
-                self.wfile.write(resp_data)
-            except _sp.TimeoutExpired:
-                logger.warning(f"⚠️ relay → {to_agent} 超时")
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                self.wfile.write(json.dumps({"status": "timeout", "agent": to_agent}).encode())
+                    "notify_response": resp_data,
+                }, ensure_ascii=False).encode())
             except Exception as e:
                 logger.warning(f"⚠️ relay → {to_agent} 失败: {e}")
                 self.send_response(500)

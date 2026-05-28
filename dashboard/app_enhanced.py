@@ -1135,18 +1135,23 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"error": str(e)}).encode())
 
     def _notify_duci_audit(self, target_type: str, target_id: str, title: str, reason: str):
-        """通知 Duci 进行驳回审计"""
+        """通知 Duci 进行驳回审计（通过 ZooNotify bridge sessions_send）"""
         try:
+            import json as _json
+            import urllib.request
             msg = f"📋 驳回审计请求\n目标: {target_id}\n类型: {target_type}\n标题: {title}\n原因: {reason}\n驳回人: dashboard"
-            requests.post(
-                f"{ZOO_MESH_HTTP}/api/chat",
-                json={
-                    'from': 'dashboard',
-                    'content': f"@duci {msg}"
-                },
-                timeout=5
+            payload = _json.dumps({
+                "agent": "duci",
+                "message": msg
+            }).encode()
+            req = urllib.request.Request(
+                "http://127.0.0.1:18794/api/sessions-send",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST"
             )
-            print(f"Duci 审计通知已发送: {target_type}/{target_id}")
+            urllib.request.urlopen(req, timeout=10)
+            print(f"Duci 审计通知已发送（sessions_send）: {target_type}/{target_id}")
         except Exception as e:
             print(f"Duci 审计通知发送失败（降级）: {e}")
 
