@@ -885,9 +885,9 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                                 self.end_headers()
                                 self.wfile.write(json.dumps({"error": "驳回原因不能为空"}).encode())
                                 return
-                            # 先保存原状态，再改为 rejected
+                            # 驳回 → 进入 audit 阶段，由毒刺审计驳回原因
                             req['previous_status'] = req.get('status', 'done')
-                            req['status'] = 'rejected'
+                            req['status'] = 'audit'
                             req['reject_reason'] = reject_reason
                             req['rejected_by'] = 'dashboard_user'
                             req['rejected_at'] = now
@@ -1340,9 +1340,9 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                                 self.end_headers()
                                 self.wfile.write(json.dumps({"error": "驳回原因不能为空"}).encode())
                                 return
-                            # 先保存原状态，再改为 rejected
+                            # 驳回 → 进入 audit 阶段，由毒刺审计驳回原因
                             issue['previous_status'] = issue.get('status', 'resolved')
-                            issue['status'] = 'rejected'
+                            issue['status'] = 'audit'
                             issue['reject_reason'] = reject_reason
                             issue['rejected_by'] = 'dashboard_user'
                             issue['rejected_at'] = now
