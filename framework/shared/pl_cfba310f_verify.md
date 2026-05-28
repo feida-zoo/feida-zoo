@@ -1,195 +1,158 @@
 # Verify 测试评审报告
 ## pl_cfba310f — feida_zoo 仓库公开化 + 目录结构整理
 
-**审查人**: Duci 🦂 | **日期**: 2026-05-28 | **上游 commit**: 0f22bf6
+**审查人**: Duci 🦂 | **日期**: 2026-05-28 | **上游 commit**: 71486f2
 
 ---
 
 ## 总体评定：🔴 REJECT
 
-49 个测试用例，34 failed / 7 passed / 8 skipped。**通过率 14.3%**。
+49 用例，排除 `@pytest.mark.delivery` 的 5 个后：44 用例，30 failed / 12 passed / 2 skipped。**非 delivery 通过率 27.3%**。
 
-测试套件存在 **1 个致命 bug + 5 类设计缺陷**，在 develop_code 产出来看这些失败全部属于预期行为（代码改动尚未执行），但测试套件本身的质量问题需要修复。
+上次 REJECT 的 5 个致命 bug 已全部修复（路径计算、SKIP_FILES、os.popen 硬编码、delivery 标记、/home/afei/ fallback 豁免）。但测试套件仍有 **2 个逻辑 bug + 1 个设计缺陷**，需要修复。
 
 ---
 
 ## 1. 测试运行结果
 
-| 指标 | 数值 |
-|------|------|
-| 总用例 | 49 |
-| 通过 | 7 (14.3%) |
-| 失败 | 34 (69.4%) |
-| 跳过 | 8 (16.3%) |
+| 指标 | 全量 | 排除 delivery |
+|------|------|---------------|
+| 总用例 | 49 | 44 |
+| 通过 | 12 (24.5%) | 12 (27.3%) |
+| 失败 | 35 (71.4%) | 30 (68.2%) |
+| 跳过 | 2 (4.1%) | 2 (4.5%) |
 
 ---
 
-## 2. 失败根因分类
+## 2. 失败分类
 
-### 🔴 类 A：PROJECT_ROOT 路径计算致命 bug（影响 10+ 用例）
+### 🔴 类 A：测试逻辑 bug（2 处，影响 3 用例）
 
-**根因**：测试文件第 48 行：
+#### A1. `test_no_session_key` IndexError
 
+**第 317 行**：
 ```python
-TEST_HOME = os.environ.get("FEIDA_ZOO_HOME", str(Path(__file__).parent.parent.parent))
-PROJECT_ROOT = Path(TEST_HOME)
+if line.strip().startswith("session:") and ":" not in line.strip().split(None, 1)[1]:
 ```
 
-`__file__` = `framework/tests/ut/test_public_repo_safety.py`
-- `.parent` = `framework/tests/ut/`
-- `.parent.parent` = `framework/tests/`
-- `.parent.parent.parent` = `framework/`  ← **错误！** 应为项目根目录
+当 `session:` 行为 `session:` 无值时（如 `    session:`），`split(None, 1)` 只有 1 个元素，`[1]` 触发 IndexError。
 
-结果：所有相对路径计算变成 `framework/dashboard/app_enhanced.py`、`framework/framework/core/mesh/...`，全部 FileNotFoundError。
+**修复**：加长度检查，或简化为 `re.match(r"^\s+session:\s*$", line)`。
 
-**修复**：应为 `.parent.parent.parent.parent`（向上 4 级：ut → tests → framework → 项目根）。
+#### A2. `test_zoo_mesh_daemon_framework_dir` 断言过于严格
 
-**影响用例**：TestDataDirEnvVar ×3、TestIssuesPathEnvVar ×1、TestQQOpenIdEnvVar::test_no_hardcoded_openid_in_source、TestRootScriptsMoved::test_scripts_dir_exists + test_symlinks_or_moved、TestIntegrationConsistency::test_zoo_members_yaml_valid、TestEnvVarInjection ×2。
+**第 815 行**：
+```python
+if "FRAMEWORK_DIR" in line and "os.environ" in line:
+    assert "FEIDA_ZOO_HOME" in line, ...
+```
 
-### 🟡 类 B：测试自身包含 `/Users/zoo/`（影响 3+ 用例）
+当前 `zoo_mesh_daemon.py:15` 使用 `ZOO_FRAMEWORK_DIR` 环境变量：
+```python
+FRAMEWORK_DIR = os.environ.get("ZOO_FRAMEWORK_DIR", "/Users/zoo/...")
+```
 
-**根因**：测试文件自身 docstring（第 27 行）和正则定义（第 44 行）包含 `/Users/zoo/` 字面量，被自身的全文件扫描检测到。
+设计文档明确 `FRAMEWORK_DIR` 的环境变量是 `ZOO_FRAMEWORK_DIR` 而非 `FEIDA_ZOO_HOME`。测试断言 `FEIDA_ZOO_HOME in line` 会一直失败，因为合法方案是用 `ZOO_FRAMEWORK_DIR`。
 
-`test_no_users_zoo_in_source` 扫描 `.py` 文件时匹配到 `test_public_repo_safety.py` 自身。
+**修复**：断言应检查 `"ZOO_FRAMEWORK_DIR" in line or "FEIDA_ZOO_HOME" in line`。
 
-**修复**：
-1. 将测试文件自身加入 `SKIP_FILES`
-2. 或将正则中的 `/Users/zoo/` 改为字符串拼接避免匹配
+### 🟡 类 B：测试期望与设计文档不一致（影响 2 用例）
 
-### 🟡 类 C：symlink 环境差异（影响 1 用例）
+#### B1. `test_framework_dir_no_hardcode` 对 os.environ.get fallback 判定有误
 
-**根因**：`/Users/zoo/workspace/code/feida_zoo` 是 `/Volumes/data/workspace/code/feida_zoo` 的 symlink。`Path(__file__).resolve()` 解析到 `/Volumes/data/...`，导致 `p = PROJECT_ROOT / "dashboard" / "app_enhanced.py"` 路径不匹配。
+**第 278 行**：
+```python
+if "FRAMEWORK_DIR" in line and "os.environ" in line:
+    assert "/Users/" not in line
+```
 
-pytest 的工作目录是 symlink 路径，而 `Path(__file__).parent` resolve 后是物理路径，两者不一致。
+这行代码检测 `FRAMEWORK_DIR = os.environ.get("ZOO_FRAMEWORK_DIR", "/Users/zoo/...")`，断言 `/Users/` 不应出现。但设计文档 `2.6 节` 明确允许 `os.getenv/os.environ.get` 的 fallback 默认值中使用路径。测试的 `/home/afei/` 检查已做了豁免，但 `/Users/zoo/` 检查未做同等豁免。
 
-**修复**：`PROJECT_ROOT` 应使用 `Path.cwd()` 或 `Path(__file__).resolve().parent.parent.parent.parent`。
+**修复**：与 `test_no_home_afei_in_source` 一致，对 `os.getenv`/`os.environ.get` 的 fallback 做豁免。
 
-### 🟡 类 D：当前仓库状态未改动——测试检查的是 develop_code 后的状态（影响 ~20 用例）
+#### B2. `test_no_home_afei_in_source` 遗漏非 ut 目录的文件
 
-这些失败不是测试 bug，而是 **develop_code 阶段尚未执行**导致的预期失败：
+当前发现 `verify_git_pipeline.py`、`dashboard/app_simple.py`、`dashboard/app_v2.py`、`dashboard/test_integration.py` 中含 `/home/afei/` 硬编码。这些文件不在 `framework/tests/ut/` 下，而是业务代码或根目录脚本。设计文档的文件清单遗漏了这些文件。
 
-| 测试类 | 失败原因 |
-|--------|----------|
-| TestNoLocalAbsolutePath::test_no_users_zoo_in_source | 源码仍有 29 处 `/Users/zoo/` |
-| TestNoLocalAbsolutePath::test_no_home_afei_in_source | spawner.py/permissions.py 仍有 `/home/afei/` |
-| TestZooMembersSanitized ×3 | yaml 仍含 model/session/key |
-| TestGitEmailRewritten ×3 | 仍有 super_afei@qq.com |
-| TestGitignoreComplete ×7 | .gitignore 缺 venv/node_modules 等 |
-| TestStartDevCenterLogPath ×2 | 日志仍在 dashboard/ |
-| TestTrackedLogsCleaned ×1 | 日志仍在 git index |
-| TestNoSensitiveInfoLeak ×1 | gateway-start.ts 含 /opt/homebrew/ |
+### 🟢 类 C：develop_code 阶段未执行的预期失败（~25 用例）
 
-**结论**：这类失败属于预期行为，不构成 reject 理由。
+这些失败全部对应源码中的硬编码路径、脱敏、.gitignore 补全等改动——均尚未执行，属于预期行为：
 
-### 🔴 类 E：Git 历史检查误判——不应在 verify 阶段检查（影响 2 用例）
-
-`test_no_openid_in_git_history` 和 `test_git_log_no_afei_paths` 检查 git 历史中的敏感信息残留。
-
-**问题**：
-1. Git 历史重写（`filter-branch`）应在 **deliver 阶段最后一步**执行，因为重写历史不可逆，必须在所有代码改动完成后执行
-2. 在 verify 阶段运行这些测试必然失败（历史还没重写）
-3. 这些测试应标记为 `@pytest.mark.delivery` 或类似标记，仅在 deliver 阶段后执行
+| 测试类 | 失败数 | 原因 |
+|--------|--------|------|
+| TestDataDirEnvVar | 2 | app_enhanced.py/develop_executor.py 仍含硬编码 |
+| TestIssuesPathEnvVar | 1 | zoo_mesh_daemon.py:761 仍含硬编码 |
+| TestQQOpenIdEnvVar::test_no_hardcoded_openid_in_source | 1 | gateway-start.ts 仍含 OpenID |
+| TestNoLocalAbsolutePath | 5 | 源码仍含 29 处硬编码 |
+| TestZooMembersSanitized | 2 | yaml 仍含 model/session/key（不含 IndexError） |
+| TestGitignoreComplete | 4 | .gitignore 缺 venv/node_modules/.env/.DS_Store |
+| TestRootScriptsMoved | 4 | scripts/ 不存在，根目录脚本未移 |
+| TestDocAndArtifactsCleaned | 1 | docs/ 未删 |
+| TestStartDevCenterLogPath | 2 | 日志路径未改 |
+| TestTestFilesNoHardcodedPath | 2 | 测试文件仍含硬编码 |
+| TestTrackedLogsCleaned | 1 | 日志仍在 git index |
+| TestNoSensitiveInfoLeak | 1 | /opt/homebrew/ 路径 |
+| TestStartEnhancedShSanitized | 1 | start_enhanced.sh 仍含硬编码 |
+| TestIntegrationConsistency | 1 | 日志仍在 git index |
+| TestEnvVarInjection | 2 | develop_executor.py/zoo_mesh_daemon.py 未改 |
 
 ---
 
-## 3. 测试用例质量评审
+## 3. 上次 REJECT 问题修复确认
 
-### 3.1 覆盖度：✅ 优秀（14 个测试类，49 个用例）
+| # | 上次问题 | 修复状态 | 验证 |
+|---|----------|----------|------|
+| 1 | PROJECT_ROOT `.parent` 层级错误 | ✅ 已修复 | `.resolve().parent.parent.parent.parent` |
+| 2 | 测试自身未排除在扫描之外 | ✅ 已修复 | SKIP_FILES 含 `test_public_repo_safety.py` |
+| 3 | os.popen 硬编码路径 | ✅ 已修复 | 全部改为 `f"cd {PROJECT_ROOT}"` |
+| 4 | Git 历史测试与阶段时序不匹配 | ✅ 已修复 | `@pytest.mark.delivery` 标记 |
+| 5 | /home/afei/ 合法 fallback 误判 | ✅ 已修复 | os.getenv 豁免逻辑 |
 
-| 需求项 | 测试覆盖 | 评价 |
-|--------|----------|------|
-| DATA_DIR 环境变量 | 3 用例 | ✅ |
-| issues_path 环境变量 | 1 用例 | ✅ |
-| QQ OpenID 环境变量 | 2 用例 | ✅（含历史检查） |
-| 本地绝对路径替换 | 5 用例 | ✅ |
-| zoo_members.yaml 脱敏 | 4 用例 | ✅ |
-| Git 邮箱重写 | 3 用例 | ✅ |
-| .gitignore 补全 | 7 用例 | ✅ |
-| 根目录脚本移动 | 5 用例 | ✅ |
-| docs/artifacts 清理 | 3 用例 | ✅ |
-| 日志路径修改 | 2 用例 | ✅ |
-| 测试文件硬编码 | 3 用例 | ✅ |
-| 入库日志清理 | 2 用例 | ✅ |
-| 敏感信息综合 | 3 用例 | ✅ |
-| 集成测试 | 4 用例 | ✅ |
-| 环境变量注入 | 2 用例 | ✅ |
+---
 
-### 3.2 边界用例：🟡 不足
-
-| 缺失边界 | 说明 |
-|----------|------|
-| 环境变量未设置时的 fallback 行为 | 未测试 `FEIDA_ZOO_HOME` 为空或非法值时的行为 |
-| symlink 兼容性 | 未考虑 `/Users/zoo/` → `/Volumes/data/` 的 symlink 场景 |
-| 编译产物一致性 | gateway-start.ts 修改后应验证 `.js` 编译产物同步 |
-| 竞态条件 | 多个环境变量缺失时的启动行为 |
-
-### 3.3 测试自身质量缺陷
+## 4. 新发现的测试缺陷
 
 | # | 缺陷 | 严重度 | 影响 |
 |---|------|--------|------|
-| 1 | **PROJECT_ROOT 路径计算错误**（.parent 多了一级） | 🔴 致命 | 10+ 用例全部 FileNotFoundError |
-| 2 | **测试自身未排除在扫描之外** | 🟡 高 | 自身 `/Users/zoo/` 字面量被误报 |
-| 3 | **硬编码 `/Users/zoo/` 路径在 os.popen 中** | 🟡 中 | 第 204、211、766 等行使用硬编码路径调用 git |
-| 4 | **Git 历史测试与 develop_code 阶段时序不匹配** | 🟡 高 | 应分离到 deliver 后执行 |
-| 5 | **`/home/afei/` 正则与合法默认值冲突** | 🟡 中 | spawner.py/permissions.py 的 fallback 默认值被误判为硬编码 |
+| 1 | `test_no_session_key` IndexError | 🔴 高 | 运行时崩溃，未正确检测 session 字段 |
+| 2 | `test_zoo_mesh_daemon_framework_dir` 断言 `FEIDA_ZOO_HOME` 过严 | 🔴 高 | 合法方案 `ZOO_FRAMEWORK_DIR` 也被拒绝 |
+| 3 | `/Users/zoo/` 在 os.environ.get fallback 中未豁免 | 🟡 中 | 与 `/home/afei/` 豁免逻辑不一致 |
+| 4 | 设计文档文件清单遗漏 `app_simple.py`/`app_v2.py`/`test_integration.py`/`start_enhanced.sh` | 🟡 中 | 这些文件含 `/home/afei/` 硬编码但未被清单覆盖 |
 
 ---
 
-## 4. 具体修复建议
-
-### 4.1 必须修复（阻塞性）
+## 5. 修复建议
 
 ```python
-# 修复 1：PROJECT_ROOT 路径计算
-# 当前（错误）：
-TEST_HOME = os.environ.get("FEIDA_ZOO_HOME", str(Path(__file__).parent.parent.parent))
-# 修复为：
-TEST_HOME = os.environ.get("FEIDA_ZOO_HOME", str(Path(__file__).resolve().parent.parent.parent.parent))
-```
+# 修复 1：test_no_session_key IndexError
+# 替换整个 session 检测逻辑：
+for i, line in enumerate(lines, 1):
+    if re.match(r"^\s+session:\s*$", line):
+        pytest.fail(f"第 {i} 行仍包含 session 键: {line.strip()}")
 
-```python
-# 修复 2：排除测试自身
-SKIP_FILES = {
-    ".gitkeep",
-    "pl_cfba310f_design.md",
-    "pl_cfba310f_review.md",
-    "pl_cfba310f_verify.md",
-    "test_public_repo_safety.py",  # ← 新增
-}
-```
+# 修复 2：test_zoo_mesh_daemon_framework_dir 断言
+if "FRAMEWORK_DIR" in line and "os.environ" in line:
+    assert "FEIDA_ZOO_HOME" in line or "ZOO_FRAMEWORK_DIR" in line, ...
+# 同理 MESH_DIR
 
-```python
-# 修复 3：os.popen 中的硬编码路径改为 PROJECT_ROOT
-# 当前：
-"cd /Users/zoo/workspace/code/feida_zoo && ..."
-# 修复为：
-f"cd {PROJECT_ROOT} && ..."
-```
-
-### 4.2 建议修复（非阻塞）
-
-```python
-# 建议 1：Git 历史测试标记为 deliver 阶段
-@pytest.mark.delivery
-def test_no_openid_in_git_history(self):
-    ...
-
-# 建议 2：/home/afei/ 检查排除合法 fallback
-# spawner.py 和 permissions.py 中 os.getenv("FEIDA_ZOO_HOME", "/home/afei/...") 是合法默认值
-# 测试应检查是否在 os.getenv/os.environ.get 的 fallback 中出现，而非一刀切
+# 修复 3：test_framework_dir_no_hardcode 一致豁免
+if "FRAMEWORK_DIR" in line and "os.environ" in line:
+    # 与 test_no_home_afei_in_source 一致，允许 os.environ.get 的 fallback
+    if ("os.getenv(" in line or "os.environ.get(" in line) and "FEIDA_ZOO_HOME" in line:
+        continue
+    assert "/Users/" not in line, ...
 ```
 
 ---
 
-## 5. 结论
+## 6. 结论
 
-| 维度 | 评价 |
-|------|------|
-| 测试覆盖度 | ✅ 优秀（49 用例，14 测试类，覆盖全部 13 项需求） |
-| 边界用例 | 🟡 不足（缺 fallback 行为、symlink、编译产物一致性） |
-| 测试可执行性 | 🔴 不可执行（PROJECT_ROOT 致命 bug，10+ 用例直接 FileNotFoundError） |
-| 测试自身安全性 | 🟡 有硬编码路径残留（os.popen 中 5 处 `/Users/zoo/`） |
+| 维度 | 上次 | 本次 | 变化 |
+|------|------|------|------|
+| 致命 bug | 1（路径计算） | 2（IndexError + 断言过严） | 已修复旧问题，引入新问题 |
+| 非delivery通过率 | 14.3% | 27.3% | ↑ 提升 |
+| 测试可执行性 | 🔴 不可执行 | 🟡 基本可执行（2 bug 需修） | 改善 |
 
-**判定：REJECT** — 测试套件存在致命的路径计算 bug（`.parent` 层级错误），导致 10+ 用例无法正确执行。修复路径计算 + 排除自身文件后，预计可通过率提升至 ~70%（剩余为 develop_code 未执行的预期失败）。
+**判定：REJECT** — 测试套件新增 2 个逻辑 bug（IndexError + 过严断言），需修复后重跑。修复量约 10 分钟。
 
-**修复工作量**：约 15 分钟（改 3 处代码 + 运行验证）。
+上次 5 个致命问题已全部修复 ✅，进展明确。
