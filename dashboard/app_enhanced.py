@@ -1714,7 +1714,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 'name': req.get('title', '未命名需求'),
                 'description': req.get('description', ''),
                 'assignee': req.get('assignee', ''),
-                'severity': req.get('severity', 'P3'),
+                'severity': req.get('severity', req.get('priority', 'P3')),
                 'pipeline_id': pipeline_id,
                 'phase': column_key,
                 'phase_name': KANBAN_STATUS.get(column_key, column_key),
