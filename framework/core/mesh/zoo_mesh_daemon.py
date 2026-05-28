@@ -875,7 +875,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
 
     current_status = cur_req.get("status", "request")
     # ── 幂等校验：已 done 的 pipeline 拒绝重复上报（reject 除外，需重新打开）──
-    if current_status == "done" and result != "reject":
+    if current_status == "done" and review_result != "reject":
         logger.info(f"Pipeline {pipeline_id} 已终态 done，忽略来自 {agent_id} 的重复 phase_complete")
         return  # 调用方（HTTP handler）单独处理响应
 
