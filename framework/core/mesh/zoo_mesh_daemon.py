@@ -882,7 +882,8 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
     # ── 幂等校验：验证报告的阶段与当前 pipeline 状态一致 ──
     # 防止重复提交导致一次跳两阶段（如 final_check 提交两次，第二次从 deliver 跳 done）
     # 仅在 completed_phase 为合法阶段名时才校验（避免对纯 pipeline_id 格式误判）
-    if completed_phase in PHASE_TRANSITION_MAP and completed_phase != current_status:
+    # reject 时不校验：驳回需要退回上游，阶段必然不匹配
+    if review_result != "reject" and completed_phase in PHASE_TRANSITION_MAP and completed_phase != current_status:
         logger.warning(
             f"Pipeline {pipeline_id}: 报告的阶段 {completed_phase} 与当前状态 {current_status} 不匹配，"
             f"疑似重复提交，已忽略。发送者: {agent_id}"
