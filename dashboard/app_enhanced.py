@@ -885,19 +885,6 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                                 self.end_headers()
                                 self.wfile.write(json.dumps({"error": "驳回原因不能为空"}).encode())
                                 return
-                            # 24h 冷却期检查
-                            if req.get('rejected_at'):
-                                try:
-                                    last_reject = datetime.fromisoformat(req['rejected_at'])
-                                    now_dt = datetime.fromisoformat(now)
-                                    if (now_dt - last_reject).total_seconds() < 86400:
-                                        self.send_response(429)
-                                        self.send_header('Content-Type', 'application/json')
-                                        self.end_headers()
-                                        self.wfile.write(json.dumps({"error": "24小时内仅允许驳回一次"}).encode())
-                                        return
-                                except Exception:
-                                    pass
                             # 先保存原状态，再改为 rejected
                             req['previous_status'] = req.get('status', 'done')
                             req['status'] = 'rejected'
@@ -1341,19 +1328,6 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                                 self.end_headers()
                                 self.wfile.write(json.dumps({"error": "驳回原因不能为空"}).encode())
                                 return
-                            # 24h 冷却期检查
-                            if issue.get('rejected_at'):
-                                try:
-                                    last_reject = datetime.fromisoformat(issue['rejected_at'])
-                                    now_dt = datetime.fromisoformat(now)
-                                    if (now_dt - last_reject).total_seconds() < 86400:
-                                        self.send_response(429)
-                                        self.send_header('Content-Type', 'application/json')
-                                        self.end_headers()
-                                        self.wfile.write(json.dumps({"error": "24小时内仅允许驳回一次"}).encode())
-                                        return
-                                except Exception:
-                                    pass
                             # 先保存原状态，再改为 rejected
                             issue['previous_status'] = issue.get('status', 'resolved')
                             issue['status'] = 'rejected'
