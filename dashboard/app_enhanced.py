@@ -943,6 +943,62 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"error": str(e)}).encode())
 
+    def _dispatch_pipeline(self, target: dict, target_type: str, source: str) -> dict:
+        """为 issue/requirement 创建 Pipeline 并推送到 Panda。
+        
+        不负责持久化，调用方负责将返回的 pipeline_id/pipeline_status 写入数据。
+        
+        Args:
+            target: issue 或 requirement 字典
+            target_type: 'issue' 或 'requirement'
+            source: payload 中 source 的值（如 'issue_reject', 'issue'）
+            
+        Returns:
+            dict: {"pipeline_id": "...", "pipeline_status": "..."}
+        """
+        import uuid
+        now = datetime.now().isoformat()
+        
+        # 重复防护：已有 reject_pipeline_id 时不重复创建
+        if target.get('reject_pipeline_id'):
+            return {"pipeline_id": target['reject_pipeline_id'], "pipeline_status": "skip_duplicate"}
+        
+        pipeline_id = f"pl_{uuid.uuid4().hex[:8]}"
+        reject_reason = target.get('reject_reason', '')
+        title_prefix = f"[驳回重开] " if target.get('audit_status') == 'approved' or source in ('issue_reject', 'requirement_reject') else ""
+        
+        pipeline_payload = {
+            "type": "pipeline_request",
+            "task_id": pipeline_id,
+            "requirement_id": target['id'],
+            "title": f"{title_prefix}{target.get('title', '')}",
+            "description": f"驳回原因: {reject_reason}\n\n{target.get('description', '')}" if reject_reason else target.get('description', ''),
+            "assignee": target.get('assignee') or "alpha",
+            "source": source,
+            "timestamp": now,
+        }
+        
+        try:
+            resp = requests.post(
+                f"{ZOO_MESH_HTTP}/api/chat",
+                json={
+                    'from': 'dashboard',
+                    'content': f"@panda 新Pipeline请求: {json.dumps(pipeline_payload, ensure_ascii=False)}"
+                },
+                timeout=5
+            )
+            if resp.status_code == 200:
+                return {"pipeline_id": pipeline_id, "pipeline_status": "pushed"}
+            else:
+                print(f"pipeline push 返回非200: {resp.status_code}")
+                return {"pipeline_id": pipeline_id, "pipeline_status": "push_failed"}
+        except requests.exceptions.Timeout:
+            print(f"pipeline push 超时（5s）")
+            return {"pipeline_id": pipeline_id, "pipeline_status": "push_failed"}
+        except Exception as e:
+            print(f"pipeline push 异常: {e}")
+            return {"pipeline_id": pipeline_id, "pipeline_status": "push_failed"}
+
     def _handle_audit_callback(self):
         """POST /api/audit-callback — 毒刺审计回调（仅接受 127.0.0.1）"""
         try:
@@ -996,6 +1052,11 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                         if audit_result == 'audit_approved':
                             issue['status'] = 'in_progress'
                             issue['audit_status'] = 'approved'
+                            # 创建新 Pipeline
+                            if not issue.get('reject_pipeline_id'):
+                                dispatch = self._dispatch_pipeline(issue, 'issue', 'issue_reject')
+                                issue['reject_pipeline_id'] = dispatch['pipeline_id']
+                                issue['reject_pipeline_status'] = dispatch['pipeline_status']
                         else:  # audit_declined
                             issue['status'] = issue.get('previous_status', 'resolved')
                             issue['audit_status'] = 'declined'
@@ -1033,6 +1094,11 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                         if audit_result == 'audit_approved':
                             req['status'] = 'develop_code'
                             req['audit_status'] = 'approved'
+                            # 创建新 Pipeline
+                            if not req.get('reject_pipeline_id'):
+                                dispatch = self._dispatch_pipeline(req, 'requirement', 'requirement_reject')
+                                req['reject_pipeline_id'] = dispatch['pipeline_id']
+                                req['reject_pipeline_status'] = dispatch['pipeline_status']
                         else:
                             req['status'] = req.get('previous_status', 'done')
                             req['audit_status'] = 'declined'
@@ -1217,39 +1283,10 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             issues.append(issue)
             self._save_issues(issues)
 
-            # 推送到 ZooMesh 触发 Pipeline（基于 Duci 审计设计要求）
-            pipeline_id = f"pl_{uuid.uuid4().hex[:8]}"
-            pipeline_payload = {
-                "type": "pipeline_request",
-                "task_id": pipeline_id,
-                "requirement_id": issue["id"],
-                "title": title,
-                "description": issue["description"],
-                "assignee": issue["assignee"] or "alpha",
-                "source": "issue",
-                "timestamp": now
-            }
-            try:
-                resp = requests.post(
-                    f"{ZOO_MESH_HTTP}/api/chat",
-                    json={
-                        'from': 'dashboard',
-                        'content': f"@panda 新Pipeline请求: {json.dumps(pipeline_payload, ensure_ascii=False)}"
-                    },
-                    timeout=5
-                )
-                if resp.status_code == 200:
-                    issue['pipeline_id'] = pipeline_id
-                    issue['pipeline_status'] = 'pushed'
-                else:
-                    issue['pipeline_status'] = 'push_failed'
-                    print(f"ZooMesh push 返回非200: {resp.status_code}")
-            except requests.exceptions.Timeout:
-                issue['pipeline_status'] = 'push_failed'
-                print(f"ZooMesh push 超时（5s）")
-            except Exception as e:
-                issue['pipeline_status'] = 'push_failed'
-                print(f"ZooMesh push 异常: {e}")
+            # 推送到 ZooMesh 触发 Pipeline
+            dispatch = self._dispatch_pipeline(issue, 'issue', 'issue')
+            issue['pipeline_id'] = dispatch['pipeline_id']
+            issue['pipeline_status'] = dispatch['pipeline_status']
             # 二次保存 pipeline 字段，失败降级（不影响 issue 已创建的事实）
             try:
                 self._save_issues(issues)
