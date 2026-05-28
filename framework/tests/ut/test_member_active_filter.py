@@ -14,7 +14,7 @@ pl_2070b427 — 成员管理界面人数不对
 7.  MemberStatusManager 不追踪 inactive 成员
 
 用法：
-    cd /Users/zoo/workspace/code/feida_zoo
+    cd <project_root>
     /tmp/venv/bin/pytest framework/tests/ut/test_member_active_filter.py -v
 """
 
@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 
 # 加入项目 root
-PROJECT_ROOT = Path("/Users/zoo/workspace/code/feida_zoo")
+PROJECT_ROOT = Path(os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo"))
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from framework.core.mesh.zoo_registry import ZooRegistry

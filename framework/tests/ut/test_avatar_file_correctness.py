@@ -14,7 +14,7 @@ pl_ecd1f8b8 — 成员管理界面各成员头像不正确
 7.  active 成员均有静态头像文件
 
 用法：
-    cd /Users/zoo/workspace/code/feida_zoo
+    cd <project_root>
     ./venv/bin/pytest framework/tests/ut/test_avatar_file_correctness.py -v
 """
 
@@ -26,7 +26,7 @@ import pytest
 
 # ── 项目路径 ──────────────────────────────────────────────────────────────
 
-PROJECT_ROOT = Path("/Users/zoo/workspace/code/feida_zoo")
+PROJECT_ROOT = Path(os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo"))
 AGENTS_DIR = PROJECT_ROOT / "agents"
 STATIC_AVATAR_DIR = PROJECT_ROOT / "dashboard" / "static" / "avatars"
 
@@ -172,12 +172,13 @@ class TestServeAvatarPath:
 
     def test_fallback_path_alpha_exists(self):
         """fallback 路径 ~/workspace/members/alpha/avatar.png 存在。"""
-        path = Path("/Users/zoo/workspace/members/alpha/avatar.png")
+        home = os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo")
+        path = Path(home).parent / "members" / "alpha" / "avatar.png"
         assert path.exists(), "fallback alpha avatar 缺失（但仍可用 agents/ 路径）"
 
     def test_fallback_path_panda_missing(self):
         """panda 在 fallback 路径下无 avatar（依赖 agents/ 源）。"""
-        path = Path("/Users/zoo/workspace/members/panda/avatar.png")
+        path = Path(os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo")).parent / "members" / "panda" / "avatar.png"
         if not path.exists():
             pytest.skip("panda 无 fallback头像，需依赖 agents/ 源（已修复）")
 

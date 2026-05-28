@@ -13,7 +13,7 @@ pl_b5e6038b — issue done 但问题管理界面状态还是待处理
 6.  已 done pipeline 重复上报 → 幂等，不重复更新
 
 用法：
-    cd /Users/zoo/workspace/code/feida_zoo
+    cd <project_root>
     ./venv/bin/pytest framework/tests/ut/test_pipeline_done_syncs_issue_status.py -v
 """
 
@@ -28,7 +28,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-PROJECT_ROOT = Path("/Users/zoo/workspace/code/feida_zoo")
+PROJECT_ROOT = Path(os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo")
 sys.path.insert(0, str(PROJECT_ROOT / "framework" / "core" / "mesh"))
 
 # 导入待测函数

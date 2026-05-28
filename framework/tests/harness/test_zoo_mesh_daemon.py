@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-FEIDA_ZOO = Path("/Users/zoo/workspace/code/feida_zoo")
+FEIDA_ZOO = Path(os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo"))
 sys.path.insert(0, str(FEIDA_ZOO))
 
 from core.mesh.zoo_mesh_daemon import ChatWriter, check_rate_limit, verify_token
