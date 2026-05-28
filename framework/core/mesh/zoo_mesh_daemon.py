@@ -15,7 +15,7 @@ import urllib.parse
 _DEFAULT_FEIDA_ZOO_HOME = "/home/afei/workspace/code/feida_zoo"
 _DEFAULT_ZOO_HOME = os.environ.get("FEIDA_ZOO_HOME", _DEFAULT_FEIDA_ZOO_HOME)
 FRAMEWORK_DIR = os.environ.get("ZOO_FRAMEWORK_DIR", os.path.join(_DEFAULT_ZOO_HOME, "framework"))
-MESH_DIR = os.environ.get("ZOO_MESH_DIR", os.path.join(os.path.dirname(_DEFAULT_ZOO_HOME), "panda", "zoo_mesh"))
+MESH_DIR = os.environ.get("ZOO_MESH_DIR", os.path.join(os.path.expanduser("~"), "workspace", "members", "panda", "zoo_mesh"))
 HTTP_PORT = int(os.environ.get("ZOO_MESH_HTTP_PORT", "18793"))
 
 sys.path.insert(0, str(Path(FRAMEWORK_DIR)))

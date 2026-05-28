@@ -36,16 +36,17 @@ if _project_root not in sys.path:
 # 导入 ZooRegistry
 from framework.core.mesh.zoo_registry import ZooRegistry
 
-PANDA_ROOT = Path(os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo")).parent / "panda"
-PROJECT_AGENTS_DIR = PANDA_ROOT / "zoo_mesh" / "agents"
+_DEFAULT_HOME = Path.home()
+ZOO_MESH_DIR = Path(os.environ.get("ZOO_MESH_DIR", os.path.join(str(_DEFAULT_HOME), "workspace", "members", "panda", "zoo_mesh")))
+PROJECT_AGENTS_DIR = ZOO_MESH_DIR / "agents"
 REGISTRY_PATH = PROJECT_ROOT / "framework" / "data" / "registry.json"
-TASK_TRACKER_PATH = PANDA_ROOT / "zoo_mesh" / "dashboard" / "task_tracker.json"
-AGENTS_DIR = PANDA_ROOT / "agents"
+TASK_TRACKER_PATH = ZOO_MESH_DIR / "dashboard" / "task_tracker.json"
+AGENTS_DIR = ZOO_MESH_DIR / "agents"
 TEMPLATES_DIR = PROJECT_ROOT / "dashboard" / "templates"
 STATIC_DIR = PROJECT_ROOT / "dashboard" / "static"
 VALID_PRIORITIES = {'P0', 'P1', 'P2', 'P3'}
 
-DATA_DIR = PANDA_ROOT / "zoo_mesh" / "dashboard"
+DATA_DIR = ZOO_MESH_DIR / "dashboard"
 
 # 确保数据目录存在
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -56,8 +57,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 MEMBERS_INFO = {}
 
 # ZooMesh 管道状态文件路径（与 Harness Pipeline 对接）
-PANDA_MESH_DIR = Path(os.environ.get("ZOO_MESH_DIR", str(PANDA_ROOT / "zoo_mesh")))
-PIPELINE_DIR = PANDA_MESH_DIR / "pipeline"
+PIPELINE_DIR = ZOO_MESH_DIR / "pipeline"
 
 # Pipeline 阶段 → 看板列映射（5列合并精简版）
 # 内部 Pipeline 状态不变，仅合并对外展示列

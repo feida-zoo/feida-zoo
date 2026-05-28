@@ -31,7 +31,7 @@ def _get_zoo_mesh():
         from core.mesh.zoo_mesh import ZooMesh
         ZooMesh._reset_instance()
         _zoo_mesh_instance = ZooMesh()
-        mesh_dir = os.environ.get("ZOO_MESH_DIR", str(Path(os.environ.get("FEIDA_ZOO_HOME", "/home/afei/workspace/code/feida_zoo")).parent / "panda" / "zoo_mesh"))
+        mesh_dir = os.environ.get("ZOO_MESH_DIR", str(Path.home() / "workspace" / "members" / "panda" / "zoo_mesh"))
         _zoo_mesh_instance.init(str(mesh_dir))
     return _zoo_mesh_instance
 
