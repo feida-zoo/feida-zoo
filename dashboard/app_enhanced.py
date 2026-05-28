@@ -568,6 +568,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 self._handle_kanban_move()
             elif parsed_path == '/api/issues':
                 self._handle_issues_post()
+            elif parsed_path == '/api/audit-callback':
+                self._handle_audit_callback()
             else:
                 self.send_error(404)
         except Exception as e:
@@ -831,11 +833,256 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
 
             if parsed_path.startswith('/api/issues/'):
                 self._handle_issues_put(parsed_path)
+            elif parsed_path.startswith('/api/requirements/'):
+                self._handle_requirements_put(parsed_path)
             else:
                 self.send_error(404)
         except Exception as e:
             print(f"处理 PUT 请求 {self.path} 时出错: {e}")
             self.send_error(500, str(e))
+
+    def _handle_requirements_put(self, parsed_path):
+        """PUT /api/requirements/:id — 更新需求状态（含驳回）"""
+        try:
+            req_id = parsed_path.split('/api/requirements/')[-1]
+            if not req_id:
+                self.send_error(404)
+                return
+
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length)
+            try:
+                data = json.loads(body) if body else {}
+            except json.JSONDecodeError:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "invalid json"}).encode())
+                return
+
+            reqs_path = DATA_DIR / "requirements.json"
+            if not reqs_path.exists():
+                self.send_response(404)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "no requirements"}).encode())
+                return
+
+            with open(reqs_path, 'r', encoding='utf-8') as f:
+                existing = json.load(f)
+
+            found = False
+            now = datetime.now().isoformat()
+            for req in existing:
+                if req.get('id') == req_id:
+                    if 'status' in data:
+                        new_status = data['status']
+                        if new_status == 'rejected':
+                            reject_reason = (data.get('reject_reason') or '').strip()
+                            if not reject_reason:
+                                self.send_response(400)
+                                self.send_header('Content-Type', 'application/json')
+                                self.end_headers()
+                                self.wfile.write(json.dumps({"error": "驳回原因不能为空"}).encode())
+                                return
+                            # 24h 冷却期检查
+                            if req.get('rejected_at'):
+                                try:
+                                    from datetime import datetime as dt
+                                    last_reject = dt.fromisoformat(req['rejected_at'])
+                                    now_dt = dt.fromisoformat(now)
+                                    if (now_dt - last_reject).total_seconds() < 86400:
+                                        self.send_response(429)
+                                        self.send_header('Content-Type', 'application/json')
+                                        self.end_headers()
+                                        self.wfile.write(json.dumps({"error": "24小时内仅允许驳回一次"}).encode())
+                                        return
+                                except Exception:
+                                    pass
+                            req['status'] = 'rejected'
+                            req['reject_reason'] = reject_reason
+                            req['rejected_by'] = data.get('rejected_by', 'human')
+                            req['rejected_at'] = now
+                            req['previous_status'] = req.get('status', 'done')
+                            req['audit_status'] = 'pending'
+                            req['audit_comment'] = ''
+                            req['audit_agent'] = 'duci'
+                            # 通知 Duci 审计
+                            self._notify_duci_audit('requirement', req.get('id', ''), req.get('title', ''), reject_reason)
+                        else:
+                            req['status'] = new_status
+                            if new_status == 'done':
+                                req['completed_at'] = now
+                    if 'title' in data:
+                        req['title'] = data['title']
+                    if 'description' in data:
+                        req['description'] = data['description']
+                    if 'priority' in data:
+                        p = data['priority'].upper()
+                        req['priority'] = p if p in VALID_PRIORITIES else 'P3'
+                    if 'assignee' in data:
+                        req['assignee'] = data['assignee']
+                    req['updated_at'] = now
+                    found = True
+                    break
+
+            if not found:
+                self.send_response(404)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "requirement not found"}).encode())
+                return
+
+            with open(reqs_path, 'w', encoding='utf-8') as f:
+                json.dump(existing, f, ensure_ascii=False, indent=2)
+
+            self._send_json({"status": "updated", "id": req_id})
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+    def _handle_audit_callback(self):
+        """POST /api/audit-callback — 毒刺审计回调（仅接受 127.0.0.1）"""
+        try:
+            # IP 鉴权：仅允许本地回环地址
+            client_ip = self.client_address[0]
+            if client_ip not in ('127.0.0.1', '::1', 'localhost'):
+                self.send_response(403)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "回调仅支持本地请求"}).encode())
+                return
+
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length)
+            try:
+                data = json.loads(body) if body else {}
+            except json.JSONDecodeError:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "invalid json"}).encode())
+                return
+
+            target_id = (data.get('target_id') or '').strip()
+            target_type = (data.get('target_type') or '').strip()
+            audit_result = (data.get('audit_result') or '').strip()
+            audit_comment = (data.get('audit_comment') or '').strip()
+
+            if not target_id or not target_type or audit_result not in ('audit_approved', 'audit_declined'):
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "缺少必要参数或 audit_result 无效"}).encode())
+                return
+
+            now = datetime.now().isoformat()
+
+            if target_type == 'issue':
+                issues = self._load_issues()
+                found = False
+                for issue in issues:
+                    if issue.get('id') == target_id:
+                        if issue.get('audit_status') != 'pending':
+                            self.send_response(409)
+                            self.send_header('Content-Type', 'application/json')
+                            self.end_headers()
+                            self.wfile.write(json.dumps({"error": "审计状态非 pending，不可重复处理"}).encode())
+                            return
+                        issue['audit_comment'] = audit_comment
+                        issue['audit_updated_at'] = now
+                        if audit_result == 'audit_approved':
+                            issue['status'] = 'in_progress'
+                            issue['audit_status'] = 'approved'
+                        else:  # audit_declined
+                            issue['status'] = issue.get('previous_status', 'resolved')
+                            issue['audit_status'] = 'declined'
+                        found = True
+                        break
+                if not found:
+                    self.send_response(404)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": "target_id 不存在"}).encode())
+                    return
+                self._save_issues(issues)
+
+            elif target_type == 'requirement':
+                reqs_path = DATA_DIR / "requirements.json"
+                if not reqs_path.exists():
+                    self.send_response(404)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": "no requirements"}).encode())
+                    return
+                with open(reqs_path, 'r', encoding='utf-8') as f:
+                    existing = json.load(f)
+                found = False
+                for req in existing:
+                    if req.get('id') == target_id:
+                        if req.get('audit_status') != 'pending':
+                            self.send_response(409)
+                            self.send_header('Content-Type', 'application/json')
+                            self.end_headers()
+                            self.wfile.write(json.dumps({"error": "审计状态非 pending"}).encode())
+                            return
+                        req['audit_comment'] = audit_comment
+                        req['audit_updated_at'] = now
+                        if audit_result == 'audit_approved':
+                            req['status'] = 'develop_code'
+                            req['audit_status'] = 'approved'
+                        else:
+                            req['status'] = req.get('previous_status', 'done')
+                            req['audit_status'] = 'declined'
+                        found = True
+                        break
+                if not found:
+                    self.send_response(404)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": "target_id 不存在"}).encode())
+                    return
+                with open(reqs_path, 'w', encoding='utf-8') as f:
+                    json.dump(existing, f, ensure_ascii=False, indent=2)
+            else:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "target_type 必须是 issue 或 requirement"}).encode())
+                return
+
+            # 通过 SSE 推送审计结果
+            self.__class__.sse_manager.broadcast("audit_result", {
+                "target_id": target_id,
+                "target_type": target_type,
+                "audit_result": audit_result,
+                "new_status": "in_progress" if (audit_result == 'audit_approved' and target_type == 'issue') else ("develop_code" if audit_result == 'audit_approved' else "restored"),
+            })
+
+            self._send_json({"status": "ok", "message": "审计结果已处理"})
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+    def _notify_duci_audit(self, target_type: str, target_id: str, title: str, reason: str):
+        """通知 Duci 进行驳回审计"""
+        try:
+            msg = f"📋 驳回审计请求\n目标: {target_id}\n类型: {target_type}\n标题: {title}\n原因: {reason}\n驳回人: dashboard"
+            requests.post(
+                f"{ZOO_MESH_HTTP}/api/chat",
+                json={
+                    'from': 'dashboard',
+                    'content': f"@duci {msg}"
+                },
+                timeout=5
+            )
+            print(f"Duci 审计通知已发送: {target_type}/{target_id}")
+        except Exception as e:
+            print(f"Duci 审计通知发送失败（降级）: {e}")
 
     def do_DELETE(self):
         """处理 DELETE 请求"""
@@ -1043,9 +1290,45 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 if issue.get('id') == issue_id:
                     now = datetime.now().isoformat()
                     if 'status' in data:
-                        issue['status'] = data['status']
-                        if data['status'] == 'resolved':
-                            issue['resolved_at'] = now
+                        new_status = data['status']
+                        if new_status == 'rejected':
+                            reject_reason = (data.get('reject_reason') or '').strip()
+                            if not reject_reason:
+                                self.send_response(400)
+                                self.send_header('Content-Type', 'application/json')
+                                self.end_headers()
+                                self.wfile.write(json.dumps({"error": "驳回原因不能为空"}).encode())
+                                return
+                            now_iso = now
+                            # 24h 冷却期检查
+                            if issue.get('rejected_at'):
+                                try:
+                                    from datetime import datetime as dt
+                                    last_reject = dt.fromisoformat(issue['rejected_at'])
+                                    now_dt = dt.fromisoformat(now_iso)
+                                    if (now_dt - last_reject).total_seconds() < 86400:
+                                        self.send_response(429)
+                                        self.send_header('Content-Type', 'application/json')
+                                        self.end_headers()
+                                        self.wfile.write(json.dumps({"error": "24小时内仅允许驳回一次"}).encode())
+                                        return
+                                except Exception:
+                                    pass
+                            issue['status'] = 'rejected'
+                            issue['reject_reason'] = reject_reason
+                            issue['rejected_by'] = data.get('rejected_by', 'human')
+                            issue['rejected_at'] = now_iso
+                            issue['previous_status'] = issue.get('status', 'resolved')
+                            issue['audit_status'] = 'pending'
+                            issue['audit_comment'] = ''
+                            issue['audit_agent'] = 'duci'
+                            # 立即使状态变为 rejected（上面已赋值）
+                            # 通知 Duci 进行审计
+                            self._notify_duci_audit('issue', issue.get('id', ''), issue.get('title', ''), reject_reason)
+                        else:
+                            issue['status'] = new_status
+                            if new_status == 'resolved':
+                                issue['resolved_at'] = now
                     if 'title' in data:
                         issue['title'] = data['title']
                     if 'description' in data:

@@ -2261,3 +2261,42 @@ body {
         justify-content: flex-end;
     }
 }
+
+/* ===== 驳回功能 ===== */
+.issue-btn-reject {
+    background: none;
+    border: none;
+    color: #f38ba8;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+.issue-btn-reject:hover {
+    background: rgba(243, 139, 168, 0.15);
+    color: #f9e2af;
+}
+.req-btn-reject {
+    background: none;
+    border: 1px solid #45475a;
+    color: #f38ba8;
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.req-btn-reject:hover {
+    background: rgba(243, 139, 168, 0.15);
+    border-color: #f38ba8;
+    color: #f9e2af;
+}
+.req-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}

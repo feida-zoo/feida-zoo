@@ -1340,6 +1340,9 @@ function loadIssues() {
                             <button class="issue-btn-action" onclick="updateIssueStatus('${issue.id}', '${nextStatus}')" title="${nextLabel}">
                                 <i class="fas fa-arrow-right"></i>
                             </button>
+                            <button class="issue-btn-reject" onclick="showIssueRejectModal('${issue.id}', '${issue.title}')" title="驳回"${REJECTABLE_ISSUE_STATUSES.indexOf(issue.status) === -1 ? ' style="display:none"' : ''}>
+                                <i class="fas fa-times-circle"></i>
+                            </button>
                             <button class="issue-btn-delete" onclick="deleteIssue('${issue.id}')" title="删除问题">
                                 <i class="fas fa-trash"></i>
                             </button>
@@ -1473,6 +1476,8 @@ var TERMINAL_REQ_STATUSES = ['done', 'cancelled', 'timed_out', 'escalated'];
 
 // 问题终端状态（已解决/已关闭）
 var CLOSED_ISSUE_STATUSES = ['resolved', 'closed', 'cancelled'];
+var REJECTABLE_ISSUE_STATUSES = ['resolved', 'closed'];
+var REJECTABLE_REQ_STATUSES = ['done'];
 
 // 优先级排序权重
 var PRIORITY_ORDER = { 'P0': 0, 'P1': 1, 'P2': 2, 'P3': 3 };
@@ -1648,7 +1653,12 @@ function loadRequirementsList() {
             var sortedReqs = sortRequirementsForDisplay(reqs);
             list.innerHTML = sortedReqs.map(function(r) { return `
                 <div class="req-list-item">
-                    <div class="req-title">${escapeHtml(r.title)}</div>
+                    <div class="req-title-row">
+                        <div class="req-title">${escapeHtml(r.title)}</div>
+                        <button class="req-btn-reject" onclick="showReqRejectModal('${r.id}', '${r.title}')" title="驳回"${REJECTABLE_REQ_STATUSES.indexOf(r.status) === -1 ? ' style="display:none"' : ''}>
+                            <i class="fas fa-times-circle"></i> 驳回
+                        </button>
+                    </div>
                     <div class="req-meta">
                         <span><i class="fas fa-flag"></i> <span class="req-priority-badge ${PRIORITY_CLASSES[r.priority] || 'p3'}">${PRIORITY_LABELS[r.priority] || 'P3低'}</span></span>
                         <span><i class="fas fa-tag"></i> <span class="req-status-badge ${r.status}">${statusLabels[r.status] || r.status}</span></span>
@@ -1663,6 +1673,125 @@ function loadRequirementsList() {
             list.innerHTML = '<div style="padding:20px;text-align:center;color:#e74c3c;">加载失败</div>';
         });
 }
+
+// ===== 驳回功能 =====
+
+var _rejectTargetId = null;
+var _rejectTargetTitle = '';
+var _rejectTargetType = 'issue'; // 'issue' or 'requirement'
+
+function showIssueRejectModal(id, title) {
+    _rejectTargetId = id;
+    _rejectTargetTitle = title;
+    _rejectTargetType = 'issue';
+    _showRejectModal('问题', id, title);
+}
+
+function showReqRejectModal(id, title) {
+    _rejectTargetId = id;
+    _rejectTargetTitle = title;
+    _rejectTargetType = 'requirement';
+    _showRejectModal('需求', id, title);
+}
+
+function _showRejectModal(typeLabel, id, title) {
+    var modal = document.getElementById('reject-modal');
+    if (!modal) {
+        // Create modal if it doesn't exist
+        var div = document.createElement('div');
+        div.className = 'modal';
+        div.id = 'reject-modal';
+        div.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;';
+        div.innerHTML =
+            '<div class="modal-content" style="background:#2a2e3e;border-radius:12px;padding:24px;width:480px;max-width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.3);">' +
+            '    <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #404456;padding-bottom:12px;margin-bottom:16px;">' +
+            '        <h3 style="margin:0;color:#cdd6f4;font-size:1.1rem;"><i class="fas fa-times-circle" style="color:#e74c3c;margin-right:8px;"></i> 驳回' + typeLabel + '</h3>' +
+            '        <button class="modal-close" onclick="closeRejectModal()" style="background:none;border:none;color:#9399b2;font-size:1.5rem;cursor:pointer;">&times;</button>' +
+            '    </div>' +
+            '    <div class="modal-body">' +
+            '        <div style="margin-bottom:12px;padding:8px 12px;background:#363a4f;border-radius:6px;color:#bac2de;">' +
+            '            <div style="font-size:0.85rem;color:#7f8499;">目标</div>' +
+            '            <div id="reject-target-info" style="font-weight:500;color:#cdd6f4;margin-top:2px;"></div>' +
+            '        </div>' +
+            '        <div class="form-group">' +
+            '            <label for="reject-reason" style="display:block;color:#cdd6f4;margin-bottom:6px;font-size:0.9rem;">驳回原因 <span class="required" style="color:#e74c3c;">*</span></label>' +
+            '            <textarea id="reject-reason" rows="4" style="width:100%;box-sizing:border-box;padding:10px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;resize:vertical;" placeholder="请详细说明驳回原因..."></textarea>' +
+            '            <div id="reject-error" style="color:#e74c3c;font-size:0.85rem;margin-top:4px;display:none;">驳回原因不能为空</div>' +
+            '        </div>' +
+            '        <div class="form-actions" style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;padding-top:12px;border-top:1px solid #404456;">' +
+            '            <button class="btn-cancel" onclick="closeRejectModal()" style="padding:8px 20px;border-radius:6px;background:#45475a;color:#cdd6f4;border:none;cursor:pointer;">取消</button>' +
+            '            <button class="btn-submit" onclick="submitReject()" style="padding:8px 20px;border-radius:6px;background:#e74c3c;color:#fff;border:none;cursor:pointer;font-weight:500;"><i class="fas fa-times-circle"></i> 提交驳回</button>' +
+            '        </div>' +
+            '    </div>' +
+            '</div>';
+        document.body.appendChild(div);
+        modal = div;
+    }
+    document.getElementById('reject-target-info').textContent = '[' + id + '] ' + title;
+    document.getElementById('reject-reason').value = '';
+    document.getElementById('reject-error').style.display = 'none';
+    modal.style.display = 'flex';
+}
+
+function closeRejectModal() {
+    var modal = document.getElementById('reject-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+function submitReject() {
+    var reason = document.getElementById('reject-reason').value.trim();
+    if (!reason) {
+        document.getElementById('reject-error').style.display = 'block';
+        return;
+    }
+    
+    var btn = document.querySelector('#reject-modal .btn-submit');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 提交中...';
+    
+    var apiUrl = _rejectTargetType === 'issue' ? '/api/issues/' : '/api/requirements/';
+    fetch(apiUrl + _rejectTargetId, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            status: 'rejected',
+            reject_reason: reason,
+            rejected_by: 'dashboard_user'
+        })
+    })
+    .then(function(r) {
+        if (!r.ok) {
+            return r.json().then(function(e) { throw new Error(e.error || '操作失败'); });
+        }
+        return r.json();
+    })
+    .then(function() {
+        closeRejectModal();
+        var toast = document.createElement('div');
+        toast.className = 'success-toast';
+        toast.innerHTML = '<i class="fas fa-check-circle"></i> 驳回已提交，通知毒刺审计';
+        document.body.appendChild(toast);
+        setTimeout(function() { toast.remove(); }, 4000);
+        // 刷新列表
+        if (_rejectTargetType === 'issue') loadIssues();
+        else loadRequirementsList();
+    })
+    .catch(function(e) {
+        console.error('submitReject error:', e);
+        alert('驳回失败: ' + e.message);
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-times-circle"></i> 提交驳回';
+    });
+}
+
+// Close reject modal on outside click
+document.addEventListener('click', function(e) {
+    if (e.target && e.target.id === 'reject-modal') {
+        closeRejectModal();
+    }
+});
 
 // 页面加载完成后初始化应用
 document.addEventListener('DOMContentLoaded', () => {
