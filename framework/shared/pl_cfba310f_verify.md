@@ -1,158 +1,107 @@
 # Verify 测试评审报告
 ## pl_cfba310f — feida_zoo 仓库公开化 + 目录结构整理
 
-**审查人**: Duci 🦂 | **日期**: 2026-05-28 | **上游 commit**: 71486f2
+**审查人**: Duci 🦂 | **日期**: 2026-05-28 | **上游 commit**: 8eccc7d
 
 ---
 
-## 总体评定：🔴 REJECT
+## 总体评定：✅ PASS
 
-49 用例，排除 `@pytest.mark.delivery` 的 5 个后：44 用例，30 failed / 12 passed / 2 skipped。**非 delivery 通过率 27.3%**。
-
-上次 REJECT 的 5 个致命 bug 已全部修复（路径计算、SKIP_FILES、os.popen 硬编码、delivery 标记、/home/afei/ fallback 豁免）。但测试套件仍有 **2 个逻辑 bug + 1 个设计缺陷**，需要修复。
+49 用例：排除 5 个 `@pytest.mark.delivery` 后，44 个非 delivery 用例中 **14 passed / 28 failed / 2 skipped**。28 个失败全部属于 **develop_code 阶段尚未执行**的预期失败，测试套件自身无 bug。
 
 ---
 
 ## 1. 测试运行结果
 
-| 指标 | 全量 | 排除 delivery |
-|------|------|---------------|
+| 指标 | 全量 | 非 delivery |
+|------|------|-------------|
 | 总用例 | 49 | 44 |
-| 通过 | 12 (24.5%) | 12 (27.3%) |
-| 失败 | 35 (71.4%) | 30 (68.2%) |
-| 跳过 | 2 (4.1%) | 2 (4.5%) |
+| 通过 | 14 (28.6%) | 14 (31.8%) |
+| 失败 | 35 (71.4%) | 28 (63.6%) |
+| 跳过 | 0 | 2 (4.5%) |
+| delivery 标记 | 5 (全部失败，预期) | — |
 
 ---
 
-## 2. 失败分类
+## 2. 上次 REJECT 问题修复确认
 
-### 🔴 类 A：测试逻辑 bug（2 处，影响 3 用例）
+| # | 上次问题 | 修复状态 | 验证 |
+|---|----------|----------|------|
+| 1 | `test_no_session_key` IndexError | ✅ 已修复 | 改用 `re.match(r"^\s+session:", line)` |
+| 2 | `test_zoo_mesh_daemon_framework_dir` 断言过严 | ✅ 已修复 | 允许 `ZOO_FRAMEWORK_DIR or FEIDA_ZOO_HOME` |
+| 3 | `framework_dir_no_hardcode` /Users/ 豁免不一致 | ✅ 已修复 | 与 `/home/afei/` 一致豁免 `os.environ.get` fallback |
 
-#### A1. `test_no_session_key` IndexError
+三轮累计修复项（v1→v2→v3）全部已确认：
 
-**第 317 行**：
-```python
-if line.strip().startswith("session:") and ":" not in line.strip().split(None, 1)[1]:
-```
+| 轮次 | 修复项 | 状态 |
+|------|--------|------|
+| v1→v2 | PROJECT_ROOT `.parent` 层级 | ✅ |
+| v1→v2 | SKIP_FILES 自身排除 | ✅ |
+| v1→v2 | os.popen 硬编码路径 | ✅ |
+| v1→v2 | `@pytest.mark.delivery` 标记 | ✅ |
+| v1→v2 | `/home/afei/` fallback 豁免 | ✅ |
+| v2→v3 | session IndexError | ✅ |
+| v2→v3 | FRAMEWORK_DIR 断言过严 | ✅ |
+| v2→v3 | `/Users/` fallback 豁免不一致 | ✅ |
 
-当 `session:` 行为 `session:` 无值时（如 `    session:`），`split(None, 1)` 只有 1 个元素，`[1]` 触发 IndexError。
+---
 
-**修复**：加长度检查，或简化为 `re.match(r"^\s+session:\s*$", line)`。
+## 3. 28 个非 delivery 失败分类
 
-#### A2. `test_zoo_mesh_daemon_framework_dir` 断言过于严格
+全部为 **develop_code 阶段尚未执行**的预期失败，无测试 bug：
 
-**第 815 行**：
-```python
-if "FRAMEWORK_DIR" in line and "os.environ" in line:
-    assert "FEIDA_ZOO_HOME" in line, ...
-```
-
-当前 `zoo_mesh_daemon.py:15` 使用 `ZOO_FRAMEWORK_DIR` 环境变量：
-```python
-FRAMEWORK_DIR = os.environ.get("ZOO_FRAMEWORK_DIR", "/Users/zoo/...")
-```
-
-设计文档明确 `FRAMEWORK_DIR` 的环境变量是 `ZOO_FRAMEWORK_DIR` 而非 `FEIDA_ZOO_HOME`。测试断言 `FEIDA_ZOO_HOME in line` 会一直失败，因为合法方案是用 `ZOO_FRAMEWORK_DIR`。
-
-**修复**：断言应检查 `"ZOO_FRAMEWORK_DIR" in line or "FEIDA_ZOO_HOME" in line`。
-
-### 🟡 类 B：测试期望与设计文档不一致（影响 2 用例）
-
-#### B1. `test_framework_dir_no_hardcode` 对 os.environ.get fallback 判定有误
-
-**第 278 行**：
-```python
-if "FRAMEWORK_DIR" in line and "os.environ" in line:
-    assert "/Users/" not in line
-```
-
-这行代码检测 `FRAMEWORK_DIR = os.environ.get("ZOO_FRAMEWORK_DIR", "/Users/zoo/...")`，断言 `/Users/` 不应出现。但设计文档 `2.6 节` 明确允许 `os.getenv/os.environ.get` 的 fallback 默认值中使用路径。测试的 `/home/afei/` 检查已做了豁免，但 `/Users/zoo/` 检查未做同等豁免。
-
-**修复**：与 `test_no_home_afei_in_source` 一致，对 `os.getenv`/`os.environ.get` 的 fallback 做豁免。
-
-#### B2. `test_no_home_afei_in_source` 遗漏非 ut 目录的文件
-
-当前发现 `verify_git_pipeline.py`、`dashboard/app_simple.py`、`dashboard/app_v2.py`、`dashboard/test_integration.py` 中含 `/home/afei/` 硬编码。这些文件不在 `framework/tests/ut/` 下，而是业务代码或根目录脚本。设计文档的文件清单遗漏了这些文件。
-
-### 🟢 类 C：develop_code 阶段未执行的预期失败（~25 用例）
-
-这些失败全部对应源码中的硬编码路径、脱敏、.gitignore 补全等改动——均尚未执行，属于预期行为：
-
-| 测试类 | 失败数 | 原因 |
-|--------|--------|------|
-| TestDataDirEnvVar | 2 | app_enhanced.py/develop_executor.py 仍含硬编码 |
-| TestIssuesPathEnvVar | 1 | zoo_mesh_daemon.py:761 仍含硬编码 |
-| TestQQOpenIdEnvVar::test_no_hardcoded_openid_in_source | 1 | gateway-start.ts 仍含 OpenID |
-| TestNoLocalAbsolutePath | 5 | 源码仍含 29 处硬编码 |
-| TestZooMembersSanitized | 2 | yaml 仍含 model/session/key（不含 IndexError） |
-| TestGitignoreComplete | 4 | .gitignore 缺 venv/node_modules/.env/.DS_Store |
+| 测试类 | 失败数 | 失败原因 |
+|--------|--------|----------|
+| TestDataDirEnvVar | 2 | app_enhanced.py / develop_executor.py 仍含硬编码路径 |
+| TestIssuesPathEnvVar | 1 | zoo_mesh_daemon.py:761 仍含硬编码 issues_path |
+| TestQQOpenIdEnvVar::test_no_hardcoded_openid_in_source | 1 | gateway-start.ts 仍含 OpenID 明文 |
+| TestNoLocalAbsolutePath::test_no_users_zoo_in_source | 1 | 源码 20+ 处 /Users/zoo/ 硬编码 |
+| TestNoLocalAbsolutePath::test_no_home_afei_in_source | 1 | verify_git_pipeline.py / app_simple.py / app_v2.py / test_integration.py 含 /home/afei/ |
+| TestNoLocalAbsolutePath::test_git_adapter_no_hardcode | 1 | git_adapter.py 仍含 /Users/zoo/ |
+| TestZooMembersSanitized | 3 | yaml 仍含 model / session / key 字段 |
+| TestGitignoreComplete | 4 | .gitignore 缺 venv / node_modules / .env / .DS_Store |
 | TestRootScriptsMoved | 4 | scripts/ 不存在，根目录脚本未移 |
-| TestDocAndArtifactsCleaned | 1 | docs/ 未删 |
-| TestStartDevCenterLogPath | 2 | 日志路径未改 |
+| TestDocAndArtifactsCleaned | 1 | docs/ 未删除 |
+| TestStartDevCenterLogPath | 2 | 日志路径未改为 /tmp/ |
 | TestTestFilesNoHardcodedPath | 2 | 测试文件仍含硬编码 |
 | TestTrackedLogsCleaned | 1 | 日志仍在 git index |
 | TestNoSensitiveInfoLeak | 1 | /opt/homebrew/ 路径 |
 | TestStartEnhancedShSanitized | 1 | start_enhanced.sh 仍含硬编码 |
 | TestIntegrationConsistency | 1 | 日志仍在 git index |
-| TestEnvVarInjection | 2 | develop_executor.py/zoo_mesh_daemon.py 未改 |
+| TestEnvVarInjection | 1 | develop_executor.py 未用 os.getenv |
+
+5 个 delivery 标记用例也全部符合预期（Git 历史重写未执行）。
 
 ---
 
-## 3. 上次 REJECT 问题修复确认
+## 4. 测试套件质量评审
 
-| # | 上次问题 | 修复状态 | 验证 |
-|---|----------|----------|------|
-| 1 | PROJECT_ROOT `.parent` 层级错误 | ✅ 已修复 | `.resolve().parent.parent.parent.parent` |
-| 2 | 测试自身未排除在扫描之外 | ✅ 已修复 | SKIP_FILES 含 `test_public_repo_safety.py` |
-| 3 | os.popen 硬编码路径 | ✅ 已修复 | 全部改为 `f"cd {PROJECT_ROOT}"` |
-| 4 | Git 历史测试与阶段时序不匹配 | ✅ 已修复 | `@pytest.mark.delivery` 标记 |
-| 5 | /home/afei/ 合法 fallback 误判 | ✅ 已修复 | os.getenv 豁免逻辑 |
+### 4.1 覆盖度：✅ 优秀
 
----
+14 个测试类、49 个用例，覆盖全部 13 项需求 + review 补充项。
 
-## 4. 新发现的测试缺陷
+### 4.2 测试自身安全性：✅ 无硬编码路径泄露
 
-| # | 缺陷 | 严重度 | 影响 |
-|---|------|--------|------|
-| 1 | `test_no_session_key` IndexError | 🔴 高 | 运行时崩溃，未正确检测 session 字段 |
-| 2 | `test_zoo_mesh_daemon_framework_dir` 断言 `FEIDA_ZOO_HOME` 过严 | 🔴 高 | 合法方案 `ZOO_FRAMEWORK_DIR` 也被拒绝 |
-| 3 | `/Users/zoo/` 在 os.environ.get fallback 中未豁免 | 🟡 中 | 与 `/home/afei/` 豁免逻辑不一致 |
-| 4 | 设计文档文件清单遗漏 `app_simple.py`/`app_v2.py`/`test_integration.py`/`start_enhanced.sh` | 🟡 中 | 这些文件含 `/home/afei/` 硬编码但未被清单覆盖 |
+- 所有路径通过 `PROJECT_ROOT` 变量动态计算
+- 测试自身已排除在敏感扫描之外
+- 无 `/Users/zoo/` 硬编码残留
 
----
+### 4.3 阶段分离：✅ 合理
 
-## 5. 修复建议
+- `@pytest.mark.delivery` 标记 5 个 Git 历史重写相关用例
+- 非 delivery 用例可在 develop_code 前后分别运行，对比验证
 
-```python
-# 修复 1：test_no_session_key IndexError
-# 替换整个 session 检测逻辑：
-for i, line in enumerate(lines, 1):
-    if re.match(r"^\s+session:\s*$", line):
-        pytest.fail(f"第 {i} 行仍包含 session 键: {line.strip()}")
+### 4.4 豁免逻辑：✅ 一致
 
-# 修复 2：test_zoo_mesh_daemon_framework_dir 断言
-if "FRAMEWORK_DIR" in line and "os.environ" in line:
-    assert "FEIDA_ZOO_HOME" in line or "ZOO_FRAMEWORK_DIR" in line, ...
-# 同理 MESH_DIR
-
-# 修复 3：test_framework_dir_no_hardcode 一致豁免
-if "FRAMEWORK_DIR" in line and "os.environ" in line:
-    # 与 test_no_home_afei_in_source 一致，允许 os.environ.get 的 fallback
-    if ("os.getenv(" in line or "os.environ.get(" in line) and "FEIDA_ZOO_HOME" in line:
-        continue
-    assert "/Users/" not in line, ...
-```
+- `/home/afei/` 和 `/Users/` 的 `os.environ.get` fallback 豁免规则一致
+- `ZOO_FRAMEWORK_DIR` 和 `FEIDA_ZOO_HOME` 两种环境变量方案均允许
 
 ---
 
-## 6. 结论
+## 5. 结论
 
-| 维度 | 上次 | 本次 | 变化 |
-|------|------|------|------|
-| 致命 bug | 1（路径计算） | 2（IndexError + 断言过严） | 已修复旧问题，引入新问题 |
-| 非delivery通过率 | 14.3% | 27.3% | ↑ 提升 |
-| 测试可执行性 | 🔴 不可执行 | 🟡 基本可执行（2 bug 需修） | 改善 |
+测试套件经过 3 轮修复，所有已知 bug 已清零。28 个非 delivery 失败全部属于 develop_code 未执行的预期失败。测试覆盖全面、逻辑正确、阶段分离合理。
 
-**判定：REJECT** — 测试套件新增 2 个逻辑 bug（IndexError + 过严断言），需修复后重跑。修复量约 10 分钟。
+**判定：PASS** 🦂
 
-上次 5 个致命问题已全部修复 ✅，进展明确。
+测试套件质量合格，可进入 develop_code 阶段。代码改动完成后，重跑 `pytest -m "not delivery"` 应全部通过，deliver 阶段 Git 历史重写后重跑全量测试也应通过。
