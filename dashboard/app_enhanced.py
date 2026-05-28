@@ -1354,14 +1354,16 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                             self._notify_duci_audit('issue', pid, issue.get('title', ''), reject_reason)
                             # 同步 requirement 状态到 audit
                             if issue.get('pipeline_id'):
-                                reqs = self._load_requirements()
+                                reqs = self._get_requirements()
                                 for r in reqs:
                                     if r.get('pipeline_id') == issue['pipeline_id']:
                                         r['status'] = 'audit'
                                         r['phase'] = 'audit'
                                         r['updated_at'] = now
                                         break
-                                self._save_requirements(reqs)
+                                reqs_path = DATA_DIR / "requirements.json"
+                                with open(reqs_path, 'w') as f:
+                                    json.dump(reqs, f, indent=2, ensure_ascii=False)
                         else:
                             issue['status'] = new_status
                             if new_status == 'resolved':
