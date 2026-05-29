@@ -118,12 +118,19 @@ class TestRouteNoPayloadAssignee:
             assert False, f"cur_req['assignee'] 写入仍存在: {line.strip()}"
 
     def test_new_req_dict_no_assignee(self):
-        """新建 requirement 的 dict 不应含 assignee"""
+        """新建 requirement 的 dict 不应含 assignee（排除 pending_queue 中的合法使用）"""
         content = _read_file(DAEMON_PATH)
-        # 找到创建 JSON dict 的部分（L638 附近）
-        # 搜索 "assignee": assignee 的 dict 拼接模式
-        if '"assignee": assignee' in content or "'assignee': assignee" in content:
-            pytest.fail("新建 req dict 中仍含 assignee")
+        # 按行检查，排除 _enqueue_pending 所在的函数
+        in_pending_func = False
+        for i, line in enumerate(content.split('\n')):
+            if 'def _enqueue_pending' in line:
+                in_pending_func = True
+            elif line.strip().startswith('def ') and not line.strip().startswith('def _enqueue_pending'):
+                in_pending_func = False
+            if in_pending_func:
+                continue
+            if '"assignee": assignee' in line or "'assignee': assignee" in line:
+                pytest.fail(f"L{i+1}: 新建 req dict 中仍含 assignee: {line.strip()}")
 
 
 # ============================================================

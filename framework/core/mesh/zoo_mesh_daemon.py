@@ -439,19 +439,6 @@ def _publish_phase_advancement(title: str, pipeline_id: str, from_phase: str, to
 
 # ── Phase-to-Agent 调度 ─────────────────────────────────────────────────────────
 
-def _phase_assignee(phase: str, requirement: dict) -> str:
-    """确定某个阶段应该由哪个 Agent 执行。
-
-    优先使用 requirement.assignee，其次查询 phase_default_agent 映射，
-    最后 fallback 到 panda。
-    """
-    assignee = requirement.get("assignee", "").strip()
-    if assignee:
-        return assignee
-    from framework.core.mesh.zoo_registry import ZooRegistry
-    return ZooRegistry().get_phase_agent(phase)
-
-
 def _pick_phase_agent(phase: str) -> str:
     """当不涉及特定 requirement 时，根据阶段选择默认 Agent。
     
@@ -599,7 +586,7 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
     task_id = payload.get("task_id", "") or payload.get("pipeline_id", "")
     title = payload.get("title", "未命名需求")
     req_id = payload.get("requirement_id", "")
-    assignee = payload.get("assignee") or _pick_phase_agent("design")
+    phase_assignee = _pick_phase_agent("design")
 
     if not task_id:
         logger.warning("pipeline_request 缺少 task_id")
@@ -620,10 +607,7 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
 
     if cur_req:
         current_status = cur_req.get("status", "request")
-        # 补充缺失的 assignee
-        if not cur_req.get("assignee"):
-            cur_req["assignee"] = assignee
-        logger.info(f"  需求当前状态: {current_status}, assignee={cur_req.get('assignee','')}")
+        logger.info(f"  需求当前状态: {current_status}")
     else:
         # 尚未创建对应 requirement（dashboard 创建消息转发至此）
         logger.info("  未找到对应 requirement，创建中")
@@ -635,7 +619,6 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
             "id": req_id or str(uuid.uuid4()),
             "title": title,
             "description": payload.get("description", ""),
-            "assignee": assignee,
             "status": "request",
             "phase": "request",
             "pipeline_id": task_id,
@@ -881,7 +864,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
                         cur_req["last_commit"] = commit_id
                     _save_requirements(reqs)
                     _publish_phase_advancement(cur_req["title"], pipeline_id, current_status, fallback)
-                    next_agent = cur_req.get("assignee") or _pick_phase_agent(fallback)
+                    next_agent = _pick_phase_agent(fallback)
                     _panda_relay_post(next_agent, pipeline_id, current_status, fallback, cur_req)
                     logger.info(f"🔄 Pipeline {pipeline_id}: 审查驳回，{current_status}→{fallback}")
             return
@@ -906,7 +889,7 @@ def _handle_phase_complete(body: str, agent_id: str) -> None:
     if next_phase in ("review", "verify", "test", "audit", "deliver", "deliver"):
         next_agent = _pick_phase_agent(next_phase)
     else:
-        next_agent = cur_req.get("assignee") or _pick_phase_agent(next_phase)
+        next_agent = _pick_phase_agent(next_phase)
     project_key = cur_req.get("project", "feida_zoo")
     next_msg = _build_phase_message(next_phase, pipeline_id, cur_req, project_key, prev_phase=current_status if current_status in ("review", "verify", "audit") else "", agent_id=next_agent)
 
@@ -1368,7 +1351,6 @@ def _scan_pending_requirements():
                 "requirement_id": req.get("id", ""),
                 "title": req.get("title", ""),
                 "description": req.get("description", ""),
-                "assignee": req.get("assignee", ""),
                 "source": "dashboard",
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             })
@@ -1418,7 +1400,7 @@ def _check_stuck_pipelines() -> None:
         # 当前阶段的负责人（不是需求原始 assignee）
         # 例如：review/audit/test 阶段负责人是 duci，而不是需求的 owner
         phase_agent = _pick_phase_agent(status)
-        assignee = phase_agent or req.get("assignee", "")
+        assignee = phase_agent or "panda"
         if not assignee:
             continue
 

@@ -452,7 +452,6 @@ class ZooHandler(SimpleHTTPRequestHandler):
                     "id": t.get("id"),
                     "name": t.get("name"),
                     "description": t.get("description", ""),
-                    "assignee": t.get("assignee"),
                     "severity": t.get("severity", "P3"),
                     "phase_name": p_val.get("name"),
                     "completed_at": t.get("completed_at", ""),

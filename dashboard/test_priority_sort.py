@@ -242,7 +242,6 @@ class TestBackendRequirementPriority(unittest.TestCase):
             "id": "test-123",
             "title": "测试需求",
             "description": "",
-            "assignee": "alpha",
             "status": "request",
             "phase": "request",
             "created_at": "2026-05-27T15:00:00",
@@ -257,7 +256,7 @@ class TestBackendRequirementPriority(unittest.TestCase):
     def test_priority_default_is_p3(self):
         """未提供 priority 时默认值应为 P3"""
         # 模拟前端未传 priority
-        data = {"title": "测试", "description": "", "assignee": ""}
+        data = {"title": "测试", "description": ""}
         priority = (data.get("priority") or "P3").upper()
         self.assertEqual(priority, "P3")
 

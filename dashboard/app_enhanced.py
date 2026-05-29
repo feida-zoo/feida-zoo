@@ -330,7 +330,6 @@ class TaskTrackerManager:
                         "id": task_id,
                         "name": task.get("name", "未命名任务"),
                         "description": task.get("description", ""),
-                        "assignee": task.get("assignee", ""),
                         "severity": task.get("severity", "P3"),
                         "phase": phase_key,
                         "phase_name": phase_data.get("name", phase_key),
@@ -683,7 +682,6 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
 
             import uuid
             req_id = str(uuid.uuid4())
-            assignee = (data.get('assignee') or '').strip()
             priority = (data.get('priority') or 'P3').upper()
             if priority not in VALID_PRIORITIES:
                 priority = 'P3'
@@ -692,7 +690,6 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 "id": req_id,
                 "title": title,
                 "description": (data.get('description') or '').strip(),
-                "assignee": assignee,
                 "status": "request",
                 "phase": "request",
                 "priority": priority,
@@ -722,7 +719,6 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                     "requirement_id": req_id,
                     "title": title,
                     "description": requirement['description'],
-                    "assignee": assignee,
                     "source": "dashboard",
                     "timestamp": requirement['created_at']
                 }
@@ -740,20 +736,7 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 print(f"Panda 通知失败: {e}")
                 requirement['panda_notified'] = False
 
-            # Also notify assignee if different from panda
-            if assignee and assignee != 'panda':
-                try:
-                    requests.post(
-                        f"{ZOO_MESH_HTTP}/api/chat",
-                        json={
-                            'from': 'dashboard',
-                            'content': f"@{assignee} 新需求已创建: {title}. Panda 将启动 Pipeline."
-                        },
-                        timeout=3
-                    )
-                except Exception:
-                    pass
-
+            # 由 Pipeline 自动路由，不再发送额外通知
             self._send_json(requirement)
         except Exception as e:
             self.send_response(500)
@@ -905,8 +888,6 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                     if 'priority' in data:
                         p = data['priority'].upper()
                         req['priority'] = p if p in VALID_PRIORITIES else 'P3'
-                    if 'assignee' in data:
-                        req['assignee'] = data['assignee']
                     req['updated_at'] = now
                     found = True
                     break
@@ -958,7 +939,6 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             "requirement_id": target['id'],
             "title": f"{title_prefix}{target.get('title', '')}",
             "description": f"驳回原因: {reject_reason}\n\n{target.get('description', '')}" if reject_reason else target.get('description', ''),
-            "assignee": target.get('assignee') or "alpha",
             "source": source,
             "timestamp": now,
         }
@@ -1267,13 +1247,13 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             issue_priority = (data.get('priority') or 'P3').upper()
             if issue_priority not in VALID_PRIORITIES:
                 issue_priority = 'P3'
+            # 由 Pipeline 自动路由，不在新建时写入
             issue = {
                 "id": str(uuid.uuid4()),
                 "title": title,
                 "description": (data.get('description') or '').strip(),
                 "priority": issue_priority,
                 "status": "open",
-                "assignee": (data.get('assignee') or '').strip(),
                 "created_at": now,
                 "updated_at": now,
                 "resolved_at": None,
@@ -1372,8 +1352,6 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                     if 'priority' in data:
                         p = data['priority'].upper()
                         issue['priority'] = p if p in VALID_PRIORITIES else 'P3'
-                    if 'assignee' in data:
-                        issue['assignee'] = data['assignee']
                     issue['updated_at'] = now
                     found = True
                     break
@@ -1706,7 +1684,6 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 'id': req.get('id', ''),
                 'name': req.get('title', '未命名需求'),
                 'description': req.get('description', ''),
-                'assignee': req.get('assignee', ''),
                 'priority': req.get('priority', 'P3'),
                 'pipeline_id': pipeline_id,
                 'phase': column_key,
@@ -1737,7 +1714,6 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 'id': task_id,
                 'name': f'管道任务 {task_id[:8]}',
                 'description': f'Pipeline 状态: {pl_state}',
-                'assignee': 'panda',
                 'priority': 'P0' if pl_state in ('cancelled', 'escalated', 'timed_out') else 'P2',
                 'pipeline_id': task_id,
                 'phase': column_key,

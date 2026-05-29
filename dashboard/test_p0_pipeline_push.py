@@ -25,10 +25,10 @@ def test(name, fn):
         print(f"  ❌ {name}: {e}")
         failed += 1
 
-def post_issue(title, desc="", priority="P3", assignee=""):
+def post_issue(title, desc="", priority="P3"):
     resp = requests.post(
         f"{DASHBOARD_URL}/api/issues",
-        json={"title": title, "description": desc, "priority": priority, "assignee": assignee},
+        json={"title": title, "description": desc, "priority": priority},
         timeout=5
     )
     assert resp.status_code == 200, f"HTTP {resp.status_code}: {resp.text[:200]}"

@@ -371,19 +371,7 @@ class ZooDevCenter {
     }
     
     updateKanbanAssigneeStatus(statusData) {
-        document.querySelectorAll('.task-assignee').forEach(el => {
-            const nameSpan = el.querySelector('span');
-            if (!nameSpan) return;
-            
-            const assigneeName = nameSpan.textContent.trim();
-            // 简单映射名称到ID
-            const nameToId = {
-                '阿尔法': 'alpha', '毒刺': 'duci', 
-                '达达': 'panda'
-            };
-            
-            const id = nameToId[assigneeName] || assigneeName.toLowerCase();
-            const status = statusData[id];
+        // assignee 由 Pipeline 自动路由，看板不再显示执行者状态
             
             if (status) {
                 if (status === 'executing') {
@@ -681,12 +669,6 @@ class ZooDevCenter {
             formEl.innerHTML = `
                 <input type="text" id="request-title-input" placeholder="新需求标题..." />
                 <div class="add-row">
-                    <select id="request-assignee-select">
-                        <option value="">指派给...</option>
-                        <option value="alpha">🐢 阿尔法</option>
-                        <option value="duci">🦂 毒刺</option>
-                        <option value="panda">🐼 达达</option>
-                    </select>
                     <button onclick="submitRequestRequirement()">添加</button>
                 </div>
             `;
@@ -737,10 +719,7 @@ class ZooDevCenter {
             taskCard.classList.add('task-exception');
         }
         
-        // 获取成员 Emoji — 优先使用 current_executor（当前阶段执行人）
-        const executor = task.current_executor || task.assignee || '';
-        const assigneeEmoji = this.memberEmojiMap[executor] || '👤';
-        const avatarSrc = executor ? `/static/avatars/${executor}.png` : '';
+        // assignee 由 Pipeline 自动路由，看板不显示执行者
         
         // 阶段状态中文映射
         const STATUS_CN = {
@@ -771,11 +750,6 @@ class ZooDevCenter {
             </div>
             <div class="task-title">${this.escapeHtml(task.name)}</div>
             <div class="task-meta">
-                <div class="task-assignee">
-                    ${avatarSrc ? `<img src="${avatarSrc}" class="assignee-avatar-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">` : ''}
-                    <div class="assignee-avatar" style="${avatarSrc ? 'display:none;' : ''}">${assigneeEmoji}</div>
-                    <span>${this.memberEmojiMap[executor] ? this.memberEmojiMap[executor] + ' ' : ''}${executor || '未分配'}</span>
-                </div>
                 ${phaseHtml}
             </div>
         `;
@@ -879,8 +853,6 @@ class ZooDevCenter {
         const bodyEl = document.getElementById('modal-body');
         
         // 获取成员 Emoji
-        const assigneeEmoji = this.memberEmojiMap[task.assignee] || '👤';
-        
         // 构建详情内容
         let detailsHtml = `
             <div class="task-detail">
@@ -895,10 +867,7 @@ class ZooDevCenter {
                             <span class="detail-label">严重程度:</span>
                             <span class="detail-value severity-${(task.priority || task.severity || 'P3').toLowerCase()}">${task.priority || task.severity}</span>
                         </div>
-                        <div class="detail-item">
-                            <span class="detail-label">分配成员:</span>
-                            <span class="detail-value">${assigneeEmoji} ${task.assignee || '未分配'}</span>
-                        </div>
+
                         <div class="detail-item">
                             <span class="detail-label">所属阶段:</span>
                             <span class="detail-value">${task.phase_name || task.phase}</span>
@@ -1332,7 +1301,7 @@ function loadIssues() {
                             </div>
                             ${issue.description ? `<div class="issue-desc">${escapeHtml(issue.description)}</div>` : ''}
                             <div class="issue-meta">
-                                <span class="issue-assignee"><i class="fas fa-user"></i> ${agentNames[issue.assignee] || escapeHtml(issue.assignee) || '未指派'}</span>
+
                                 <span class="issue-time"><i class="fas fa-clock"></i> ${isClosed ? '已解决: ' : ''}${displayTime}</span>
                             </div>
                         </div>
@@ -1364,7 +1333,6 @@ function showCreateIssueForm() {
         document.getElementById('issue-title').value = '';
         document.getElementById('issue-desc').value = '';
         document.getElementById('issue-priority').value = 'P3';
-        document.getElementById('issue-assignee').value = '';
         document.getElementById('issue-title').focus();
     }
 }
@@ -1377,8 +1345,6 @@ function submitIssue() {
     const title = document.getElementById('issue-title');
     const desc = document.getElementById('issue-desc');
     const priority = document.getElementById('issue-priority');
-    const assignee = document.getElementById('issue-assignee');
-    
     if (!title || !title.value.trim()) {
         title.focus();
         title.style.borderColor = '#e74c3c';
@@ -1392,8 +1358,7 @@ function submitIssue() {
         body: JSON.stringify({
             title: title.value.trim(),
             description: desc ? desc.value.trim() : '',
-            priority: priority ? priority.value : 'P3',
-            assignee: assignee ? assignee.value : ''
+            priority: priority ? priority.value : 'P3'
         })
     })
     .then(r => r.json())
@@ -1530,7 +1495,6 @@ function sortIssuesForDisplay(issues) {
 function submitRequirement() {
     const title = document.getElementById('req-title');
     const desc = document.getElementById('req-desc');
-    const assignee = document.getElementById('req-assignee');
     const priority = document.getElementById('req-priority');
     const btn = document.getElementById('req-submit-btn');
     
@@ -1550,7 +1514,6 @@ function submitRequirement() {
         body: JSON.stringify({
             title: title.value.trim(),
             description: desc ? desc.value.trim() : '',
-            assignee: assignee ? assignee.value : '',
             priority: priority ? priority.value : 'P3'
         })
     })
@@ -1558,7 +1521,6 @@ function submitRequirement() {
     .then(req => {
         title.value = '';
         if (desc) desc.value = '';
-        if (assignee) assignee.value = '';
         
         // Show success toast
         const toast = document.createElement('div');
@@ -1585,7 +1547,6 @@ function submitRequirement() {
 
 function submitRequestRequirement() {
     const titleInput = document.getElementById('request-title-input');
-    const assigneeSelect = document.getElementById('request-assignee-select');
     
     if (!titleInput || !titleInput.value.trim()) {
         if (titleInput) { titleInput.focus(); titleInput.style.borderColor = '#e74c3c'; setTimeout(() => { titleInput.style.borderColor = ''; }, 2000); }
@@ -1597,14 +1558,12 @@ function submitRequestRequirement() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
             title: titleInput.value.trim(),
-            description: '',
-            assignee: assigneeSelect ? assigneeSelect.value : ''
+            description: ''
         })
     })
     .then(r => r.json())
     .then(() => {
         titleInput.value = '';
-        if (assigneeSelect) assigneeSelect.value = '';
         if (window.zooDevCenter) {
             window.zooDevCenter.loadKanbanData();
         }
@@ -1662,7 +1621,7 @@ function loadRequirementsList() {
                     <div class="req-meta">
                         <span><i class="fas fa-flag"></i> <span class="req-priority-badge ${PRIORITY_CLASSES[r.priority] || 'p3'}">${PRIORITY_LABELS[r.priority] || 'P3低'}</span></span>
                         <span><i class="fas fa-tag"></i> <span class="req-status-badge ${r.status}">${statusLabels[r.status] || r.status}</span></span>
-                        <span><i class="fas fa-user"></i> ${agentNames[r.assignee] || '未指派'}</span>
+
                         <span><i class="fas fa-clock"></i> ${r.created_at ? new Date(r.created_at).toLocaleString('zh-CN') : ''}</span>
                     </div>
                 </div>
