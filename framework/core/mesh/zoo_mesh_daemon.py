@@ -652,20 +652,22 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
     except Exception as e:
         logger.warning(f"StateMachine transition failed: {e}")
 
-    # 4. 更新 requirements.json
+    # 4. Agent 可用性检测（必须在 status 写入之前，否则自引用误判为忙碌）
+    phase_assignee = _pick_phase_agent("design")
+    priority = cur_req.get("priority", "P3")
+    agent_avail = _agent_available(phase_assignee)
+
+    # 5. 更新 requirements.json
     cur_req["status"] = "design"
     cur_req["phase"] = "design"
     cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
     _save_requirements(reqs)
 
-    # 5. 发布推进事件
+    # 6. 发布推进事件
     _publish_phase_advancement(title, task_id, "request", "design")
 
-    # 6. Agent 可用性检测（内存 pending 队列）
-    phase_assignee = _pick_phase_agent("design")
-    priority = cur_req.get("priority", "P3")
-
-    if not _agent_available(phase_assignee):
+    # 7. 根据步骤 4 的预判结果派发或入 pending
+    if not agent_avail:
         _enqueue_pending(task_id, "design", phase_assignee, priority, title)
         logger.info(f"⏳ {phase_assignee} 忙碌，{task_id} 入 pending 队列等待")
     else:
@@ -1278,7 +1280,7 @@ def _agent_available(agent_id: str) -> bool:
     for r in reqs:
         status = r.get("status", "")
         assignee = r.get("assignee", "")
-        if status and status not in ("done", "rejected", "request", "") and assignee == agent_id:
+        if status and status not in ("done", "rejected", "request", "", "cancelled") and assignee == agent_id:
             return False
     # 检查内存 pending 队列
     for item in _pending_queue:
