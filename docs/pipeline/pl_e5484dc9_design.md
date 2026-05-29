@@ -1,8 +1,9 @@
-# Design 报告: pl_e5484dc9 — 移除需求/问题管理的「指派成员」界面
+# Design 报告: pl_e5484dc9 — 移除需求/问题管理的「指派成员」（第 2 版）
 
 **阶段**: design  
 **设计人**: 阿尔法 (Alpha) 🐢  
 **日期**: 2026-05-29  
+**版本**: v2 — 按 review REJECT 全面补充  
 
 ---
 
@@ -14,145 +15,184 @@
 3. 建议直接删除 assignee 界面元素和相关逻辑
 
 ### 1.2 可行性评估 ✅
-- **可行**: 仅删除 UI 字段和后端字段，不破坏 Pipeline 派发核心逻辑
-- **依赖**: `_phase_assignee` 使用 `requirement.assignee`（用户填写值）作兜底 → 需改为永不用 assignee 字段，完全依赖 `_pick_phase_agent` 自动路由
-- **风险**: 低 — Pipeline 核心的 `_phase_assignee` 目前先检查 `requirement.assignee`，再 fallback 到 `_pick_phase_agent`。删除 assignee 后所有 req 都将走自动路由，这正是期望行为
-- **优先级**: P1（界面整洁/语义正确性，非功能阻断）
+- **可行**: 仅删除 UI 字段和无关路由依赖，不破坏 Pipeline 核心
+- **依赖**: `_phase_assignee` / `_pick_phase_agent` / `stuck 检测` 三处需改为纯自动路由
+- **风险**: 低
+- **优先级**: P1（界面整洁/语义正确性）
 
 ### 1.3 需求合理性判定
 **判定: 合理** ✅
-- Pipeline 自动路由是设计意图，assignee 字段成为误导性残留
-- 删除后数据更干净，逻辑更一致
 
 ---
 
 ## 二、架构设计
 
-### 2.1 What — 产出物
+### 2.1 What — 改动总览
 
-| 产出 | 路径 | 说明 |
-|------|------|------|
-| 修改 HTML | `dashboard/templates/dev_center.html` | 移除需求和问题的 assignee 下拉框 |
-| 修改 JS | `dashboard/static/dev_center.js` | 移除 assignee 读取/提交/显示逻辑 |
-| 修改后端 | `dashboard/app_enhanced.py` | 移除 assignee 字段处理 |
-| 修改后端 | `framework/core/mesh/zoo_mesh_daemon.py` | `_phase_assignee` 移除 assignee 兜底，纯自动路由 |
-| Design 文档 | `docs/pipeline/pl_e5484dc9_design.md` | 本文件 |
+| # | 位置 | 改动内容 | 优先级 |
+|---|------|----------|--------|
+| 1 | `dashboard/templates/dev_center.html` | 删除需求表单和问题表单的 assignee 下拉框 | P1 |
+| 2 | `dashboard/static/dev_center.js` | 删除 assignee 相关的表单读取、看板显示、任务详情 | P1 |
+| 3 | `dashboard/static/dev_center.css` | 删除 `.task-assignee` / `.assignee-avatar` 等死类 | P2 |
+| 4 | `dashboard/app_enhanced.py` | 删除 assignee 表单处理、通知、响应体 | P1 |
+| 5 | `framework/core/mesh/zoo_mesh_daemon.py` | 删除 `_phase_assignee` 函数，全量替换为 `_pick_phase_agent` | P0 |
+| 6 | `framework/core/mesh/zoo_mesh_daemon.py` | L602：创建 pipeline 时不从 payload 读 assignee | P1 |
+| 7 | `framework/core/mesh/zoo_mesh_daemon.py` | L624-625：停止向 requirement 写入 assignee | P1 |
+| 8 | `framework/core/mesh/zoo_mesh_daemon.py` | L638：创建 JSON 不含 assignee | P1 |
+| 9 | `framework/core/mesh/zoo_mesh_daemon.py` | L884/L909：驳回/推进路由移除 `cur_req.get("assignee")` 兜底 | P1 |
+| 10 | `framework/core/mesh/zoo_mesh_daemon.py` | L1421：stuck 检测移除 `req.get("assignee", "")` 兜底 | P2 |
+| 11 | `dashboard/test_p0_pipeline_push.py` | 删除测试中 `assignee` 参数 | P2 |
+| 12 | `dashboard/test_priority_sort.py` | 删除测试中硬编码 `assignee` | P2 |
 
-### 2.2 Why — 为什么要删
+### 2.2 Why
 
-| 当前问题 | 根因 |
-|----------|------|
-| 新建需求时 assignee 无用 → 用户总选错或留空 | Pipeline 自动派发不依赖用户填写 |
-| 完成后全挂 alpha → assignee 数据失真 | dev 阶段自动路由到 alpha，用户填的 assignee 被覆盖 |
-| UI 含多余字段 → 增加用户认知负荷 | 用户不需要也不能正确填写 |
+**核心矛盾**: `_phase_assignee` 优先读 `requirement.assignee`（用户填写）→ 用户填的总和实际执行者不一致 → 数据污染。
 
-### 2.3 Tradeoff
+**修复后数据流**:
+```
+需求创建 → Pipeline 启动 → _pick_phase_agent(phase) → 纯自动路由
+                                                            ↓
+                                          根据 zoo_members.yaml 的 responsible_phases
+                                          选择正确 Agent
+```
+
+### 2.3 详细改动说明
+
+#### #5: `_phase_assignee` 函数 → 删除
+
+```python
+# 删除此函数
+def _phase_assignee(phase, requirement):
+    assignee = requirement.get("assignee", "")
+    if assignee:
+        return assignee
+    return ZooRegistry().get_phase_agent(phase)
+
+# 所有调用点替换为:
+ZooRegistry().get_phase_agent(phase)
+```
+
+#### #9: L884/L909 — 路由兜底改为纯自动
+
+```python
+# 当前（受影响）:
+next_agent = cur_req.get("assignee") or _pick_phase_agent(fallback)
+
+# 改为:
+next_agent = _pick_phase_agent(fallback)
+```
+
+#### #10: L1421 — stuck 检测
+
+```python
+# 当前:
+assignee = phase_agent or req.get("assignee", "")
+
+# 改为:
+assignee = phase_agent or "panda"
+```
+
+#### #6: L602 — 创建 pipeline 时
+
+```python
+# 当前:
+assignee = payload.get("assignee") or _pick_phase_agent("design")
+
+# 改为:
+phase_assignee = _pick_phase_agent("design")
+```
+
+#### #7: L624-625 — 停止写入 requirement
+
+```python
+# 删除:
+if not cur_req.get("assignee"):
+    cur_req["assignee"] = assignee
+```
+
+#### #14: SSE 通知中的 assignee
+
+```python
+# 删除 app_enhanced.py L743-750:
+# 通知 assignee 的逻辑（整个 if 块）:
+if assignee and assignee != 'panda':
+    ...
+```
+
+### 2.4 Tradeoff
 
 | 选项 | 优点 | 缺点 | 选择 |
 |------|------|------|------|
-| 完全删掉 assignee 字段 | UI 简洁，逻辑干净 | 历史数据的 assignee 暴露 | ✅ |
-| UI 隐藏但不删后端 | 可快速恢复 | 拖泥带水，逻辑混乱 | ❌ |
-| 保留但置灰 | 兼容旧数据 | 仍占空间 | ❌ |
-
-### 2.4 接口变更
-
-**删除的字段:**
-- 需求表单: `req-assignee` 下拉框
-- 问题表单: `issue-assignee` 下拉框
-- API 创建需求: 请求体中的 `assignee` 字段
-- API 创建问题: 请求体中的 `assignee` 字段
-- 需求详情: 卡片上的 assignee 显示
-- 问题详情: 列表中的 assignee 显示
-- 看板需求项: `task.assignee` 显示
-
-**后端行为变更:**
-- `_phase_assignee`: 移除 `requirement.assignee` 优先逻辑，直接委托给 `_pick_phase_agent(phase)`
-- 创建需求的 SSE/通知: 移除 assignee 相关逻辑
-- dashboard 需求/问题 API: 移除 assignee 字段处理
-
-**保持不变:**
-- `_pick_phase_agent(phase)` 自动路由 → 永远准确
-- `requirement.assignee` 字段仍写入，但不再被 UI 读取和显示
+| 保留 `_phase_assignee` 但改空 | 函数名保留 | 和 `_pick_phase_agent` 重复 | ❌ |
+| 删除 `_phase_assignee`（✅） | 无重复 | 需改 5 个调用点 | ✅ |
+| 保留 L884/L909 的 assignee 兜底 | 兼容历史数据 | assignee 字段继续干扰路由 | ❌ |
+| 强制纯自动路由（✅） | 路由准确 | 历史数据的 assignee 无视（保留不删） | ✅ |
 
 ### 2.5 文件清单
 
-| 文件 | 修改类型 | 说明 |
-|------|----------|------|
-| `dashboard/templates/dev_center.html` | 删除 UI 元素 | 删除需求和问题表单的 assignee 下拉框 |
-| `dashboard/static/dev_center.js` | 删除 JS 逻辑 | 删除 assignee 读取/填充/提交/显示逻辑 |
-| `dashboard/app_enhanced.py` | 删除后端处理 | 删除 assignee 表单处理、通知、响应体 |
-| `framework/core/mesh/zoo_mesh_daemon.py` | 修改 core 逻辑 | `_phase_assignee` 移除 `requirement.assignee` 兜底 |
-
-### 2.6 改动量估算
-
-| 文件 | 改动量 |
-|------|--------|
-| dev_center.html | ~4 行删除（2 个下拉框） |
-| dev_center.js | ~30 行删除（表单读取、看板显示、任务详情） |
-| app_enhanced.py | ~20 行删除（参数解析、赋值、响应） |
-| zoo_mesh_daemon.py | ~4 行修改（`_phase_assignee` 简化） |
+| 文件 | 操作 | 改动量估计 |
+|------|------|-----------|
+| `dashboard/templates/dev_center.html` | 修改 | ~4 行删除 |
+| `dashboard/static/dev_center.js` | 修改 | ~30 行删除 |
+| `dashboard/static/dev_center.css` | 修改 | ~15 行删除 |
+| `dashboard/app_enhanced.py` | 修改 | ~20 行删除 |
+| `framework/core/mesh/zoo_mesh_daemon.py` | 修改 | ~8 处修改 |
+| `dashboard/test_p0_pipeline_push.py` | 修改 | ~2 行修改 |
+| `dashboard/test_priority_sort.py` | 修改 | ~2 行修改 |
 
 ---
 
 ## 三、UI 设计
 
-### 3.1 删除内容（需求表单当前布局 → 移除后）
+### 3.1 删除内容（需求表单）
 
 ```
-当前:
-  ┌─ 创建新需求 ──────────────────────┐
-  │  标题: [________]                   │
-  │  描述: [________]                   │
-  │  优先级: [P0 ▼]                     │
-  │  指派给: [-- 选择成员 -- ▼]  ← 删除 │
-  │  [提交需求]                         │
-  └───────────────────────────────────┘
-
-删除后:
-  ┌─ 创建新需求 ──────────────────────┐
-  │  标题: [________]                   │
-  │  描述: [________]                   │
-  │  优先级: [P0 ▼]                     │
-  │  [提交需求]                         │
-  └───────────────────────────────────┘
+当前:                         删除后:
+┌─ 创建新需求 ──────┐         ┌─ 创建新需求 ──────┐
+│ 标题            │         │ 标题            │
+│ 描述            │         │ 描述            │
+│ 优先级          │         │ 优先级          │
+│ 指派给 [删除] ✂️  │         │ [提交需求]       │
+│ [提交需求]       │         └──────────────────┘
+└──────────────────┘
 ```
 
-### 3.2 删除内容（问题表单同理）
+### 3.2 删除内容（问题表单）
 
 ```
-当前:
-  ┌─ 创建问题 ────────────────────────┐
-  │  标题: [________]                   │
-  │  描述: [________]                   │
-  │  优先级: [P3 ▼]                     │
-  │  指派给: [-- 选择成员 -- ▼]  ← 删除 │
-  │  [创建问题]                         │
-  └───────────────────────────────────┘
+当前:                         删除后:
+┌─ 创建问题 ────────┐         ┌─ 创建问题 ────────┐
+│ 标题            │         │ 标题            │
+│ 描述            │         │ 描述            │
+│ 优先级          │         │ 优先级          │
+│ 指派给 [删除] ✂️  │         │ [创建问题]       │
+│ [创建问题]       │         └──────────────────┘
+└───────────────────┘
 ```
 
-### 3.3 看板任务详情
+### 3.3 删除内容（看板详情中的 assignee）
 
-当前看板 item 显示 `<span class="detail-value">🐢 alpha</span>` — **也删除**，因为：
-- Pipeline 自动路由，显示执行者没有用户操作的场景
-- 如果需要故障排查，可从 requirements.json 追溯
+看板 item 当前显示 `<span class="detail-value">🐢 alpha</span>` → 删除
 
-### 3.4 问题列表
+### 3.4 删除内容（问题列表中的 assignee）
 
-当前显示 `<span class="issue-assignee"><i class="fas fa-user"></i> 🐢 阿尔法</span>` — **也删除**，理由同上
+问题列表当前显示 `<span class="issue-assignee"><i class="fas fa-user"></i> 🐢 阿尔法</span>` → 删除
+
+### 3.5 看板创建需求的下拉框
+
+`request-assignee-select`（JS L684, L1588-1601）→ 同步删除
+
+### 3.6 不受影响
+
+- `_pending_queue` 中的 assignee 字段（是阶段执行者，语义不同，保留）
+- requirements.json 历史 assignee 值（保留不删）
 
 ---
 
-## 四、状态定义
+## 四、实施步骤
 
-无状态变更。只是 UI 展示和表单输入的清理。
-
-### 影响范围确认
-
-| 场景 | 改前 | 改后 |
-|------|------|------|
-| 新建需求 | 用户选指派成员 → 写入 .assignee | 不显示，Pipeline 自动路由 |
-| 新建问题 | 同上 | 同上 |
-| 看板显示 | 显示 .assignee (🐢 阿尔法) | 不显示 |
-| 问题列表 | 显示 .assignee (🐢 阿尔法) | 不显示 |
-| Pipeline 派发 | `_phase_assignee` 优先用 .assignee | 完全走自动路由 |
-| 历史数据 | assignee 字段仍存在 | 不展示，不删除历史值 |
+1. 先改 `zoo_mesh_daemon.py`（最核心）
+2. 再改 `app_enhanced.py`
+3. 再改 HTML + JS + CSS
+4. 再改测试文件
+5. 重启服务和验证
