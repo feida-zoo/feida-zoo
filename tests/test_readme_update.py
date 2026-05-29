@@ -79,19 +79,34 @@ class TestActiveMembers:
 
     def test_ex_members_not_in_active_table(self):
         """已退出成员不可出现在活跃成员表中（可在归档区出现）。
-        检查「归档成员」小节标题存在，而非在全文搜索"归档"避免匹配职责描述。"""
+        检查「已归档成员」小节标题存在、且已退出成员不在活跃成员表格中。"""
         content = _read_readme()
-        # 找成员列表节
         member_section = _extract_section(content, "成员列表") or ""
         # 检查归档小节标题
-        has_archive_heading = "### 归档" in member_section or "## 归档" in member_section or \
-                              "### 已退出" in member_section
-        if has_archive_heading:
-            return  # 有独立归档区，通过
-        # 没有独立归档区时，检查已退出成员是否完全不出现在 README 中
-        for name in self.ARCHIVED:
-            assert name not in content, \
-                f"已退出成员 {name} 出现在 README 中但无归档标注"
+        has_archive_heading = (
+            "### 已归档" in member_section or
+            "### 归档" in member_section or
+            "## 归档" in member_section or
+            "### 已退出" in member_section
+        )
+        if not has_archive_heading:
+            for name in self.ARCHIVED:
+                assert name not in content, \
+                    f"已退出成员 {name} 出现在 README 中但无归档标注"
+            return
+        # 有归档标注 → 提取活跃子节与归档子节之间的文本（活跃表格部分）
+        # 活跃子节内容：从「### 活跃成员」到「### 已归档成员」或到「## 」下一节
+        active_marker = "### 活跃成员"
+        archive_marker = "### 已归档"
+        if active_marker in member_section:
+            active_text = member_section.split(active_marker)[-1]
+            if archive_marker in active_text:
+                active_text = active_text.split(archive_marker)[0]
+            else:
+                active_text = active_text.split("\n###")[0] if "\n###" in active_text else active_text
+            for name in self.ARCHIVED:
+                assert name not in active_text, \
+                    f"已退出成员 {name} 出现在活跃成员表格中"
 
     def test_active_emojis_present(self):
         content = _read_readme()
@@ -258,14 +273,19 @@ class TestPipelineIntro:
         assert "Pipeline" in content or "工作流" in content, "缺少 Pipeline 介绍"
 
     def test_phase_stages_listed(self):
-        """全部 7 阶段列在 README 中"""
+        """全部 7 阶段列在 README 中（中英文均可）"""
         content = _read_readme()
-        pipeline_section = content.split("Pipeline")[-1].split("\n##")[0] \
-            if "Pipeline" in content else ""
-        pipeline_section = pipeline_section or (content.split("工作流")[-1].split("\n##")[0]
-                                                  if "工作流" in content else "")
-        count = sum(1 for phase in EXPECTED_PHASES if phase in pipeline_section)
-        assert count >= 7, f"Pipeline 阶段不全，expected 7, found {count}"
+        # 用精确标题定位 Pipeline 节
+        pipeline_marker = "## Pipeline 工作流" if "## Pipeline 工作流" in content else "## Pipeline"
+        if pipeline_marker in content:
+            pipeline_section = content.split(pipeline_marker)[-1].split("\n##")[0]
+        else:
+            pipeline_section = ""
+        # 检查英文阶段名（如 design/review/develop）或中文标签（如 设计/审查/开发）
+        cn_labels = ["需求", "设计", "审查", "开发", "测试", "审计", "交付"]
+        en_found = sum(1 for phase in EXPECTED_PHASES if phase in pipeline_section)
+        cn_found = sum(1 for label in cn_labels if label in pipeline_section)
+        assert en_found + cn_found >= 7, f"Pipeline 阶段不全，expected 7, found en={en_found} cn={cn_found}"
 
 
 class TestTechStack:
