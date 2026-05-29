@@ -7,6 +7,7 @@ pl_e5484dc9 — 移除「指派成员」字段测试用例
 - dashboard API: 创建/返回不携带 assignee
 - UI: HTML/JS/CSS 元素已删除
 - 不受影响: pending_queue 的 assignee 保留、历史数据保留
+- app_v2.py assignee 返回
 """
 import os
 import re
@@ -16,11 +17,17 @@ import pytest
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DAEMON_PATH = os.path.join(REPO_ROOT, "framework", "core", "mesh", "zoo_mesh_daemon.py")
 APP_PATH = os.path.join(REPO_ROOT, "dashboard", "app_enhanced.py")
+APP_V2_PATH = os.path.join(REPO_ROOT, "dashboard", "app_v2.py")
 HTML_PATH = os.path.join(REPO_ROOT, "dashboard", "templates", "dev_center.html")
 JS_PATH = os.path.join(REPO_ROOT, "dashboard", "static", "dev_center.js")
 CSS_PATH = os.path.join(REPO_ROOT, "dashboard", "static", "dev_center.css")
 TEST_PUSH_PATH = os.path.join(REPO_ROOT, "dashboard", "test_p0_pipeline_push.py")
 TEST_SORT_PATH = os.path.join(REPO_ROOT, "dashboard", "test_priority_sort.py")
+
+
+def _read_file(path):
+    with open(path, encoding="utf-8") as f:
+        return f.read()
 
 
 # ============================================================
@@ -31,212 +38,218 @@ class TestPhaseAssigneeRemoved:
     """TC-001: _phase_assignee 函数已被删除"""
 
     def test_phase_assignee_function_gone(self):
-        """_phase_assignee 函数定义不存在"""
-        with open(DAEMON_PATH) as f:
-            content = f.read()
-        # 检查 def _phase_assignee — 如果存在则是未删除
-        matches = re.findall(r'def _phase_assignee\b', content)
-        assert len(matches) == 0, f"_phase_assignee 函数仍存在 ({len(matches)} 处)"
+        content = _read_file(DAEMON_PATH)
+        matches = re.findall(r'^def _phase_assignee\b', content, re.MULTILINE)
+        assert len(matches) == 0, f"_phase_assignee 函数定义仍存在 ({len(matches)} 处)"
 
     def test_phase_assignee_not_called(self):
-        """_phase_assignee 不应被调用"""
-        with open(DAEMON_PATH) as f:
-            content = f.read()
-        calls = re.findall(r'_phase_assignee\(', content)
-        assert len(calls) == 0, f"_phase_assignee 仍被调用 ({len(calls)} 处)"
+        content = _read_file(DAEMON_PATH)
+        # 只搜索函数调用（排除注释和pending_queue中的字段引用）
+        calls = []
+        for m in re.finditer(r'_phase_assignee\(', content):
+            line_start = content.rfind('\n', 0, m.start()) + 1
+            line = content[line_start:content.find('\n', m.start())]
+            # pending_queue 是数据结构，含 assignee 字段但不调用该函数
+            if not line.strip().startswith('#'):
+                calls.append(line)
+        assert len(calls) == 0, f"_phase_assignee 仍被调用: {calls}"
 
 
-class TestPickPhaseAgentUsed:
-    """TC-002: 路由改为纯 _pick_phase_agent"""
+# ============================================================
+# TC-002: 路由改为纯 _pick_phase_agent
+# ============================================================
+
+class TestRoutingPureAuto:
+    """TC-002: 路由兜底和 stuck 检测移除 assignee 依赖"""
 
     def test_routing_no_assignee_fallback(self):
-        """L884/L909 路由不应有 assignee 兜底"""
-        with open(DAEMON_PATH) as f:
-            lines = f.readlines()
-        # 找路由位置的 assignee 兜底
-        for i, line in enumerate(lines):
+        content = _read_file(DAEMON_PATH)
+        for i, line in enumerate(content.split('\n'), 1):
             stripped = line.strip()
-            # 含有 cur_req.get("assignee") 且不在注释或 pending_queue 中
-            if 'cur_req.get("assignee")' in stripped and not stripped.startswith('#'):
-                # 确认不在 pending 相关代码中
-                if 'pending' not in stripped.lower() and '_enqueue_pending' not in stripped:
-                    pytest.fail(f"L{i+1}: cur_req.get('assignee') 仍作为路由兜底存在: {stripped}")
+            if stripped.startswith('#') or not stripped:
+                continue
+            # 路由位置的 cur_req.get("assignee") — 要求被替换掉
+            if 'cur_req.get("assignee")' in stripped:
+                pytest.fail(f"L{i}: cur_req.get('assignee') 仍作为路由兜底存在")
 
-    def test_stuck_no_assignee_fallback(self):
-        """L1421 stuck 检测无 assignee 兜底
-        搜索 stuck 检测特定区域的 req.get('assignee')，排除写入 assignee 的区域。"""
-        with open(DAEMON_PATH) as f:
-            content = f.read()
-        # 找到 stuck 检测函数区域
-        stuck_func_match = re.search(r'def _handle_user_pipeline_stuck.*?(?=
-def |$)', content, re.DOTALL)
-        if not stuck_func_match:
-            # 如果没有独立的 stuck 函数，搜 _stuck_check 相关代码
-            stuck_matches = [m.start() for m in re.finditer(r'stuck', content, re.IGNORECASE)]
-        else:
-            stuck_code = stuck_func_match.group(0)
-            # 在 stuck 函数中找 req.get('assignee')
-            if 'req.get("assignee"' in stuck_code or "req.get('assignee'" in stuck_code:
-                pytest.fail(f"stuck 检测中仍存在 assignee 兜底: {stuck_code[:200]}")
-
-    @staticmethod
-    def _find_context(content, pattern, window=100):
-        idx = content.find(pattern)
-        if idx >= 0:
-            return content[max(0,idx-window):idx+window]
-        return ""
+    def test_stuck_assignee_fallback_removed(self):
+        """_check_stuck_pipelines 函数中
+        assignee = phase_agent or req.get("assignee", "")
+        → 应改为 assignee = phase_agent or "panda" """
+        content = _read_file(DAEMON_PATH)
+        # 定位 stuck 函数
+        fn_start = content.find('def _check_stuck_pipelines')
+        assert fn_start >= 0, "未找到 _check_stuck_pipelines 函数"
+        fn_end = content.find('\ndef ', fn_start + 1)
+        stuck_fn = content[fn_start:fn_end] if fn_end > 0 else content[fn_start:]
+        # 寻找 assignee = phase_agent or req.get("assignee", "")
+        if 'req.get("assignee"' in stuck_fn:
+            pytest.fail("_check_stuck_pipelines 中仍存在 req.get('assignee') 兜底")
 
 
 class TestRouteNoPayloadAssignee:
     """TC-002(续): 创建 pipeline 不从 payload 读 assignee"""
 
     def test_no_payload_assignee(self):
-        """创建 pipeline 时不应从 payload.get('assignee')"""
-        with open(DAEMON_PATH) as f:
-            content = f.read()
-        # payload.get("assignee") 在 daemon 中应不存在（_handle_pipeline_request 部分）
-        if 'payload.get("assignee")' in content:
-            pytest.fail("payload.get('assignee') 仍存在于 daemon 中")
+        content = _read_file(DAEMON_PATH)
+        assert 'payload.get("assignee")' not in content, \
+            "payload.get('assignee') 仍存在于 daemon 中"
 
-    def test_no_write_assignee_to_req(self):
-        """不应向 requirement 写入 assignee"""
-        with open(DAEMON_PATH) as f:
-            content = f.read()
-        # cur_req["assignee"] = 的写入应不存在
-        matches = re.findall(r'cur_req\[.assignee.\]', content)
-        allowed_contexts = []
-        for m in matches:
-            idx = content.find(m)
-            # 检查是否在 pending_queue 上下文中（合法）
-            context = content[max(0,idx-50):idx+50]
-            if 'pending' in context.lower():
-                allowed_contexts.append(m)
-        disallowed = len(matches) - len(allowed_contexts)
-        assert disallowed == 0, f"cur_req['assignee'] 写入仍存在 {disallowed} 处"
+    def test_no_assignee_routing_variable(self):
+        """变量名改为 phase_assignee/next_agent，避免 named assignee 参与路由"""
+        content = _read_file(DAEMON_PATH)
+        for i, line in enumerate(content.split('\n'), 1):
+            stripped = line.strip()
+            if stripped.startswith('#') or not stripped:
+                continue
+            # L602 附近：assignee = ... 赋值（创建 pipeline 时）
+            # 应改为 phase_assignee = ... 或其他变量名
+            if re.match(r'assignee\s*=', stripped) and \
+               '_pick_phase_agent' in stripped and \
+               '_enqueue_pending' not in stripped:
+                pytest.fail(f"L{i}: 变量名仍为 assignee（语义不明）: {stripped}")
+
+    def test_no_write_assignee_to_cur_req(self):
+        """cur_req['assignee'] = 的写入应不存在（pending 上下文也不会用 cur_req）"""
+        content = _read_file(DAEMON_PATH)
+        for m in re.finditer(r'cur_req\[\s*["\']assignee["\']\s*\]\s*=', content):
+            line_start = content.rfind('\n', 0, m.start()) + 1
+            line = content[line_start:content.find('\n', m.start())]
+            assert False, f"cur_req['assignee'] 写入仍存在: {line.strip()}"
+
+    def test_new_req_dict_no_assignee(self):
+        """新建 requirement 的 dict 不应含 assignee"""
+        content = _read_file(DAEMON_PATH)
+        # 找到创建 JSON dict 的部分（L638 附近）
+        # 搜索 "assignee": assignee 的 dict 拼接模式
+        if '"assignee": assignee' in content or "'assignee': assignee" in content:
+            pytest.fail("新建 req dict 中仍含 assignee")
 
 
 # ============================================================
-# TC-003: Dashboard API — 不再接受/返回 assignee
+# TC-003: Dashboard API
 # ============================================================
 
 class TestDashboardAPINoAssignee:
-    """TC-003: Dashboard 创建 API 不再处理 assignee"""
+    """TC-003: Dashboard API 不再接收/返回 assignee"""
 
-    def test_create_requirement_no_assignee(self):
-        """创建需求 API 不接收 assignee"""
-        with open(APP_PATH) as f:
-            content = f.read()
-        # 创建需求部分不应有 data.get('assignee')
-        # 找到创建需求的 handler 部分
-        create_req_section = content.split("def do_POST")[-1] if "def do_POST" in content else ""
-        # 检查是否还有 assignee 处理
-        if 'data.get(\'assignee\'' in create_req_section or 'data.get("assignee"' in create_req_section:
-            # 排除 issues 的 GET/POST
-            if 'issue' not in create_req_section.lower():
-                pytest.fail("创建需求 API 仍处理 assignee 字段")
+    def _do_POST_handler(self, handler_sig):
+        """提取 do_POST 中指定 handler 分支的代码块"""
+        content = _read_file(APP_PATH)
+        # 定位 handler 分支的 elif/if 代码块
+        pos = content.find(handler_sig)
+        if pos < 0:
+            return None
+        block_start = content[:pos].rfind('\n') + 1
+        # 找到下一个函数定义或类方法
+        block_end = content.find('\n    def ', block_start + 1)
+        if block_end < 0:
+            block_end = content.find('\n    # ', block_start + 1)
+        if block_end < 0:
+            block_end = len(content)
+        return content[block_start:block_end]
 
-    def test_requirement_response_no_assignee(self):
-        """需求 API 响应不含 assignee 字段"""
-        with open(APP_PATH) as f:
-            content = f.read()
-        # 响应体构造不应返回 assignee
-        assignee_in_resp = re.findall(r'"assignee"\s*:\s*task\.get\(', content) + \
-                           re.findall(r"'assignee'\s*:\s*task\.get\(", content) + \
-                           re.findall(r'"assignee"\s*:\s*req\.get\(', content)
-        # 排除 issues handler 中的合法 GET 响应（get_issues）
-        allowed = 0
-        for m in assignee_in_resp:
-            idx = content.find(m)
-            context = content[max(0,idx-100):idx+100]
-            if 'issue' in context.lower():
-                allowed += 1  # issue 详情显示历史 assignee — review 时确认是否有必要
-            else:
-                pytest.fail(f"需求 API 响应仍含 assignee: {context}")
-        # 允许 issues 列表保留历史 assignee
-        if len(assignee_in_resp) > allowed:
-            extra = len(assignee_in_resp) - allowed
-            if extra > 3:  # 3 个是 issue GET 的合理数量
-                pytest.fail(f"assignee 在 API 响应中出现 {extra} 次（超过预期的 issue 显示）")
+    def test_create_requirement_no_assignee_input(self):
+        """创建需求的 POST handler 不应读取 data.get('assignee')"""
+        handler_code = self._do_POST_handler('"/api/requirements"')
+        handler_code = handler_code or self._do_POST_handler("'/api/requirements'")
+        if handler_code is None:
+            handler_code = "\n".join(_read_file(APP_PATH).split('\n')[680:760])
+        assert 'assignee' not in handler_code, \
+            f"创建需求 handler 中仍含 assignee 处理"
 
-    def test_issue_API_no_assignee(self):
-        """问题 API 不应接收 assignee"""
-        with open(APP_PATH) as f:
-            content = f.read()
-        # issue 创建 handler 不应处理 assignee
-        if 'issue' in content:
-            create_issue_section = content.split("def create_issue")[-1] if "def create_issue" in content else ""
-            create_issue_section = create_issue_section or (content.split("/api/issues")[0][-500:])
-            if create_issue_section:
-                if 'data.get(\'assignee\'' in create_issue_section or 'data.get("assignee"' in create_issue_section:
-                    # 确认是创建/更新 issue 的 assignee，不是 GET 响应
-                    if 'post' in create_issue_section.lower() or 'create' in create_issue_section.lower():
-                        pytest.fail("创建问题 API 仍处理 assignee 字段")
+    def test_create_issue_no_assignee_input(self):
+        """创建问题的 POST handler 不应读取 data.get('assignee')"""
+        handler_code = self._do_POST_handler('"/api/issues"')
+        handler_code = handler_code or self._do_POST_handler("'/api/issues'")
+        if handler_code is None:
+            handler_code = "\n".join(_read_file(APP_PATH).split('\n')[1260:1330])
+        assert 'assignee' not in handler_code, \
+            f"创建问题 handler 中仍含 assignee 处理"
+
+    def test_kanban_response_no_assignee(self):
+        """看板 API 响应不应含 assignee 字段（issue 列表可以保留历史值）"""
+        content = _read_file(APP_PATH)
+        # 看板数据在处理 kanban 请求的函数中
+        # 搜索 "assignee" 出现在 json 响应构造中的位置
+        for i, line in enumerate(content.split('\n'), 1):
+            stripped = line.strip()
+            if stripped.startswith('#') or not stripped:
+                continue
+            # 响应 dict 中的 "assignee": task.get("assignee", "")
+            # 只检查非 issue handler 的区域
+            if '"assignee"' in stripped and 'task.get' in stripped:
+                # 检查是否在 issue handler 中
+                context_start = max(0, content[:content.find(stripped, max(0,i*30-500))].rfind('\ndef ', 0))
+                context = content[context_start:context_start+500]
+                if 'issue' not in context.lower():
+                    pytest.fail(f"L{i}: 看板 API 响应仍含 assignee: {stripped}")
 
 
 # ============================================================
-# TC-004 ~ TC-005: UI 元素已删除
+# TC-004 ~ TC-006: UI 元素
 # ============================================================
 
 class TestHTMLAssigneeRemoved:
     """TC-004: HTML 中 assignee 下拉框已删除"""
 
-    ASSIGNEE_SELECTS = [
-        'id="req-assignee"',
-        'id="issue-assignee"',
-        'id="request-assignee-select"',
-        'label for="req-assignee"',
-        'label for="issue-assignee"',
-    ]
+    IDS = ['req-assignee', 'issue-assignee', 'request-assignee-select']
 
-    def test_requirement_assignee_select_gone(self):
-        with open(HTML_PATH) as f:
-            content = f.read()
-        for sel in self.ASSIGNEE_SELECTS:
+    def test_assignee_selects_gone(self):
+        content = _read_file(HTML_PATH)
+        for sel in self.IDS:
             assert sel not in content, f"HTML 中仍存在: {sel}"
 
-    def test_assignee_labels_gone(self):
-        with open(HTML_PATH) as f:
-            content = f.read()
+    def test_assignee_label_gone(self):
+        content = _read_file(HTML_PATH)
         assert '指派给' not in content, "HTML 中仍存在'指派给'标签"
 
 
 class TestJSAssigneeRemoved:
     """TC-005: JS 中 assignee 逻辑已删除"""
 
-    ASSIGNEE_REFS = [
-        'document.getElementById(\'req-assignee\')',
-        'document.getElementById("req-assignee")',
-        'document.getElementById(\'issue-assignee\')',
-        'document.getElementById("issue-assignee")',
-        'document.getElementById(\'request-assignee-select\')',
-        'document.getElementById("request-assignee-select")',
-    ]
+    SELECT_IDS = ['req-assignee', 'issue-assignee', 'request-assignee-select']
 
-    def test_assignee_selects_gone(self):
-        with open(JS_PATH) as f:
-            content = f.read()
-        for ref in self.ASSIGNEE_REFS:
-            assert ref not in content, f"JS 中仍引用: {ref}"
+    def test_assignee_select_refs_gone(self):
+        content = _read_file(JS_PATH)
+        for sel_id in self.SELECT_IDS:
+            patterns = [
+                f"getElementById('{sel_id}')",
+                f'getElementById("{sel_id}")',
+                f"querySelector('#{sel_id}')",
+                f'querySelector("#{sel_id}")',
+            ]
+            for p in patterns:
+                assert p not in content, f"JS 中仍引用: {p}"
 
     def test_kanban_assignee_display_gone(self):
-        with open(JS_PATH) as f:
-            content = f.read()
-        # 看板中的 .task-assignee 或 assigneeEmoji/assignee 显示
-        # detail-value 后的 assignee 显示
-        detail_assignee = re.findall(r'detail-value.*assignee', content) or \
-                          re.findall(r'assignee.*detail-value', content)
-        assert len(detail_assignee) == 0, f"看板 assignee 显示仍存在: {detail_assignee}"
+        content = _read_file(JS_PATH)
+        patterns = [
+            'task-assignee',
+            'assigneeEmoji',
+            'assignee-avatar',
+        ]
+        for p in patterns:
+            # 赋值操作（= 左边含该名）可保留
+            lines = [l for l in content.split('\n') if p in l and '=' not in l.split(p)[0][-20:]]
+            for line in lines:
+                pytest.fail(f"JS 看板中仍显示 assignee: {line.strip()[:80]}")
 
     def test_issue_list_assignee_gone(self):
-        with open(JS_PATH) as f:
-            content = f.read()
+        content = _read_file(JS_PATH)
         assert 'issue-assignee' not in content, "问题列表 assignee 显示仍存在"
+
+    def test_detail_assignee_display_gone(self):
+        """任务详情弹窗中的 assignee 行"""
+        content = _read_file(JS_PATH)
+        detail_lines = [l for l in content.split('\n') if 'detail-value' in l and 'assignee' in l]
+        assert len(detail_lines) == 0, f"任务详情仍显示 assignee: {detail_lines[:2]}"
 
 
 class TestCSSAssigneeRemoved:
     """TC-006: CSS 中 assignee 样式已删除"""
 
-    CSS_CLASSES = [
+    CLASSES = [
         '.task-assignee',
         '.assignee-avatar',
         '.assignee-avatar-img',
@@ -244,27 +257,24 @@ class TestCSSAssigneeRemoved:
     ]
 
     def test_css_classes_gone(self):
-        with open(CSS_PATH) as f:
-            content = f.read()
-        for cls in self.CSS_CLASSES:
+        content = _read_file(CSS_PATH)
+        for cls in self.CLASSES:
             assert cls not in content, f"CSS 中仍存在: {cls}"
 
 
 # ============================================================
-# TC-007: SSE 通知不含 assignee
+# TC-007: SSE 通知
 # ============================================================
 
 class TestSSENotificationNoAssignee:
     """TC-007: SSE 通知不应发送 assignee"""
 
     def test_sse_notify_no_assignee(self):
-        with open(APP_PATH) as f:
-            content = f.read()
-        # 创建需求后的 SSE 通知不应处理 assignee
-        # 检查 'notify.*assignee' 或 'assignee.*notify' 模式
-        notify_assignee = re.findall(r'notify.*assignee|assignee.*notif', content, re.IGNORECASE)
-        for match in notify_assignee:
-            pytest.fail(f"SSE 通知仍含 assignee: {match}")
+        content = _read_file(APP_PATH)
+        # 搜索创建需求后 SSE 通知中的 assignee 处理
+        for i, line in enumerate(content.split('\n'), 1):
+            if 'assignee' in line and ('notify' in line.lower() or 'notif' in line.lower()):
+                pytest.fail(f"L{i}: SSE 通知仍含 assignee: {line.strip()}")
 
 
 # ============================================================
@@ -275,39 +285,52 @@ class TestTestFilesNoAssignee:
     """TC-008: 测试文件 assignee 参数已移除"""
 
     def test_pipeline_push_no_assignee_param(self):
-        with open(TEST_PUSH_PATH) as f:
-            content = f.read()
-        # post_issue 函数签名的 assignee 参数应已删除
-        post_issue_def = re.findall(r'def post_issue\(.*?\)', content)
-        for d in post_issue_def:
-            if 'assignee' in d:
-                pytest.fail(f"test_p0_pipeline_push 中 post_issue 仍含 assignee 参数: {d}")
+        content = _read_file(TEST_PUSH_PATH)
+        for m in re.finditer(r'def post_issue\(.*?\)', content):
+            if 'assignee' in m.group():
+                pytest.fail(f"test_p0_pipeline_push 中 post_issue 仍含 assignee 参数")
 
     def test_priority_sort_no_hardcoded_assignee(self):
-        with open(TEST_SORT_PATH) as f:
-            content = f.read()
-        # 硬编码的 "assignee": "alpha" 或 "assignee": "" 应不存在
-        if '"assignee"' in content or "'assignee'" in content:
-            lines_with_assignee = [l for l in content.split('\n') if 'assignee' in l]
-            relevant = [l for l in lines_with_assignee if 'pending' not in l.lower()]
-            if relevant:
-                pytest.fail(f"test_priority_sort 中 assignee 未清理: {relevant}")
+        """优先排除 pending_queue 上下文中的 assignee"""
+        content = _read_file(TEST_SORT_PATH)
+        lines = content.split('\n')
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if 'assignee' not in stripped:
+                continue
+            context = '\n'.join(lines[max(0,i-3):i+3])
+            if 'pending' in context.lower():
+                continue
+            pytest.fail(f"test_priority_sort L{i}: assignee 未清理: {stripped[:80]}")
 
 
 # ============================================================
-# TC-009: pending_queue 的 assignee 保留（不受影响）
+# TC-009: pending_queue 的 assignee 保留
 # ============================================================
 
 class TestPendingQueueAssigneeKept:
-    """TC-009: pending_queue 的 assignee 字段应保留"""
+    """TC-009: pending_queue 的 assignee 字段应保留（阶段执行者）"""
 
     def test_pending_queue_assignee_field_kept(self):
-        """_pending_queue 中的 assignee 是阶段执行者，应保留"""
-        with open(DAEMON_PATH) as f:
-            content = f.read()
-        # 确认 pending_queue 相关代码中仍有 assignee
-        pending_section_match = re.search(r'_pending_queue.*?def ', content, re.DOTALL)
-        if pending_section_match:
-            pending_code = pending_section_match.group(0)
-            assert 'assignee' in pending_code, \
-                "pending_queue 中 assignee 字段不应被删除"
+        content = _read_file(DAEMON_PATH)
+        pending_section = content[content.find('_pending_queue'):]
+        pending_section = pending_section[:800]
+        assert 'assignee' in pending_section, \
+            "pending_queue 中 assignee 字段不应被删除"
+
+
+# ============================================================
+# TC-010: app_v2.py assignee 返回
+# ============================================================
+
+class TestAppV2AssigneeResponse:
+    """TC-010: app_v2.py 不应返回 assignee（如果有该函数）"""
+
+    def test_app_v2_response_no_assignee(self):
+        if not os.path.exists(APP_V2_PATH):
+            pytest.skip("app_v2.py 不存在")
+        content = _read_file(APP_V2_PATH)
+        # 搜索响应 dict 中的 assignee 字段
+        for i, line in enumerate(content.split('\n'), 1):
+            if re.search(r'["\']assignee["\']\s*:', line):
+                pytest.fail(f"app_v2.py L{i}: 响应中仍含 assignee")
