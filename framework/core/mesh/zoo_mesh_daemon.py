@@ -388,7 +388,10 @@ def _get_phase_template(phase: str, pipeline_id: str = "", project_key: str = "f
             "   改了 CSS/JS/HTML → ./zoo-service-restart dashboard\n"
             "   改了 Python 代码  → ./zoo-service-restart daemon\n"
             "   都改了             → ./zoo-service-restart\n"
-            "4. 端到端验证：curl http://127.0.0.1:18792/ 确认修复生效\n"
+            "4. 端到端验证（用 dry_run 或 /api/validate-requirement，不留测试垃圾）：\n"
+            "   curl -X POST http://127.0.0.1:18792/api/validate-requirement -H 'Content-Type: application/json' -d '{...}'\n"
+            "   或 curl http://127.0.0.1:18792/api/requirements -d '{{\"dry_run\":true,\"title\":\"test\"}}'\n"
+            "   或 curl http://127.0.0.1:18792/api/issues -d '{{\"dry_run\":true,\"title\":\"test\"}}'\n"
             "5. 以上全部完成后，最后执行 zoo-phase-complete 上报\n"
         ),
     }

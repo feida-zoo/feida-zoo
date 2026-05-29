@@ -564,6 +564,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 self._handle_kanban_move()
             elif parsed_path == '/api/issues':
                 self._handle_issues_post()
+            elif parsed_path == '/api/validate-requirement':
+                self._handle_validate_requirement()
             elif parsed_path == '/api/audit-callback':
                 self._handle_audit_callback()
             else:
@@ -658,6 +660,37 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"error": str(e)}).encode())
 
+    def _handle_validate_requirement(self):
+        """POST /api/validate-requirement — 只校验不创建（供 deliver E2E 验证使用）"""
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length)
+            try:
+                data = json.loads(body) if body else {}
+            except json.JSONDecodeError:
+                self._send_json({"valid": False, "error": "invalid json"})
+                return
+
+            title = (data.get('title') or '').strip()
+            if not title:
+                self._send_json({"valid": False, "error": "title required"})
+                return
+
+            priority = (data.get('priority') or 'P3').upper()
+            if priority not in VALID_PRIORITIES:
+                self._send_json({"valid": False, "error": f"invalid priority: {priority}"})
+                return
+
+            self._send_json({
+                "valid": True,
+                "title": title,
+                "assignee": data.get('assignee', ''),
+                "priority": priority,
+                "message": "请求格式验证通过"
+            })
+        except Exception as e:
+            self._send_json({"valid": False, "error": str(e)})
+
     def _handle_requirements_post(self):
         """Create a new requirement and dispatch to Harness Pipeline via Panda"""
         try:
@@ -680,12 +713,33 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": "title required"}).encode())
                 return
 
+            dry_run = data.get('dry_run', False)
+            if dry_run:
+                self._send_json({
+                    "valid": True,
+                    "dry_run": True,
+                    "title": title,
+                    "message": "验证通过（未实际创建）"
+                })
+                return
+
             import uuid
             req_id = str(uuid.uuid4())
             priority = (data.get('priority') or 'P3').upper()
             if priority not in VALID_PRIORITIES:
                 priority = 'P3'
             
+            dry_run = data.get('dry_run', False)
+            if dry_run:
+                self._send_json({
+                    "valid": True,
+                    "dry_run": True,
+                    "title": title,
+                    "assignee": data.get('assignee', ''),
+                    "message": "验证通过（未实际创建）"
+                })
+                return
+
             requirement = {
                 "id": req_id,
                 "title": title,
@@ -1234,6 +1288,16 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": "title required"}).encode())
+                return
+
+            dry_run = data.get('dry_run', False)
+            if dry_run:
+                self._send_json({
+                    "valid": True,
+                    "dry_run": True,
+                    "title": title,
+                    "message": "验证通过（未实际创建）"
+                })
                 return
 
             import uuid
