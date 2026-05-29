@@ -1017,11 +1017,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                         if audit_result == 'audit_approved':
                             issue['status'] = 'in_progress'
                             issue['audit_status'] = 'approved'
-                            # 创建新 Pipeline
-                            if not issue.get('reject_pipeline_id'):
-                                dispatch = self._dispatch_pipeline(issue, 'issue', 'issue_reject')
-                                issue['reject_pipeline_id'] = dispatch['pipeline_id']
-                                issue['reject_pipeline_status'] = dispatch['pipeline_status']
+                            # 不再自动创建 Pipeline，避免测试残留被批量复活
+                            # Pipeline 的驳回重走由 daemon 的 _handle_phase_complete 处理
                         else:  # audit_declined
                             issue['status'] = issue.get('previous_status', 'resolved')
                             issue['audit_status'] = 'declined'
@@ -1059,11 +1056,8 @@ class ZooDevCenterHandler(BaseHTTPRequestHandler):
                         if audit_result == 'audit_approved':
                             req['status'] = 'develop_code'
                             req['audit_status'] = 'approved'
-                            # 创建新 Pipeline
-                            if not req.get('reject_pipeline_id'):
-                                dispatch = self._dispatch_pipeline(req, 'requirement', 'requirement_reject')
-                                req['reject_pipeline_id'] = dispatch['pipeline_id']
-                                req['reject_pipeline_status'] = dispatch['pipeline_status']
+                            # 不再自动创建 Pipeline，避免测试残留被批量复活
+                            # Pipeline 的驳回重走由 daemon 的 _handle_phase_complete 处理
                         else:
                             req['status'] = req.get('previous_status', 'done')
                             req['audit_status'] = 'declined'
