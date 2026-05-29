@@ -1275,13 +1275,18 @@ _pending_queue: list = []  # 内存 pending 队列，[{task_id, phase, assignee,
 
 
 def _agent_available(agent_id: str) -> bool:
-    """检查 agent 是否有活跃 pipeline 任务。"""
+    """检查 agent 是否有活跃 pipeline 任务。
+
+    使用当前阶段负责人（_pick_phase_agent）而非需求 assignee，
+    因为管线流转到 review/audit 时实际处理人是 duci，不是 assignee。
+    """
     reqs = _load_requirements()
     for r in reqs:
         status = r.get("status", "")
-        assignee = r.get("assignee", "")
-        if status and status not in ("done", "rejected", "request", "", "cancelled") and assignee == agent_id:
-            return False
+        if status and status not in ("done", "rejected", "request", "", "cancelled"):
+            phase_agent = _pick_phase_agent(status)
+            if phase_agent == agent_id:
+                return False
     # 检查内存 pending 队列
     for item in _pending_queue:
         if item.get("assignee") == agent_id:
