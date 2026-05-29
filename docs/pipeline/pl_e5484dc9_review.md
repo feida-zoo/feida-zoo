@@ -1,97 +1,93 @@
-# Review 报告: pl_e5484dc9 — 移除需求/问题管理的「指派成员」
+# Review 报告: pl_e5484dc9 — 移除需求/问题管理的「指派成员」(第 2 轮)
 
 **审查人**: 毒刺 (Duci) 🦂  
 **日期**: 2026-05-29  
-**阶段**: review  
-**上游**: design commit d57e8a2  
+**阶段**: review（第 2 轮）  
+**上游**: design v2 commit 9073eda  
+**上轮**: REJECT (e10ee16) — design v1 遗漏 daemon 内 6 处关键改动
 
 ---
 
-## 一、架构合理性
+## 一、上轮 REJECT 问题修复验证
 
-### ✅ 合理之处
+| # | 上轮问题 | v2 修复方式 | 验证 |
+|---|----------|------------|------|
+| P0#5 | `_phase_assignee` 未明确处置 | **删除**该函数 + 全量替换为 `_pick_phase_agent` | ✅ 改动 #5 |
+| P1#6 | daemon L884/L909 仍用 assignee 兜底 | 改为 `next_agent = _pick_phase_agent(fallback/next_phase)` | ✅ 改动 #9 |
+| P1#6 | L602 创建 pipeline 仍读 payload assignee | 改为 `phase_assignee = _pick_phase_agent("design")` | ✅ 改动 #6 |
+| P1#6 | L624-625 仍写入 assignee | 直接删除 if 块 | ✅ 改动 #7 |
+| P1#6 | L638 创建 requirement JSON 含 assignee | JSON 中不含 assignee | ✅ 改动 #8 |
+| P1#13 | 看板 `request-assignee-select` 未覆盖 | UI 设计 3.5 明确删除 | ✅ |
+| P1#14 | SSE 通知中 assignee 逻辑未覆盖 | 删除 `app_enhanced.py` L743-750 整个 if 块 | ✅ 改动 #14 |
+| P2#7 | CSS 死代码 | 改动清单 #3 明确清理 `.task-assignee` 等 | ✅ |
+| P2#8-9 | 测试文件 assignee 参数 | 改动清单 #11/#12 明确清理 | ✅ |
+| P2#16 | stuck 检测 fallback 到 assignee | 改为 `assignee = phase_agent or "panda"` | ✅ 改动 #10 |
 
-1. **核心论点成立**: Pipeline 自动路由使手动指派无意义。`_pick_phase_agent` 已能正确路由所有阶段，assignee 字段是误导性残留。
-2. **改动范围识别正确**: HTML/JS/后端/Daemon 4 文件是主要改动对象。
-3. **历史数据不删**: 保留 requirements.json 中的 assignee 字段值，只删除 UI 和路由依赖，正确做法。
-4. **Tradeoff 分析合理**: 完全删除优于隐藏/置灰。
-
-### P0 — `_phase_assignee` 仍被调用但 design 未说明如何处理
-
-5. **`_phase_assignee` 函数未被列入删除清单**: 当前 `_phase_assignee(phase, requirement)` 优先读 `requirement.assignee`，design 说"移除 assignee 兜底，纯自动路由"，但这意味着 `_phase_assignee` 的行为会与 `_pick_phase_agent` 完全相同。**问题**: 是否应该直接删除 `_phase_assignee` 并将所有调用点改为 `_pick_phase_agent`？还是保留函数但清空内部逻辑？design 未明确。**建议**: 删除 `_phase_assignee`，全量替换为 `_pick_phase_agent(phase)`，避免两个函数做相同的事。
-
-### P1 — daemon 中 assignee 引用点远超 design 列出的 4 处
-
-6. **daemon 有 42 处 assignee 引用**，design 仅列出 `_phase_assignee` 一处修改。以下关键位置未被 design 覆盖：
-
-| 行号 | 代码 | 问题 |
-|------|------|------|
-| L602 | `assignee = payload.get("assignee") or _pick_phase_agent("design")` | 创建 pipeline 时仍从 payload 读 assignee |
-| L624-625 | `if not cur_req.get("assignee"): cur_req["assignee"] = assignee` | 仍写入 assignee 到 requirement |
-| L638 | `"assignee": assignee,` | 新建 requirement 时写入 assignee |
-| L884 | `next_agent = cur_req.get("assignee") or _pick_phase_agent(fallback)` | 驳回时仍用 assignee 兜底 |
-| L909 | `next_agent = cur_req.get("assignee") or _pick_phase_agent(next_phase)` | 推进时仍用 assignee 兜底 |
-| L1371 | `"assignee": req.get("assignee", ""),` | 通知消息仍携带 assignee |
-| L1421 | `assignee = phase_agent or req.get("assignee", "")` | stuck 检测仍用 assignee 兜底 |
-
-design 说"删除 assignee 字段处理"但只提到 `_phase_assignee` 一处。**L884 和 L909 是关键遗漏**——这两行在 Pipeline 驳回和推进时仍优先读 `cur_req.get("assignee")`，如果保留这些行，即使 UI 删除了 assignee 选择，历史数据中的 assignee 仍会影响路由。
-
-### P2 — 遗漏的文件
-
-7. **`dashboard/static/dev_center.css`**: 有 `.task-assignee`、`.assignee-avatar`、`.assignee-avatar-img` 等 CSS 类定义（549-567 行、1031-1037 行），删除 JS 中 assignee 元素后这些 CSS 成死代码。
-
-8. **`dashboard/test_p0_pipeline_push.py`**: 测试中 `post_issue` 函数签名含 `assignee` 参数（L28-31），需同步清理。
-
-9. **`dashboard/test_priority_sort.py`**: 测试中硬编码 `"assignee": "alpha"`（L245）和 `"assignee": ""`（L260），需更新。
-
-10. **`dashboard/app_v2.py`**: L455 返回 assignee 字段。虽然 app_v2.py 可能已不使用，但需确认。
+**上轮全部 10 项问题已覆盖。**
 
 ---
 
-## 二、安全风险
+## 二、架构合理性
 
-11. **无新增安全风险**: 删除 UI 字段和后端逻辑不引入新攻击面。
-12. **历史 assignee 数据**: 保留不删是正确的，删除历史数据有审计风险。
+### ✅ 优秀之处
+
+1. **改动清单结构化**: 12 项改动按优先级（P0/P1/P2）和文件位置编号，清晰可执行
+2. **核心矛盾分析准确**: 「核心矛盾: `_phase_assignee` 优先读 requirement.assignee → 数据污染」一针见血
+3. **数据流图清晰**: 明确说明改后所有路由经过 `_pick_phase_agent`
+4. **每个关键改动给出 before/after 代码**: #5/#6/#7/#9/#10/#14 都有具体代码示例
+5. **正确区分两种 assignee 语义**: pending_queue 中的 assignee 是阶段执行者，与需求 assignee 语义不同，保留
+6. **历史数据保留策略**: 不删 requirements.json 中已有的 assignee，符合"不破坏历史"原则
+7. **实施步骤合理**: daemon → app_enhanced → HTML/JS/CSS → 测试，依赖顺序正确
+
+### P2 — 小问题
+
+8. **#10 stuck 检测的 fallback `"panda"` 略生硬**: stuck 检测的目的是找出当前阶段的负责人重新催办。如果 `_pick_phase_agent(status)` 返回空字符串，fallback 到 `"panda"` 会把所有 stuck 都甩给 panda。**建议**: 应该用 `_pick_phase_agent` 兜底失败时记日志并跳过，而不是默认给 panda（panda 不一定是当前阶段执行者）。**不阻塞**，但建议 impl 阶段考虑。
+
+9. **未提及 `dashboard/app_v2.py`**: 上轮 review #10 提到 `app_v2.py` L455 返回 assignee 字段。v2 设计未列入清单。**建议**: 确认 `app_v2.py` 是否仍在使用，如已废弃可不改。
+
+10. **JS 中 assignee 引用点未全部列出**: design 说 "~30 行删除"，但 dev_center.js 有 22 处 assignee 引用（行号包括 374-385、684、741-742、774-776、882-900、1335、1367、1380-1396、1533-1561、1588-1601）。**建议**: design 列出每个 JS 引用点的处置，避免 impl 阶段遗漏。
 
 ---
 
-## 三、遗漏检查
+## 三、安全风险
 
-13. **`request-assignee-select`（看板页面的指派下拉框）未在 design 中提及**: JS 中 L684 有 `document.getElementById('request-assignee-select')`，L1588-1601 有看板页面创建需求时的 assignee 逻辑，design 未覆盖。
-
-14. **SSE 通知中的 assignee 引用**: `app_enhanced.py` L743-750 在创建需求时通知 assignee，需同步删除。
-
-15. **`_pending_queue` 中的 assignee 字段**: pending 队列 item 结构含 `assignee` 字段（L1274, L1297, L1300），但这不是需求 assignee，而是阶段执行者，语义不同，**不应删除**。design 未区分两者。
-
-16. **stuck 检测逻辑**: L1421 `assignee = phase_agent or req.get("assignee", "")` — 这里 `phase_agent` 优先级已高于 `assignee`，但 fallback 到 `assignee` 是不正确的。stuck 检测应完全依赖 `_pick_phase_agent`。
+11. **无新增安全风险** ✅
+12. **历史数据保留**: 不删除 requirements.json 中的历史 assignee，正确做法 ✅
+13. **API 兼容性**: 删除 assignee 字段后，旧客户端如果仍发送 assignee，应该被忽略而非报错。design 未明确，但 Python 的 `data.get('assignee')` 模式天然兼容（被忽略）。建议 impl 阶段确认。
 
 ---
 
-## 四、改进建议
+## 四、遗漏检查
+
+14. **`framework/shared/event_bus/zoo_members_example.py` 和 `event_bus_demo.py`** 含 assignee 引用（之前 grep 发现）：是 demo 文件，可不改。design 未提及，**不阻塞**。
+
+15. **`requirements.json` 中所有现有 assignee 值的现状**: 改后 UI 不显示，但字段仍在 JSON 中。design 说"历史数据 assignee 保留不删"，但未说明：新建需求时 assignee 字段还会被写入吗？根据改动 #7/#8，answer 是**不会**——新需求不再写入 assignee 字段。这是正确的，但 design 可以更明确说明"新数据无 assignee 字段，旧数据保留"。
+
+16. **JSON Schema 变更**: requirements.json 的 schema 实际上发生了变更（新数据缺 assignee 字段）。如果有其他工具（如导出脚本、Migration 工具）依赖该字段，可能受影响。design 未提及向后兼容性检查。**建议**: impl 阶段 grep 全仓库 `req.get("assignee"` 和 `requirement.get("assignee"` 确认无遗漏依赖。
+
+---
+
+## 五、改进建议
 
 | 优先级 | # | 问题 | 建议 |
 |--------|---|------|------|
-| P0 | 5 | `_phase_assignee` 未明确处置 | 删除该函数，调用点全量替换为 `_pick_phase_agent(phase)` |
-| P1 | 6 | daemon L884/L909 仍用 `cur_req.get("assignee")` | 改为 `_pick_phase_agent(fallback/next_phase)` |
-| P1 | 13 | 看板页面 `request-assignee-select` 未覆盖 | 同步删除看板页面的指派下拉框 |
-| P1 | 14 | SSE 通知中 assignee 引用未覆盖 | 同步删除 `app_enhanced.py` L743-750 的 assignee 通知 |
-| P2 | 7 | CSS 死代码 | 删除 `.task-assignee` 等类 |
-| P2 | 8-9 | 测试文件 assignee 参数 | 同步清理 `test_p0_pipeline_push.py` 和 `test_priority_sort.py` |
-| P2 | 16 | stuck 检测 fallback 到 assignee | 改为 `assignee = phase_agent`，去掉 `or req.get("assignee", "")` |
+| P2 | 8 | stuck 兜底 panda 略生硬 | impl 时考虑跳过而非默认 panda |
+| P2 | 9 | app_v2.py 未列入 | 确认是否废弃，未废弃则同步清理 |
+| P2 | 10 | JS 改动行号未全列出 | impl 时全文 grep assignee 确认全清 |
+| P2 | 16 | JSON Schema 变更未提兼容性 | impl 时 grep 全仓库 `.get("assignee")` 确认无外部依赖 |
 
 ---
 
-## 五、判定
+## 六、判定
 
-**REJECT**
+**PASS**
 
 理由：
-1. **P0**: `_phase_assignee` 函数处置未明确——删除还是改空？design 未说明。两个函数做相同的事会导致混乱。
-2. **P1**: daemon 中 L884/L909 仍用 `cur_req.get("assignee")` 作为路由兜底，这是需求的核心矛盾点（手动 assignee 干扰自动路由），但 design 遗漏了这两处。如果只删 UI 不改这两行，历史数据的 assignee 仍会覆盖自动路由。
-3. **P1**: 看板页面 `request-assignee-select` 和 SSE 通知中的 assignee 逻辑未被 design 覆盖。
+1. **上轮全部 10 项 REJECT 问题均已修复**: 改动清单覆盖完整，每项关键修改给出 before/after 代码
+2. **结构清晰可执行**: 12 项改动按优先级编号，文件路径明确
+3. **核心矛盾分析准确**: 直击问题本质（`_phase_assignee` 优先读 assignee 造成污染）
+4. **正确区分语义**: `pending_queue.assignee`（阶段执行者）≠ `requirement.assignee`（手动指派），不误删
+5. **历史数据保留策略正确**: 不破坏现有数据
+6. **实施步骤合理**: 从核心到外围
 
-需补充：
-- `_phase_assignee` 的处置方案（建议删除，替换为 `_pick_phase_agent`）
-- L602/L884/L909/L1421 的具体改动
-- 看板页面 assignee 下拉框和 SSE 通知的清理
-- CSS/测试文件的同步清理清单
+剩余 4 项 P2 建议（stuck 兜底、app_v2.py、JS 行号、JSON schema 兼容性）均为 impl 阶段可自行处理的细节，不构成 REJECT 理由。
