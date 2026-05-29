@@ -1257,14 +1257,19 @@ mesh = None
 _pending_queue: list = []  # 内存 pending 队列，[{task_id, phase, assignee, priority, title}]
 
 
-def _agent_available(agent_id: str) -> bool:
+def _agent_available(agent_id: str, exclude_pipeline_id: str = "") -> bool:
     """检查 agent 是否有活跃 pipeline 任务。
 
     使用当前阶段负责人（_pick_phase_agent）而非需求 assignee，
     因为管线流转到 review/audit 时实际处理人是 duci，不是 assignee。
+
+    exclude_pipeline_id: 排除指定管线（避免 pending 派发时自引用误判）
     """
     reqs = _load_requirements()
     for r in reqs:
+        pid = r.get("pipeline_id", "")
+        if exclude_pipeline_id and pid == exclude_pipeline_id:
+            continue
         status = r.get("status", "")
         if status and status not in ("done", "rejected", "request", "", "cancelled"):
             phase_agent = _pick_phase_agent(status)
@@ -1272,6 +1277,8 @@ def _agent_available(agent_id: str) -> bool:
                 return False
     # 检查内存 pending 队列
     for item in _pending_queue:
+        if exclude_pipeline_id and item.get("task_id") == exclude_pipeline_id:
+            continue
         if item.get("assignee") == agent_id:
             return False
     return True
@@ -1312,7 +1319,7 @@ def _dispatch_pending_agents():
         assignee = item["assignee"]
         task_id = item["task_id"]
         phase = item["phase"]
-        if _agent_available(assignee):
+        if _agent_available(assignee, exclude_pipeline_id=task_id):
             _pending_queue.remove(item)
             reqs = _load_requirements()
             cur_req = next((r for r in reqs if r.get("pipeline_id") == task_id), None)
@@ -1404,8 +1411,8 @@ def _check_stuck_pipelines() -> None:
         if not assignee:
             continue
 
-        # 负责人有 pending 任务 → 在忙，跳过
-        if any(item.get("assignee") == assignee for item in _pending_queue):
+        # 负责人有 pending 任务 → 在忙，跳过（排除当前管线自身）
+        if any(item.get("assignee") == assignee and item.get("task_id") != pipeline_id for item in _pending_queue):
             logger.info(f"⏭️ stuck 检测：{pipeline_id} 负责人 {assignee} 在忙，跳过")
             continue
 
