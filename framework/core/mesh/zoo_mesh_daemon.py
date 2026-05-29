@@ -640,20 +640,19 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
     priority = cur_req.get("priority", "P3")
     agent_avail = _agent_available(phase_assignee)
 
-    # 5. 更新 requirements.json
-    cur_req["status"] = "design"
-    cur_req["phase"] = "design"
-    cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-    _save_requirements(reqs)
-
-    # 6. 发布推进事件
+    # 5. 发布推进事件
     _publish_phase_advancement(title, task_id, "request", "design")
 
-    # 7. 根据步骤 4 的预判结果派发或入 pending
+    # 6. 派发或入 pending
     if not agent_avail:
+        # 不写 status=design，避免 pending 管线在磁盘上互相阻塞
         _enqueue_pending(task_id, "design", phase_assignee, priority, title)
         logger.info(f"⏳ {phase_assignee} 忙碌，{task_id} 入 pending 队列等待")
     else:
+        cur_req["status"] = "design"
+        cur_req["phase"] = "design"
+        cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+        _save_requirements(reqs)
         try:
             _panda_relay_post(phase_assignee, task_id, "request", "design", cur_req)
             logger.info(f"已通知 {phase_assignee} 执行 design 阶段")
@@ -663,7 +662,6 @@ def _handle_pipeline_request(body: str, agent_id: str) -> None:
             logger.info(f"📥 通知失败，{task_id} 入 pending 队列")
 
     logger.info(f"✅ Pipeline {task_id} 已启动，第一阶段: design")
-    _save_requirements(reqs)
 
 
 def _sync_issue_status(pipeline_id: str, target_status: str) -> None:
@@ -1323,7 +1321,12 @@ def _dispatch_pending_agents():
             _pending_queue.remove(item)
             reqs = _load_requirements()
             cur_req = next((r for r in reqs if r.get("pipeline_id") == task_id), None)
-            if cur_req and cur_req.get("status") == phase:
+            if cur_req:
+                # 派发时才写入 design 状态，避免 pending 管线互相阻塞
+                cur_req["status"] = phase
+                cur_req["phase"] = phase
+                cur_req["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                _save_requirements(reqs)
                 _panda_relay_post(assignee, task_id, phase, phase, cur_req)
                 logger.info(f"📤 pending 任务派发: {task_id} → {assignee}")
                 dispatched += 1
