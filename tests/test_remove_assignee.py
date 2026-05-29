@@ -309,6 +309,34 @@ class TestTestFilesNoAssignee:
 # TC-009: pending_queue 的 assignee 保留
 # ============================================================
 
+class TestJSCSSSyntaxValid:
+    """P0#3: 验证 JS/CSS 可解析（审计建议）"""
+
+    def test_js_syntax_valid(self):
+        """dev_center.js 必须能被 Node.js 解析"""
+        import subprocess
+        result = subprocess.run(
+            ['node', '-c', JS_PATH],
+            capture_output=True, text=True
+        )
+        assert result.returncode == 0, \
+            f"JS 语法错误: {result.stderr.decode() if isinstance(result.stderr, bytes) else result.stderr}"
+
+    def test_css_braces_balanced(self):
+        """CSS 大括号必须配对"""
+        content = _read_file(CSS_PATH)
+        depth = 0
+        for i, line in enumerate(content.split('\n'), 1):
+            stripped = line.strip()
+            if '{' in stripped:
+                depth += stripped.count('{')
+            if '}' in stripped:
+                depth -= stripped.count('}')
+            if depth < 0:
+                pytest.fail(f"CSS L{i}: 多余的 }} (depth={depth})")
+        assert depth == 0, f"CSS 大括号未闭合: depth={depth}"
+
+
 class TestPendingQueueAssigneeKept:
     """TC-009: pending_queue 的 assignee 字段应保留（阶段执行者）"""
 

@@ -546,10 +546,7 @@ body {
     color: var(--gray-color);
 }
 
-/* assignee 相关样式：不再需要（assignee 由 Pipeline 自动路由） */
-    object-fit: cover;
-    border: 1px solid var(--border-color);
-}
+/* assignee 相关样式：不再需要（由 Pipeline 自动路由） */
 
 .task-phase {
     background: var(--light-color);
@@ -1008,7 +1005,6 @@ body {
 
 /* 看板头像活跃动画 */
 /* 执行中头像活跃动画（已删除 — 由 Pipeline 自动路由） */
-}
 
 @keyframes pulse-green {
     0% { opacity: 1; }

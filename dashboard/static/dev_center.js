@@ -370,17 +370,8 @@ class ZooDevCenter {
         this.updateKanbanAssigneeStatus(statusData);
     }
     
-    updateKanbanAssigneeStatus(statusData) {
+    updateKanbanAssigneeStatus(_statusData) {
         // assignee 由 Pipeline 自动路由，看板不再显示执行者状态
-            
-            if (status) {
-                if (status === 'executing') {
-                    el.classList.add('is-executing');
-                } else {
-                    el.classList.remove('is-executing');
-                }
-            }
-        });
     }
 
     async loadMemberCards() {
