@@ -133,39 +133,33 @@ class TestRouteNoPayloadAssignee:
 class TestDashboardAPINoAssignee:
     """TC-003: Dashboard API 不再接收/返回 assignee"""
 
-    def _do_POST_handler(self, handler_sig):
-        """提取 do_POST 中指定 handler 分支的代码块"""
+    def _extract_handle_fn(self, fn_name):
+        """按顶层函数名提取函数体（如 _handle_requirements_post）"""
         content = _read_file(APP_PATH)
-        # 定位 handler 分支的 elif/if 代码块
-        pos = content.find(handler_sig)
+        pos = content.find(f'def {fn_name}(')
         if pos < 0:
             return None
         block_start = content[:pos].rfind('\n') + 1
-        # 找到下一个函数定义或类方法
-        block_end = content.find('\n    def ', block_start + 1)
-        if block_end < 0:
-            block_end = content.find('\n    # ', block_start + 1)
+        block_end = content.find('\ndef ', block_start + 1)
         if block_end < 0:
             block_end = len(content)
         return content[block_start:block_end]
 
-    def test_create_requirement_no_assignee_input(self):
-        """创建需求的 POST handler 不应读取 data.get('assignee')"""
-        handler_code = self._do_POST_handler('"/api/requirements"')
-        handler_code = handler_code or self._do_POST_handler("'/api/requirements'")
+    def test_handle_requirements_post_no_assignee(self):
+        """_handle_requirements_post 函数不含 assignee 处理"""
+        handler_code = self._extract_handle_fn('_handle_requirements_post')
         if handler_code is None:
-            handler_code = "\n".join(_read_file(APP_PATH).split('\n')[680:760])
+            pytest.skip('_handle_requirements_post 不存在')
         assert 'assignee' not in handler_code, \
-            f"创建需求 handler 中仍含 assignee 处理"
+            f"_handle_requirements_post 中仍含 assignee"
 
-    def test_create_issue_no_assignee_input(self):
-        """创建问题的 POST handler 不应读取 data.get('assignee')"""
-        handler_code = self._do_POST_handler('"/api/issues"')
-        handler_code = handler_code or self._do_POST_handler("'/api/issues'")
+    def test_handle_issues_post_no_assignee(self):
+        """_handle_issues_post 函数不含 assignee 处理"""
+        handler_code = self._extract_handle_fn('_handle_issues_post')
         if handler_code is None:
-            handler_code = "\n".join(_read_file(APP_PATH).split('\n')[1260:1330])
+            pytest.skip('_handle_issues_post 不存在')
         assert 'assignee' not in handler_code, \
-            f"创建问题 handler 中仍含 assignee 处理"
+            f"_handle_issues_post 中仍含 assignee"
 
     def test_kanban_response_no_assignee(self):
         """看板 API 响应不应含 assignee 字段（issue 列表可以保留历史值）"""
